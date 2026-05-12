@@ -98,25 +98,14 @@ AI_MODEL=gpt-4o-mini
 4. 创建作品 → 进入编辑器 → 写内容 → 保存
 5. 刷新页面，数据应持久化
 
-## L3 Agent 路由层（Router-Worker 架构）
+## 开发约束
 
-**目标**：用小模型做意图路由，避免每次都用顶级大模型 + 全工具集。
+**修改路由层（`backend/src/services/agentRouter.ts`）前**：必须跑 `L3-agent-router.md` 里的 5 个关键测试 case，准确率达标再合并。
 
-**核心文件**：
-- `backend/src/services/agentRouter.ts` — 路由服务（`routeAgentRequest()`）
-- `backend/src/routes/ai-agent.ts` — 端点 `POST /api/ai/agent-chat`
-- `backend/src/routes/ai.ts` — 共享 `buildWorkContextPrompt`/`TOOL_PROMPTS`/`STYLE_PROMPTS`/`streamResponse`
+**禁止改动**：
+- `backend/src/services/llm.ts`（已稳定）
+- `/api/ai/agent-chat` 的 SSE body 写入路由决策（前端透明是核心设计，决策只走日志和 `X-Agent-Route` header）
 
-**关键决策（不要改）**：
-- 路由模型：`gemini-2.5-flash`（速度快、便宜、支持 JSON）
-- 路由失败降级：默认模型（`claude-sonnet-4-6`）+ 全工具集，不阻塞用户
-- JSON 解析：先去 markdown 围栏 → JSON.parse → 失败正则兜底（沿用 `/tool-match` 模式）
-- 路由对前端透明：决策只走日志（`[agent-chat] route: ...`）和 HTTP header（`X-Agent-Route`），不写入 SSE body
-- 灰度开关：前端 URL 加 `?agent=1` 走 L3，否则走原 `/api/ai/chat`
+**新增 AI 端点时**：复用 `backend/src/routes/ai.ts` 已导出的 `streamResponse(res, extraHeaders?)`、`buildWorkContextPrompt`、`TOOL_PROMPTS`、`STYLE_PROMPTS`，不要重复造轮子。
 
-**调试**：
-- 路由决策日志：后端 console 看 `[agent-chat] route: intent=..., model=..., tools=[...], confidence=...`
-- 路由 prompt 在 `agentRouter.ts:buildRouterPrompt()`，需要修规则时改这里
-- 路由模型 ID 在 `agentRouter.ts:ROUTER_MODEL_ID` 常量
-
-**详细方案**：见 `L3-agent-router.md`
+L3 路由层完整设计见 `L3-agent-router.md`。
