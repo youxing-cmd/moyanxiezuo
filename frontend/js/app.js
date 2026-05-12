@@ -4631,7 +4631,7 @@ async function initPageInteractions(page) {
                 showToast('请先进入写作页面', 'warning');
                 return false;
             }
-            // 1. 强制清除所有引用高亮，防止新文本继承高亮样式
+            // 1. 强制清除所有引用高亮
             clearRefHighlight();
             editorArea.querySelectorAll('.ref-highlight').forEach(el => {
                 const parent = el.parentNode;
@@ -4642,14 +4642,13 @@ async function initPageInteractions(page) {
             });
             refSpanId = null;
 
-            // 2. 保存撤销状态（在 DOM 变更之前）
-            const content = editorArea.innerHTML;
+            // 2. 保存撤销状态
             const titleEl = editorArea.querySelector('h1#editorTitle');
-            let saveContent = content;
-            if (titleEl) saveContent = content.replace(titleEl.outerHTML, '');
+            const rawHtml = editorArea.innerHTML;
+            const saveContent = titleEl ? rawHtml.replace(titleEl.outerHTML, '') : rawHtml;
             pushEditorUndo(saveContent);
 
-            // 3. 插入文本
+            // 3. 定位光标
             editorArea.focus();
 
             // 空编辑器清理
@@ -4658,26 +4657,44 @@ async function initPageInteractions(page) {
             }
 
             const sel = window.getSelection();
-            if (sel.rangeCount > 0) {
-                const range = sel.getRangeAt(0);
-                if (editorArea.contains(range.commonAncestorContainer)) {
-                    if (!range.collapsed) range.deleteContents();
-                    // 按段落拆分，每段用 <p> 包裹
-                    const paragraphs = text.split('\n');
-                    const frag = document.createDocumentFragment();
-                    paragraphs.forEach(para => {
-                        const p = document.createElement('p');
-                        p.textContent = para || ' ';
-                        frag.appendChild(p);
-                    });
-                    range.insertNode(frag);
-                    range.collapse(false);
+            if (!sel.rangeCount) {
+                showToast('请先将光标放在编辑器中', 'warning');
+                return false;
+            }
+            const range = sel.getRangeAt(0);
+
+            // 如果光标在 h1/blockquote/pre 等块级元素内部，移到该元素之后
+            let node = range.commonAncestorContainer;
+            while (node && node !== editorArea) {
+                if (node.nodeType === 1 && /^H[1-6]|BLOCKQUOTE|PRE$/.test(node.tagName)) {
+                    const afterRange = document.createRange();
+                    afterRange.setStartAfter(node);
+                    afterRange.collapse(true);
                     sel.removeAllRanges();
-                    sel.addRange(range);
-                    editorArea.dispatchEvent(new Event('input', { bubbles: true }));
-                    showToast('已插入正文', 'success');
-                    return true;
+                    sel.addRange(afterRange);
+                    break;
                 }
+                node = node.parentNode;
+            }
+
+            // 4. 插入文本
+            const freshRange = sel.getRangeAt(0);
+            if (editorArea.contains(freshRange.commonAncestorContainer)) {
+                if (!freshRange.collapsed) freshRange.deleteContents();
+                const paragraphs = text.split('\n');
+                const frag = document.createDocumentFragment();
+                paragraphs.forEach(para => {
+                    const p = document.createElement('p');
+                    p.textContent = para || ' ';
+                    frag.appendChild(p);
+                });
+                freshRange.insertNode(frag);
+                freshRange.collapse(false);
+                sel.removeAllRanges();
+                sel.addRange(freshRange);
+                editorArea.dispatchEvent(new Event('input', { bubbles: true }));
+                showToast('已插入正文', 'success');
+                return true;
             }
             showToast('请先将光标放在编辑器中', 'warning');
             return false;
