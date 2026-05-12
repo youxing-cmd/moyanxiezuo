@@ -102,7 +102,7 @@ const outlineSchema = z.object({
 });
 
 // 构建作品上下文 system prompt
-async function buildWorkContextPrompt(workId: number, userId: number): Promise<string | null> {
+export async function buildWorkContextPrompt(workId: number, userId: number): Promise<string | null> {
   const [work] = await db.select().from(works).where(and(eq(works.id, workId), eq(works.userId, userId))).limit(1);
   if (!work) return null;
 
@@ -1692,5 +1692,5 @@ aiRouter.post('/tools/:name', async (c) => {
   }
 });
 
-export { TOOL_PROMPTS, DEFAULT_TOOL_PROMPTS };
+export { TOOL_PROMPTS, DEFAULT_TOOL_PROMPTS, STYLE_PROMPTS };
 export default aiRouter;
