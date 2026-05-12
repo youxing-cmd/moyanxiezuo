@@ -5104,13 +5104,21 @@ async function initPageInteractions(page) {
 
         // 多轮工具调用循环：发起 /chat → 接 SSE → 若有 tool_calls 则执行后再轮一次，最多 maxRounds 轮
         // 返回最终 AI 文本回复；过程中实时更新 aiContentEl 和 aiBubble.tool-trace
+        // 灰度：URL 加 ?agent=1 可切换到 /api/ai/agent-chat（L3 路由层，自动选择模型和工具）
         async function runChatWithTools(initialMessages, baseBody, aiContentEl, aiBubble, signal, maxRounds = 5) {
             const messages = [...initialMessages];
             let totalContent = '';
 
+            const useAgent = new URLSearchParams(location.search).get('agent') === '1';
+            const endpoint = useAgent ? `${API_BASE}/ai/agent-chat` : `${API_BASE}/ai/chat`;
+            // agent 模式下后端路由决定模型和工具，前端透传 model/tools 无意义
+            const filteredBody = useAgent
+                ? Object.fromEntries(Object.entries(baseBody).filter(([k]) => k !== 'model' && k !== 'modelId' && k !== 'tools'))
+                : baseBody;
+
             for (let round = 0; round < maxRounds; round++) {
-                const body = { ...baseBody, messages };
-                const res = await fetch(`${API_BASE}/ai/chat`, {
+                const body = { ...filteredBody, messages };
+                const res = await fetch(endpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

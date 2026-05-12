@@ -15,6 +15,7 @@ import {
   buildWorkContextPrompt,
   TOOL_PROMPTS,
   STYLE_PROMPTS,
+  streamResponse,
 } from './ai.js';
 
 const agentChatRouter = new Hono();
@@ -140,20 +141,15 @@ agentChatRouter.post('/agent-chat', async (c) => {
       tools.length > 0 ? tools : undefined,
     );
 
-    return new Response(res.body, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        // 路由决策放在 header 里方便后端日志和前端调试（如有需要）
-        'X-Agent-Route': encodeURIComponent(JSON.stringify({
-          intent: decision.intent,
-          model: decision.targetModelId,
-          tools: decision.enabledTools,
-          confidence: decision.confidence,
-          fallback: decision.fallback,
-        })),
-      },
+    return streamResponse(res, {
+      // 路由决策放在 header 里方便后端日志和前端调试（如有需要）
+      'X-Agent-Route': encodeURIComponent(JSON.stringify({
+        intent: decision.intent,
+        model: decision.targetModelId,
+        tools: decision.enabledTools,
+        confidence: decision.confidence,
+        fallback: decision.fallback,
+      })),
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

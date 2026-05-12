@@ -158,12 +158,13 @@ export async function buildWorkContextPrompt(workId: number, userId: number): Pr
   return prompt;
 }
 // 构造 SSE 流式响应
-function streamResponse(res: Response): Response {
+export function streamResponse(res: Response, extraHeaders?: Record<string, string>): Response {
   return new Response(res.body, {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
+      ...(extraHeaders || {}),
     },
   });
 }
