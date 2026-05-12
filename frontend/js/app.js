@@ -4631,6 +4631,8 @@ async function initPageInteractions(page) {
                 showToast('请先进入写作页面', 'warning');
                 return false;
             }
+            // 插入前清除引用高亮，防止新文本继承高亮样式
+            clearRefHighlight();
             editorArea.focus();
 
             // 空编辑器清理
