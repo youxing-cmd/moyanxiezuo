@@ -4631,8 +4631,25 @@ async function initPageInteractions(page) {
                 showToast('请先进入写作页面', 'warning');
                 return false;
             }
-            // 插入前清除引用高亮，防止新文本继承高亮样式
+            // 1. 强制清除所有引用高亮，防止新文本继承高亮样式
             clearRefHighlight();
+            editorArea.querySelectorAll('.ref-highlight').forEach(el => {
+                const parent = el.parentNode;
+                if (parent) {
+                    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+                    parent.removeChild(el);
+                }
+            });
+            refSpanId = null;
+
+            // 2. 保存撤销状态（在 DOM 变更之前）
+            const content = editorArea.innerHTML;
+            const titleEl = editorArea.querySelector('h1#editorTitle');
+            let saveContent = content;
+            if (titleEl) saveContent = content.replace(titleEl.outerHTML, '');
+            pushEditorUndo(saveContent);
+
+            // 3. 插入文本
             editorArea.focus();
 
             // 空编辑器清理
