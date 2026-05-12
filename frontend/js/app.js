@@ -4525,7 +4525,7 @@ async function initPageInteractions(page) {
         // AI对话：消息反馈按钮（复制/重新生成/点赞/点踩）
         const bindMsgFeedback = (container) => {
             container.querySelectorAll('.msg-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
+                btn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     const action = btn.dataset.action;
                     const bubble = btn.closest('.ai-msg-bubble');
