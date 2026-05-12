@@ -75,7 +75,8 @@ npm run typecheck # TypeScript类型检查
 | POST | /api/works/:id/chapters | 创建章节 |
 | PUT | /api/works/:id/chapters/:cid | 更新章节 |
 | DELETE | /api/works/:id/chapters/:cid | 删除章节 |
-| POST | /api/ai/chat | AI对话（SSE流式） |
+| POST | /api/ai/chat | AI对话（SSE流式，支持手动选模型/工具） |
+| POST | /api/ai/agent-chat | L3 路由层（gemini-2.5-flash 自动选模型和工具，SSE 流式） |
 | POST | /api/ai/continue | AI续写 |
 | POST | /api/ai/polish | AI润色 |
 | POST | /api/ai/outline | 生成大纲 |
@@ -96,3 +97,26 @@ AI_MODEL=gpt-4o-mini
 3. 注册/登录
 4. 创建作品 → 进入编辑器 → 写内容 → 保存
 5. 刷新页面，数据应持久化
+
+## L3 Agent 路由层（Router-Worker 架构）
+
+**目标**：用小模型做意图路由，避免每次都用顶级大模型 + 全工具集。
+
+**核心文件**：
+- `backend/src/services/agentRouter.ts` — 路由服务（`routeAgentRequest()`）
+- `backend/src/routes/ai-agent.ts` — 端点 `POST /api/ai/agent-chat`
+- `backend/src/routes/ai.ts` — 共享 `buildWorkContextPrompt`/`TOOL_PROMPTS`/`STYLE_PROMPTS`/`streamResponse`
+
+**关键决策（不要改）**：
+- 路由模型：`gemini-2.5-flash`（速度快、便宜、支持 JSON）
+- 路由失败降级：默认模型（`claude-sonnet-4-6`）+ 全工具集，不阻塞用户
+- JSON 解析：先去 markdown 围栏 → JSON.parse → 失败正则兜底（沿用 `/tool-match` 模式）
+- 路由对前端透明：决策只走日志（`[agent-chat] route: ...`）和 HTTP header（`X-Agent-Route`），不写入 SSE body
+- 灰度开关：前端 URL 加 `?agent=1` 走 L3，否则走原 `/api/ai/chat`
+
+**调试**：
+- 路由决策日志：后端 console 看 `[agent-chat] route: intent=..., model=..., tools=[...], confidence=...`
+- 路由 prompt 在 `agentRouter.ts:buildRouterPrompt()`，需要修规则时改这里
+- 路由模型 ID 在 `agentRouter.ts:ROUTER_MODEL_ID` 常量
+
+**详细方案**：见 `L3-agent-router.md`
