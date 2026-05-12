@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { db } from '../db/index.js';
-import { aiConversations, works, outlines, characters, users, pointTransactions } from '../db/schema.js';
+import { aiConversations, works, outlines, characters, users, pointTransactions, toolPrompts } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { callLLM, resolveModelConfig, type ChatMessage, type ModelConfig } from '../services/llm.js';
 import { getEnabledTools, getTool } from '../config/tools.js';
@@ -649,6 +649,25 @@ const DEFAULT_TOOL_PROMPTS: Record<string, string> = {
 };
 
 let TOOL_PROMPTS: Record<string, string> = { ...DEFAULT_TOOL_PROMPTS };
+
+// 启动时从数据库加载已修改的提示词，合并到 TOOL_PROMPTS
+async function loadToolPromptsFromDB() {
+  try {
+    const rows = await db.select().from(toolPrompts);
+    for (const row of rows) {
+      if (DEFAULT_TOOL_PROMPTS[row.toolKey]) {
+        TOOL_PROMPTS[row.toolKey] = row.prompt;
+      }
+    }
+    if (rows.length > 0) {
+      console.log(`[ai] 已从数据库加载 ${rows.length} 条自定义提示词`);
+    }
+  } catch (err) {
+    // 表可能不存在（首次启动前），忽略错误
+    console.warn('[ai] 加载自定义提示词失败（可忽略，首次启动时表可能不存在）:', err);
+  }
+}
+loadToolPromptsFromDB();
 
 const STYLE_PROMPTS: Record<string, string> = {
   creative: `风格：创意发挥型。
@@ -1421,7 +1440,7 @@ const updatePromptSchema = z.object({
   prompt: z.string().min(1),
 });
 
-// PUT /api/ai/tool-prompts/:tool — 更新单个工具提示词
+// PUT /api/ai/tool-prompts/:tool — 更新单个工具提示词（内存 + 数据库持久化）
 aiRouter.put('/tool-prompts/:tool', async (c) => {
   const tool = c.req.param('tool');
   if (!DEFAULT_TOOL_PROMPTS[tool]) {
@@ -1435,6 +1454,19 @@ aiRouter.put('/tool-prompts/:tool', async (c) => {
   }
 
   TOOL_PROMPTS[tool] = parsed.data.prompt;
+
+  // 持久化到数据库（upsert）
+  try {
+    const existing = await db.select().from(toolPrompts).where(eq(toolPrompts.toolKey, tool)).limit(1);
+    if (existing.length > 0) {
+      await db.update(toolPrompts).set({ prompt: parsed.data.prompt, updatedAt: new Date() }).where(eq(toolPrompts.toolKey, tool));
+    } else {
+      await db.insert(toolPrompts).values({ toolKey: tool, prompt: parsed.data.prompt });
+    }
+  } catch (err) {
+    console.warn(`[ai] 持久化提示词 ${tool} 失败:`, err);
+  }
+
   return c.json({
     key: tool,
     prompt: TOOL_PROMPTS[tool],
@@ -1476,13 +1508,19 @@ aiRouter.post('/tool-prompts/:tool/test', async (c) => {
   }
 });
 
-// POST /api/ai/tool-prompts/:tool/reset — 重置单个工具提示词到默认
-aiRouter.post('/tool-prompts/:tool/reset', (c) => {
+// POST /api/ai/tool-prompts/:tool/reset — 重置单个工具提示词到默认（内存 + 数据库）
+aiRouter.post('/tool-prompts/:tool/reset', async (c) => {
   const tool = c.req.param('tool');
   if (!DEFAULT_TOOL_PROMPTS[tool]) {
     return c.json({ error: '工具不存在' }, 404);
   }
   TOOL_PROMPTS[tool] = DEFAULT_TOOL_PROMPTS[tool];
+  // 从数据库删除自定义记录
+  try {
+    await db.delete(toolPrompts).where(eq(toolPrompts.toolKey, tool));
+  } catch (err) {
+    console.warn(`[ai] 删除自定义提示词 ${tool} 失败:`, err);
+  }
   return c.json({
     key: tool,
     prompt: TOOL_PROMPTS[tool],
@@ -1490,9 +1528,15 @@ aiRouter.post('/tool-prompts/:tool/reset', (c) => {
   });
 });
 
-// POST /api/ai/tool-prompts/reset — 重置所有工具提示词到默认
-aiRouter.post('/tool-prompts/reset', (c) => {
+// POST /api/ai/tool-prompts/reset — 重置所有工具提示词到默认（内存 + 数据库）
+aiRouter.post('/tool-prompts/reset', async (c) => {
   TOOL_PROMPTS = { ...DEFAULT_TOOL_PROMPTS };
+  // 清空数据库中的所有自定义提示词
+  try {
+    await db.delete(toolPrompts);
+  } catch (err) {
+    console.warn('[ai] 清空自定义提示词失败:', err);
+  }
   return c.json({ success: true, message: '所有提示词已恢复默认' });
 });
 

@@ -73,8 +73,15 @@ export const aiConversations = pgTable('ai_conversations', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').notNull(),
   workId: integer('work_id'),
-  messages: jsonb('messages').$type<Array<{role: string; content: string}>>().notNull().default([]),
+  messages: jsonb('messages').$type<Array<Record<string, unknown>>>().notNull().default([]),
   createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
+});
+
+export const toolPrompts = pgTable('tool_prompts', {
+  id: serial('id').primaryKey(),
+  toolKey: text('tool_key').notNull().unique(),
+  prompt: text('prompt').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).$defaultFn(() => new Date()),
 });
 
 export const characters = pgTable('characters', {

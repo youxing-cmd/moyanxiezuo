@@ -27,6 +27,10 @@ let modelConfigList = [];
 // 引用高亮 span 的 id（全局，供划词和@引用共用）
 let refSpanId = null;
 
+// 划词引用存储（ID → 完整文本，全局共享）
+const quoteStore = new Map();
+let quoteCounter = 0;
+
 // 厂商配置映射（选择厂商 → 自动填充 baseUrl / provider / 默认模型名）
 const PROVIDER_CONFIGS = {
     openai:      { label: 'OpenAI',      provider: 'openai-compatible', baseUrl: 'https://api.openai.com/v1',                                                    defaultModel: 'gpt-4o-mini' },
@@ -4677,6 +4681,32 @@ async function initPageInteractions(page) {
         // AI 对话历史
         let aiChatHistory = [];
 
+        // 估算文本token数（中文约2字=1token，英文约1词=1token）
+        function estimateTokens(text) {
+            if (!text) return 0;
+            // 中文字符数
+            const cjkCount = (text.match(/[一-鿿]/g) || []).length;
+            // 英文单词数
+            const enWords = (text.match(/[a-zA-Z]+/g) || []).length;
+            // 其他字符（标点、数字等）按1token/字符估算
+            const otherChars = text.length - cjkCount - (text.match(/[a-zA-Z]+/g)?.join('').length || 0);
+            return Math.ceil(cjkCount / 2) + enWords + Math.ceil(otherChars / 4);
+        }
+
+        // 按token限制裁剪历史消息（从最新往旧取，累计不超过maxTokens）
+        function trimHistoryByTokens(history, maxTokens = 20000) {
+            let totalTokens = 0;
+            const result = [];
+            for (let i = history.length - 1; i >= 0; i--) {
+                const msg = history[i];
+                const msgTokens = estimateTokens(msg.content) + 10; // 10 tokens 消息结构开销
+                if (totalTokens + msgTokens > maxTokens) break;
+                totalTokens += msgTokens;
+                result.unshift(msg);
+            }
+            return result;
+        }
+
         // 引用高亮 span 的 id（用于替换原文时定位）
 
         // 加载对话历史
@@ -4722,9 +4752,11 @@ async function initPageInteractions(page) {
             aiChatHistory.forEach((msg, index) => {
                 if (msg.role === 'user') {
                     chatMessages.appendChild(createUserBubble(msg.content));
-                } else if (msg.role === 'assistant') {
+                } else if (msg.role === 'assistant' && msg.content) {
+                    // 跳过只有 tool_calls 没有 content 的 assistant 消息
                     chatMessages.appendChild(createAiBubble(msg.content, index));
                 }
+                // role === 'tool' 的消息不渲染，仅作为上下文保留
             });
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
@@ -4861,9 +4893,11 @@ async function initPageInteractions(page) {
                     }
                 }
 
-                // 对话框中只展示精简引用（前30字）
+                // 存储完整引用，UI显示精简版
+                const quoteId = `q${++quoteCounter}`;
+                quoteStore.set(quoteId, selText);
                 const displayText = selText.length > 30 ? selText.slice(0, 30) + '...' : selText;
-                const refText = `@引用：「${displayText}」\n`;
+                const refText = `@引用：「${displayText}」#${quoteId}\n`;
                 const input = workspace.querySelector('#aiChatInput');
                 if (input) {
                     const start = input.selectionStart || 0;
@@ -5145,7 +5179,11 @@ async function initPageInteractions(page) {
                 // 没有 tool_calls：本次回复就是最终输出
                 if (!sseResult.toolCalls || sseResult.toolCalls.length === 0) {
                     maybeShowUndoButton(aiBubble);
-                    return totalContent;
+                    // 最终 assistant 消息也加入 messages，用于持久化
+                    if (sseResult.content) {
+                        messages.push({ role: 'assistant', content: sseResult.content });
+                    }
+                    return { content: totalContent, messages };
                 }
 
                 // 有 tool_calls：把 assistant 消息（含 tool_calls）push，然后逐个执行工具，结果回灌
@@ -5190,7 +5228,7 @@ async function initPageInteractions(page) {
             // 超过最大轮次
             appendToolTraceLine(aiBubble, '⚠️ 工具调用次数超过上限，已停止');
             maybeShowUndoButton(aiBubble);
-            return totalContent;
+            return { content: totalContent, messages };
         }
 
         // 如果最近一次工具调用有写入快照，在 AI 气泡的 feedback 区追加一个撤销按钮
@@ -5225,13 +5263,15 @@ async function initPageInteractions(page) {
             }
             if (!chatMessages) return;
 
-            // 解析 @引用格式
+            // 解析 @引用格式（支持从quoteStore取完整内容）
             let userContent = text;
             let refText = '';
-            const refMatch = text.match(/@引用：「([^」]+)」/);
+            const refMatch = text.match(/@引用：「[^」]*」#(q\d+)/);
             if (refMatch) {
-                refText = refMatch[1];
-                userContent = text.replace(/@引用：「[^」]+」/, '') + '\n\n【引用内容】\n' + refText;
+                const quoteId = refMatch[1];
+                refText = quoteStore.get(quoteId) || refMatch[0].match(/「([^」]*)」/)?.[1] || '';
+                quoteStore.delete(quoteId); // 用完即删
+                userContent = text.replace(/@引用：「[^」]*」#q\d+/, '').trim() + '\n\n【引用内容】\n' + refText;
             }
 
             // 添加用户消息到界面（显示原文，不显示解析后的内容）
@@ -5240,9 +5280,9 @@ async function initPageInteractions(page) {
             chatInput.value = '';
             trackAiUsage();
 
-            // 构建消息历史
+            // 构建消息历史（按token累计，不超过20K tokens）
             const messages = [
-                ...aiChatHistory.slice(-10),
+                ...trimHistoryByTokens(aiChatHistory, 20000),
                 { role: 'user', content: userContent }
             ];
 
@@ -5253,6 +5293,7 @@ async function initPageInteractions(page) {
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
             let fullResponse = '';
+            let fullChatMessages = [];
             let aborted = false;
             aiChatAbortCtrl = new AbortController();
             setAiSendButtonStreaming(true);
@@ -5278,19 +5319,19 @@ async function initPageInteractions(page) {
                 }
                 baseBody.modelId = getActiveModelId();
 
-                // L2 Agent: 仅在「默认对话」/「自定义工具」模式下启用工具白名单
-                // 专用工具（续写/润色/...）有自己的 system prompt，AI 角色固定，强行加工具会角色冲突
-                if (!isSpecializedTool) {
-                    baseBody.tools = [
-                        'get_full_text', 'get_selection', 'get_chapter_list',
-                        'replace_selection', 'insert_at_cursor', 'append_paragraph',
-                        'find_and_replace', 'get_characters', 'get_outline',
-                    ];
-                }
+                // L2 Agent: 所有模式都启用工具白名单（含专用工具）
+                // 专用工具的 system prompt 定义 AI 角色，工具只提供编辑器上下文读写能力
+                baseBody.tools = [
+                    'get_full_text', 'get_selection', 'get_chapter_list',
+                    'replace_selection', 'insert_at_cursor', 'append_paragraph',
+                    'find_and_replace', 'get_characters', 'get_outline',
+                ];
 
-                fullResponse = await runChatWithTools(
+                const result = await runChatWithTools(
                     initialMessages, baseBody, aiContentEl, aiBubble, aiChatAbortCtrl.signal,
                 );
+                fullResponse = result.content;
+                fullChatMessages = result.messages;
 
                 // 流完成后，将内容格式化为段落（与续写格式统一）
                 if (aiContentEl) aiContentEl.innerHTML = formatAiParagraphs(fullResponse);
@@ -5309,20 +5350,22 @@ async function initPageInteractions(page) {
                 setAiSendButtonStreaming(false);
             }
 
-            // 保存到历史（含被中止的部分内容；空内容不保存）
+            // 保存到历史（含 tool_calls 和 tool 结果，空内容不保存）
             const savedAssistant = aborted ? (fullResponse ? fullResponse + '\n\n[已停止]' : '') : fullResponse;
             if (savedAssistant) {
-                aiChatHistory.push({ role: 'user', content: text });
-                aiChatHistory.push({ role: 'assistant', content: savedAssistant });
-                if (aiChatHistory.length > 50) {
-                    aiChatHistory = aiChatHistory.slice(-50);
-                }
-                if (currentWorkId) {
-                    api('/ai/conversations', {
-                        method: 'POST',
-                        body: { workId: Number(currentWorkId), messages: aiChatHistory }
-                    }).catch(() => {});
-                }
+                // 用完整 messages 替换简单的 user+assistant，保留工具调用过程
+                const historyMsgs = fullChatMessages.length > 0
+                    ? fullChatMessages.filter(m => m.role !== 'system')
+                    : [{ role: 'user', content: text }, { role: 'assistant', content: savedAssistant }];
+                aiChatHistory.push(...historyMsgs);
+                // 按token限制存储历史（保留最近100K tokens）
+                aiChatHistory = trimHistoryByTokens(aiChatHistory, 100000);
+            }
+            if (currentWorkId) {
+                api('/ai/conversations', {
+                    method: 'POST',
+                    body: { workId: Number(currentWorkId), messages: aiChatHistory }
+                }).catch(() => {});
             }
         };
 
@@ -5339,31 +5382,27 @@ async function initPageInteractions(page) {
                     baseBody.style = currentChatStyle;
                 }
                 baseBody.modelId = getActiveModelId();
-                if (!isSpecializedTool) {
-                    baseBody.tools = [
-                        'get_full_text', 'get_selection', 'get_chapter_list',
-                        'replace_selection', 'insert_at_cursor', 'append_paragraph',
-                        'find_and_replace', 'get_characters', 'get_outline',
-                    ];
-                }
+                baseBody.tools = [
+                    'get_full_text', 'get_selection', 'get_chapter_list',
+                    'replace_selection', 'insert_at_cursor', 'append_paragraph',
+                    'find_and_replace', 'get_characters', 'get_outline',
+                ];
 
                 const aiBubble = contentEl?.closest('.ai-msg-bubble') || null;
-                fullResponse = await runChatWithTools(
+                const result = await runChatWithTools(
                     contextMessages, baseBody, contentEl, aiBubble, undefined,
                 );
+                fullResponse = result.content;
 
                 // 流完成后格式化段落
                 if (contentEl) contentEl.innerHTML = formatAiParagraphs(fullResponse);
 
-                // 更新历史记录中的该条消息
-                if (msgIndex < aiChatHistory.length) {
-                    aiChatHistory[msgIndex] = { role: 'assistant', content: fullResponse };
-                }
+                // 更新历史记录：替换该位置及之后的消息为新的完整 messages
+                const newMsgs = result.messages.filter(m => m.role !== 'system');
+                aiChatHistory.splice(msgIndex, aiChatHistory.length - msgIndex, ...newMsgs);
 
-                // 限制历史长度
-                if (aiChatHistory.length > 50) {
-                    aiChatHistory = aiChatHistory.slice(-50);
-                }
+                // 按token限制存储历史（保留最近100K tokens）
+                aiChatHistory = trimHistoryByTokens(aiChatHistory, 100000);
 
                 // 异步保存到后端
                 if (currentWorkId) {
@@ -10274,9 +10313,11 @@ function sendSelectionToChat() {
         return;
     }
 
-    // 对话框中只展示精简引用（前30字）
+    // 存储完整引用，UI显示精简版
+    const quoteId = `q${++quoteCounter}`;
+    quoteStore.set(quoteId, selText);
     const displayText = selText.length > 30 ? selText.slice(0, 30) + '...' : selText;
-    const refText = `@引用：「${displayText}」\n`;
+    const refText = `@引用：「${displayText}」#${quoteId}\n`;
     const start = chatInput.selectionStart || 0;
     const end = chatInput.selectionEnd || 0;
     const before = chatInput.value.substring(0, start);
