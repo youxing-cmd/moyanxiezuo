@@ -157,6 +157,23 @@ export async function buildWorkContextPrompt(workId: number, userId: number): Pr
 
   return prompt;
 }
+// 构造 SSE 流式响应
+function streamResponse(res: Response): Response {
+  return new Response(res.body, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
+}
+
+// 从非流式响应中提取 AI 内容
+async function extractContent(res: Response): Promise<string> {
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
 
 // 工具 system prompt 映射（可运行时修改）
 const DEFAULT_TOOL_PROMPTS: Record<string, string> = {
@@ -726,13 +743,7 @@ aiRouter.post('/chat', async (c) => {
     // 注意：完整对话历史（含AI回复）由前端在流结束后通过 POST /api/ai/conversations 保存
     // 此处不做保存，避免存储不完整的历史
 
-    return new Response(res.body, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
+    return streamResponse(res);
   } catch (err: any) {
     return c.json({ error: err.message || 'AI调用失败' }, 500);
   }
@@ -800,19 +811,9 @@ aiRouter.post('/continue', async (c) => {
       { role: 'user', content: `请根据以下内容续写小说，${styleHint}，续写长度约${lengthHint}：\n\n${context}` },
     ], stream);
 
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
+    if (stream) return streamResponse(res);
 
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content || '';
-    return c.json({ content });
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '续写失败' }, 500);
   }
@@ -838,19 +839,9 @@ aiRouter.post('/polish', async (c) => {
       { role: 'user', content: `请对以下文字进行润色，要求：${styleHint}。\n\n${text}` },
     ], stream);
 
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
+    if (stream) return streamResponse(res);
 
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content || '';
-    return c.json({ content });
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '润色失败' }, 500);
   }
@@ -874,19 +865,9 @@ aiRouter.post('/outline', async (c) => {
       { role: 'system', content: TOOL_PROMPTS.outline },
       { role: 'user', content: `基于题材「${genre || '未指定'}」、主题「${theme}」，生成共${chapters}章的小说总纲。` },
     ], stream, modelConfig);
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
+    if (stream) return streamResponse(res);
 
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content || '';
-    return c.json({ content });
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '大纲生成失败' }, 500);
   }
@@ -953,18 +934,9 @@ aiRouter.post('/expand', async (c) => {
       { role: 'user', content: `将以下文本扩写为更完整的小说段落。${style ? `风格要求：${style}` : ''}\n\n${text}` },
     ], stream);
 
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
+    if (stream) return streamResponse(res);
 
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '扩写失败' }, 500);
   }
@@ -985,17 +957,8 @@ aiRouter.post('/character', async (c) => {
       { role: 'system', content: TOOL_PROMPTS.character },
       { role: 'user', content: `根据题材「${genre || '未指定'}」、角色定位「${role}」${context ? `、背景设定「${context}」` : ''}，生成角色设定卡。` },
     ], stream, modelConfig);
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    if (stream) return streamResponse(res);
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '角色生成失败' }, 500);
   }
@@ -1016,17 +979,8 @@ aiRouter.post('/chapter-outline', async (c) => {
       { role: 'system', content: TOOL_PROMPTS['chapter-outline'] },
       { role: 'user', content: `根据以下总纲，生成连续${count}章的章纲${volume ? `（${volume}）` : ''}：\n\n${outline}` },
     ], stream, modelConfig);
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    if (stream) return streamResponse(res);
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '章纲生成失败' }, 500);
   }
@@ -1047,17 +1001,8 @@ aiRouter.post('/inspiration', async (c) => {
       { role: 'system', content: TOOL_PROMPTS.inspiration },
       { role: 'user', content: `问题：${problem}${context ? `\n当前剧情背景：${context}` : ''}` },
     ], stream, modelConfig);
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    if (stream) return streamResponse(res);
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '灵感生成失败' }, 500);
   }
@@ -1082,17 +1027,8 @@ aiRouter.post('/fuse-inspirations', async (c) => {
       { role: 'system', content: TOOL_PROMPTS.fuseInspirations },
       { role: 'user', content: `请将以下${inspirations.length}个灵感进行深度融合，创造一个有化学反应的全新作品创意：\n\n${inspirationText}` },
     ], stream, modelConfig);
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    if (stream) return streamResponse(res);
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '热梗融合失败' }, 500);
   }
@@ -1113,17 +1049,8 @@ aiRouter.post('/titles', async (c) => {
       { role: 'system', content: TOOL_PROMPTS.titles },
       { role: 'user', content: `根据以下内容生成标题${style ? `，偏${style}风格` : ''}：\n\n${content}` },
     ], stream, modelConfig);
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    if (stream) return streamResponse(res);
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '标题生成失败' }, 500);
   }
@@ -1145,18 +1072,9 @@ aiRouter.post('/rewrite', async (c) => {
       { role: 'user', content: `将以下文本改写为${targetStyle || '更流畅自然'}的风格。\n\n${text}` },
     ], stream);
 
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
+    if (stream) return streamResponse(res);
 
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '改写失败' }, 500);
   }
@@ -1185,18 +1103,9 @@ aiRouter.post('/detect', async (c) => {
       { role: 'user', content: `请对以下文本进行全维度深度审计：\n\n${text}` },
     ], stream);
 
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
+    if (stream) return streamResponse(res);
 
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '检测失败' }, 500);
   }
@@ -1225,18 +1134,9 @@ aiRouter.post('/de-ai', async (c) => {
       { role: 'user', content: `请重写以下内容以去除AI味：\n\n${text}` },
     ], stream);
 
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
+    if (stream) return streamResponse(res);
 
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '去AI味失败' }, 500);
   }
@@ -1265,17 +1165,8 @@ aiRouter.post('/scene', async (c) => {
       { role: 'system', content: TOOL_PROMPTS.scene },
       { role: 'user', content: `生成以下场景的描写：${scene}${mood ? `\n氛围要求：${mood}` : ''}${style ? `\n风格要求：${style}` : ''}\n\n直接输出描写内容，不要添加额外说明。` },
     ], stream, modelConfig);
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    if (stream) return streamResponse(res);
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '场景描写生成失败' }, 500);
   }
@@ -1294,17 +1185,8 @@ aiRouter.post('/dialogue', async (c) => {
       { role: 'system', content: TOOL_PROMPTS.dialogue },
       { role: 'user', content: `为以下角色生成对话：${characters}${context ? `\n场景背景：${context}` : ''}${tone ? `\n对话基调：${tone}` : ''}\n\n直接输出对话内容，不要添加额外说明。` },
     ], stream, modelConfig);
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    if (stream) return streamResponse(res);
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '对话生成失败' }, 500);
   }
@@ -1323,17 +1205,8 @@ aiRouter.post('/conflict', async (c) => {
       { role: 'system', content: TOOL_PROMPTS.conflict },
       { role: 'user', content: `为以下剧情设计冲突升级方案：\n${context}${level ? `\n升级强度：${level}` : ''}\n\n直接输出方案，不要添加额外说明。` },
     ], stream, modelConfig);
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    if (stream) return streamResponse(res);
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '冲突升级设计失败' }, 500);
   }
@@ -1352,17 +1225,8 @@ aiRouter.post('/foreshadow', async (c) => {
       { role: 'system', content: TOOL_PROMPTS.foreshadow },
       { role: 'user', content: `为以下剧情设计伏笔：\n${context}${target ? `\n需要铺垫的目标事件：${target}` : ''}\n\n直接输出伏笔设计方案，不要添加额外说明。` },
     ], stream, modelConfig);
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    if (stream) return streamResponse(res);
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '伏笔设计失败' }, 500);
   }
@@ -1381,17 +1245,8 @@ aiRouter.post('/pacing', async (c) => {
       { role: 'system', content: TOOL_PROMPTS.pacing },
       { role: 'user', content: `分析以下文本的章节节奏：\n\n${text}\n\n直接输出分析报告和修改建议，不要添加额外说明。` },
     ], stream, modelConfig);
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    if (stream) return streamResponse(res);
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '节奏分析失败' }, 500);
   }
@@ -1410,17 +1265,8 @@ aiRouter.post('/hook', async (c) => {
       { role: 'system', content: TOOL_PROMPTS.hook },
       { role: 'user', content: `优化以下小说开头，提升留存率：\n\n${opening}${genre ? `\n题材：${genre}` : ''}\n\n直接输出优化后的开篇内容，不要添加额外说明。` },
     ], stream, modelConfig);
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    if (stream) return streamResponse(res);
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '开篇优化失败' }, 500);
   }
@@ -1439,17 +1285,8 @@ aiRouter.post('/blurb', async (c) => {
       { role: 'system', content: TOOL_PROMPTS.blurb },
       { role: 'user', content: `根据以下内容生成吸引人的作品简介：\n\n${outline}${genre ? `\n题材：${genre}` : ''}\n\n直接输出简介文案，不要添加额外说明。` },
     ], stream, modelConfig);
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    if (stream) return streamResponse(res);
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '简介生成失败' }, 500);
   }
@@ -1519,8 +1356,7 @@ ${toolList}
       modelConfig,
     );
 
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content || '';
+    const content = await extractContent(res);
 
     // 解析JSON
     let result: { tool: string; confidence: number } = { tool: 'default', confidence: 0 };
@@ -1631,18 +1467,9 @@ aiRouter.post('/tool-prompts/:tool/test', async (c) => {
       { role: 'user', content: input },
     ], stream);
 
-    if (stream) {
-      return new Response(res.body, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
-    }
+    if (stream) return streamResponse(res);
 
-    const data = await res.json();
-    return c.json({ content: data.choices?.[0]?.message?.content || '' });
+    return c.json({ content: await extractContent(res) });
   } catch (err: any) {
     return c.json({ error: err.message || '测试失败' }, 500);
   }
