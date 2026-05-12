@@ -4917,6 +4917,12 @@ async function initPageInteractions(page) {
                         span.style.cssText = 'background:rgba(99,102,241,0.15); color:var(--text-muted);';
                         refSpanId = span.id;
                         range.surroundContents(span);
+                        // 将光标移到高亮 span 之后，防止后续输入继承高亮样式
+                        const afterRange = document.createRange();
+                        afterRange.setStartAfter(span);
+                        afterRange.collapse(true);
+                        selection.removeAllRanges();
+                        selection.addRange(afterRange);
                     } catch (err) {
                         // 跨元素选中时 surroundContents 会失败，fallback 不做高亮
                         console.warn('引用高亮失败（跨元素选中）', err);
@@ -10247,7 +10253,7 @@ async function quickRunAiTool(tool) {
     `);
 
     const body = { [config.field]: sel };
-    await streamSSE(`${API_BASE}${config.route}`, { ...body, stream: true },
+    await streamSSE(`${API_BASE}${config.route}`, { ...body, stream: true, modelId: getActiveModelId() },
         (text) => {
             const el = document.getElementById('quickToolResult');
             if (el) el.innerHTML = formatAiParagraphs(text);
@@ -10348,6 +10354,12 @@ function sendSelectionToChat() {
             span.style.cssText = 'background:rgba(99,102,241,0.15); color:var(--text-muted);';
             refSpanId = span.id;
             range.surroundContents(span);
+            // 将光标移到高亮 span 之后，防止后续输入继承高亮样式
+            const afterRange = document.createRange();
+            afterRange.setStartAfter(span);
+            afterRange.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(afterRange);
         } catch (err) {
             console.warn('引用高亮失败（跨元素选中）', err);
         }
@@ -10474,7 +10486,7 @@ async function handleContinueText() {
         showToast('续写完成', 'success');
     });
 
-    await streamSSE(`${API_BASE}/ai/continue`, { context: content, stream: true },
+    await streamSSE(`${API_BASE}/ai/continue`, { context: content, stream: true, modelId: getActiveModelId() },
         (text) => {
             const el = document.getElementById('continueResultText');
             if (el) el.innerHTML = formatAiParagraphs(text);
@@ -10512,7 +10524,7 @@ async function handleContinuePlot() {
         </div>
     `);
 
-    await streamSSE(`${API_BASE}/ai/continue`, { context: content, style: 'plot', stream: true },
+    await streamSSE(`${API_BASE}/ai/continue`, { context: content, style: 'plot', stream: true, modelId: getActiveModelId() },
         (text) => {
             const el = document.getElementById('plotResultContent');
             if (el) el.innerHTML = formatAiParagraphs(text);
@@ -10605,7 +10617,7 @@ async function handleReplaceText() {
     // 先显示空弹窗（加载状态）
     showReplaceModal(sel, '', true);
 
-    await streamSSE(`${API_BASE}/ai/rewrite`, { text: sel, stream: true },
+    await streamSSE(`${API_BASE}/ai/rewrite`, { text: sel, stream: true, modelId: getActiveModelId() },
         (text) => {
             const el = document.getElementById('replaceResultText');
             if (el) el.innerHTML = formatAiParagraphs(text);
@@ -10713,7 +10725,7 @@ async function handleDetectText() {
         </div>
     `);
 
-    await streamSSE(`${API_BASE}/ai/detect`, { text: plainText, stream: true },
+    await streamSSE(`${API_BASE}/ai/detect`, { text: plainText, stream: true, modelId: getActiveModelId() },
         (text) => {
             const el = document.getElementById('detectResultContent');
             if (el) el.innerHTML = formatAiParagraphs(text);
@@ -10805,7 +10817,7 @@ async function handleDeAiText() {
         </div>
     `);
 
-    await streamSSE(`${API_BASE}/ai/de-ai`, { text: plainText, stream: true },
+    await streamSSE(`${API_BASE}/ai/de-ai`, { text: plainText, stream: true, modelId: getActiveModelId() },
         (text) => {
             const el = document.getElementById('deAiResultContent');
             if (el) el.innerHTML = formatAiParagraphs(text);
