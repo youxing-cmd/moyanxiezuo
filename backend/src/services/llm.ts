@@ -3,6 +3,9 @@ import {
   getPresetModelById,
   type PresetModel,
 } from '../config/presetModels.js';
+import { db } from '../db/index.js';
+import { modelConfigs } from '../db/schema.js';
+import { eq, and } from 'drizzle-orm';
 
 // 模型配置类型（运行时使用，含 apiKey）
 export interface ModelConfig {
@@ -235,20 +238,52 @@ function classifyFetchError(err: unknown): LLMError {
 }
 
 // 从预设清单中解析模型配置
-// modelId 为 string：查预设；为 number/缺失/无效：回退默认预设
-// userId 参数保留以兼容旧调用，当前不使用（预设全局共享）
-export function resolveModelConfig(
-  _userId: number,
+// modelId 为 string：查预设 → 查用户模型库；为 number/缺失/无效：回退默认预设
+export async function resolveModelConfig(
+  userId: number,
   modelId?: string | number | null,
-): ModelConfig | null {
-  // 1. 显式传 string id → 优先使用
+): Promise<ModelConfig | null> {
+  // 1. 显式传 string id → 优先使用预设
   if (typeof modelId === 'string' && modelId) {
     const preset = getPresetModelById(modelId);
     if (preset) return presetToModelConfig(preset);
-    // 找不到 → 回退默认
+    // 预设找不到 → 查用户模型库（数字 id 或自定义名称）
+    const numericId = parseInt(modelId, 10);
+    if (!isNaN(numericId)) {
+      const rows = await db
+        .select()
+        .from(modelConfigs)
+        .where(and(eq(modelConfigs.id, numericId), eq(modelConfigs.userId, userId)))
+        .limit(1);
+      if (rows[0]) {
+        const r = rows[0];
+        return {
+          provider: r.provider,
+          baseUrl: r.baseUrl,
+          apiKey: r.apiKey,
+          modelName: r.modelName,
+        };
+      }
+    }
   }
 
-  // 2. 没传 / 是 number / 找不到 → 默认预设
+  // 2. 没传 / 是 number → 查用户默认模型
+  const userDefault = await db
+    .select()
+    .from(modelConfigs)
+    .where(and(eq(modelConfigs.userId, userId), eq(modelConfigs.isDefault, true)))
+    .limit(1);
+  if (userDefault[0]) {
+    const r = userDefault[0];
+    return {
+      provider: r.provider,
+      baseUrl: r.baseUrl,
+      apiKey: r.apiKey,
+      modelName: r.modelName,
+    };
+  }
+
+  // 3. 全局默认预设
   const defaultId = getDefaultPresetModelId();
   if (!defaultId) return null;
   const def = getPresetModelById(defaultId);

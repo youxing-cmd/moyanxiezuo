@@ -130,7 +130,7 @@ agentChatRouter.post('/agent-chat', async (c) => {
   }
 
   // 3. 用路由决策的模型和工具调用大模型
-  const modelConfig = resolveModelConfig(userId, decision.targetModelId);
+  const modelConfig = await resolveModelConfig(userId, decision.targetModelId);
   const tools = getEnabledTools(decision.enabledTools);
 
   try {

@@ -157,14 +157,20 @@ window.jzEditor = {
 
         this._saveSnapshot();
         range.deleteContents();
-        const lines = text.split('\n');
-        for (let i = lines.length - 1; i >= 0; i--) {
-            if (i < lines.length - 1) range.insertNode(document.createElement('br'));
-            range.insertNode(document.createTextNode(lines[i]));
-        }
+
+        // 按段落拆分，每段用 <p> 包裹
+        const paragraphs = text.split('\n');
+        const frag = document.createDocumentFragment();
+        paragraphs.forEach(para => {
+            const p = document.createElement('p');
+            p.textContent = para || ' ';
+            frag.appendChild(p);
+        });
+        range.insertNode(frag);
         range.collapse(false);
         sel.removeAllRanges();
         sel.addRange(range);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
         return JSON.stringify({ ok: true, replaced_chars: text.length });
     },
 
@@ -174,25 +180,44 @@ window.jzEditor = {
         const text = (args && typeof args.text === 'string') ? args.text : '';
         if (!text) return JSON.stringify({ ok: false, error: '插入文本为空' });
 
-        const sel = window.getSelection();
-        if (!sel || sel.rangeCount === 0) {
-            return JSON.stringify({ ok: false, error: '请先将光标放在编辑器中' });
-        }
-        const range = sel.getRangeAt(0);
-        if (!el.contains(range.commonAncestorContainer)) {
-            return JSON.stringify({ ok: false, error: '请先将光标放在编辑器中' });
+        this._saveSnapshot();
+
+        // 生成 <p> HTML
+        const html = text.split('\n').map(para =>
+            '<p>' + (para ? escapeHtml(para) : '&nbsp;') + '</p>'
+        ).join('');
+
+        // 空编辑器：直接 innerHTML，避免 contentEditable 空状态光标问题
+        const isEmpty = !el.textContent.trim() || el.innerHTML === '<br>' || el.innerHTML === '<div><br></div>';
+        if (isEmpty) {
+            el.innerHTML = html;
+            const sel = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+        } else {
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0) {
+                return JSON.stringify({ ok: false, error: '请先将光标放在编辑器中' });
+            }
+            const range = sel.getRangeAt(0);
+            if (!el.contains(range.commonAncestorContainer)) {
+                return JSON.stringify({ ok: false, error: '请先将光标放在编辑器中' });
+            }
+            if (!range.collapsed) range.deleteContents();
+            const frag = document.createDocumentFragment();
+            const temp = document.createElement('div');
+            temp.innerHTML = html;
+            while (temp.firstChild) frag.appendChild(temp.firstChild);
+            range.insertNode(frag);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
         }
 
-        this._saveSnapshot();
-        if (!range.collapsed) range.deleteContents();
-        const lines = text.split('\n');
-        for (let i = lines.length - 1; i >= 0; i--) {
-            if (i < lines.length - 1) range.insertNode(document.createElement('br'));
-            range.insertNode(document.createTextNode(lines[i]));
-        }
-        range.collapse(false);
-        sel.removeAllRanges();
-        sel.addRange(range);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
         return JSON.stringify({ ok: true, inserted_chars: text.length });
     },
 
@@ -204,21 +229,22 @@ window.jzEditor = {
         if (!text) return JSON.stringify({ ok: false, error: '追加文本为空' });
 
         this._saveSnapshot();
-        const range = document.createRange();
-        range.selectNodeContents(el);
-        range.collapse(false);
 
-        // 空行分隔
-        range.insertNode(document.createElement('br'));
-        range.insertNode(document.createElement('br'));
-
-        const lines = text.split('\n');
-        for (let i = lines.length - 1; i >= 0; i--) {
-            if (i < lines.length - 1) range.insertNode(document.createElement('br'));
-            range.insertNode(document.createTextNode(lines[i]));
+        // 空编辑器清理
+        if (!el.innerHTML.trim() || el.innerHTML === '<br>' || el.innerHTML === '<div><br></div>') {
+            el.innerHTML = '';
         }
-        range.collapse(false);
+
+        // 按段落拆分，每段用 <p> 追加
+        const paragraphs = text.split('\n');
+        paragraphs.forEach(para => {
+            const p = document.createElement('p');
+            p.textContent = para || ' ';
+            el.appendChild(p);
+        });
+
         el.scrollTop = el.scrollHeight;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
         return JSON.stringify({ ok: true, appended_chars: text.length });
     },
 
@@ -4534,6 +4560,10 @@ async function initPageInteractions(page) {
                         replaceRefText(text);
                         console.log('[埋点]', { event: 'ai_msg_replace', chapterId: 127, msgPreview: msgText.slice(0, 50), timestamp: new Date().toISOString() });
                     } else if (action === 'regenerate') {
+                        if (aiChatStreaming) {
+                            showToast('正在生成中，请稍候', 'warning');
+                            return;
+                        }
                         const msgIndex = parseInt(bubble.dataset.msgIndex);
                         if (isNaN(msgIndex) || msgIndex <= 0 || msgIndex >= aiChatHistory.length) {
                             showToast('无法重新生成', 'warning');
@@ -4546,12 +4576,16 @@ async function initPageInteractions(page) {
                             return;
                         }
                         showToast('正在重新生成...', 'info');
-                        // 清空当前消息内容
                         contentEl.textContent = '';
-                        // 构建上下文：从开头到该用户消息
                         const contextMessages = aiChatHistory.slice(0, userMsgIndex + 1);
-                        // SSE 重新生成
-                        regenerateMessage(contextMessages, msgIndex, contentEl);
+                        aiChatAbortCtrl = new AbortController();
+                        setAiSendButtonStreaming(true);
+                        try {
+                            await regenerateMessage(contextMessages, msgIndex, contentEl, aiChatAbortCtrl.signal);
+                        } finally {
+                            aiChatAbortCtrl = null;
+                            setAiSendButtonStreaming(false);
+                        }
                         console.log('[埋点]', { event: 'ai_msg_regenerate', chapterId: 127, msgPreview: msgText.slice(0, 50), timestamp: new Date().toISOString() });
                     } else if (action === 'like') {
                         btn.style.color = btn.style.color === 'var(--success)' ? 'var(--text-muted)' : 'var(--success)';
@@ -4598,36 +4632,30 @@ async function initPageInteractions(page) {
                 return false;
             }
             editorArea.focus();
+
+            // 空编辑器清理
+            if (!editorArea.innerHTML.trim() || editorArea.innerHTML === '<br>' || editorArea.innerHTML === '<div><br></div>') {
+                editorArea.innerHTML = '';
+            }
+
             const sel = window.getSelection();
             if (sel.rangeCount > 0) {
                 const range = sel.getRangeAt(0);
                 if (editorArea.contains(range.commonAncestorContainer)) {
-                    // 在光标位置插入文本（保留换行格式）
-                    const lines = text.split('\n');
-                    let firstNode = null;
-                    let lastNode = null;
-                    lines.forEach((line, i) => {
-                        if (i > 0) {
-                            const br = document.createElement('br');
-                            range.insertNode(br);
-                            range.setStartAfter(br);
-                            range.collapse(true);
-                        }
-                        if (line) {
-                            const textNode = document.createTextNode(line);
-                            range.insertNode(textNode);
-                            if (!firstNode) firstNode = textNode;
-                            lastNode = textNode;
-                            range.setStartAfter(textNode);
-                            range.collapse(true);
-                        }
+                    if (!range.collapsed) range.deleteContents();
+                    // 按段落拆分，每段用 <p> 包裹
+                    const paragraphs = text.split('\n');
+                    const frag = document.createDocumentFragment();
+                    paragraphs.forEach(para => {
+                        const p = document.createElement('p');
+                        p.textContent = para || ' ';
+                        frag.appendChild(p);
                     });
+                    range.insertNode(frag);
+                    range.collapse(false);
                     sel.removeAllRanges();
-                    if (lastNode) {
-                        range.setStartAfter(lastNode);
-                        range.collapse(true);
-                    }
                     sel.addRange(range);
+                    editorArea.dispatchEvent(new Event('input', { bubbles: true }));
                     showToast('已插入正文', 'success');
                     return true;
                 }
@@ -4693,14 +4721,16 @@ async function initPageInteractions(page) {
             return Math.ceil(cjkCount / 2) + enWords + Math.ceil(otherChars / 4);
         }
 
-        // 按token限制裁剪历史消息（从最新往旧取，累计不超过maxTokens）
+        // 按token限制裁剪历史消息（从最新往旧取，累计不超过maxTokens，至少保留最近1条）
         function trimHistoryByTokens(history, maxTokens = 20000) {
+            if (history.length === 0) return [];
             let totalTokens = 0;
             const result = [];
             for (let i = history.length - 1; i >= 0; i--) {
                 const msg = history[i];
                 const msgTokens = estimateTokens(msg.content) + 10; // 10 tokens 消息结构开销
-                if (totalTokens + msgTokens > maxTokens) break;
+                // 至少保留最近1条消息
+                if (result.length > 0 && totalTokens + msgTokens > maxTokens) break;
                 totalTokens += msgTokens;
                 result.unshift(msg);
             }
@@ -4895,6 +4925,11 @@ async function initPageInteractions(page) {
 
                 // 存储完整引用，UI显示精简版
                 const quoteId = `q${++quoteCounter}`;
+                // 防止泄漏：超过50个引用时清理最早的
+                if (quoteStore.size > 50) {
+                    const firstKey = quoteStore.keys().next().value;
+                    quoteStore.delete(firstKey);
+                }
                 quoteStore.set(quoteId, selText);
                 const displayText = selText.length > 30 ? selText.slice(0, 30) + '...' : selText;
                 const refText = `@引用：「${displayText}」#${quoteId}\n`;
@@ -5103,7 +5138,7 @@ async function initPageInteractions(page) {
                 return JSON.stringify({ error: `未实现的工具: ${name}` });
             }
             try {
-                const result = await fn(args || {});
+                const result = await fn.call(window.jzEditor, args || {});
                 if (typeof result === 'string') return result;
                 return JSON.stringify(result ?? null);
             } catch (err) {
@@ -5263,19 +5298,24 @@ async function initPageInteractions(page) {
             }
             if (!chatMessages) return;
 
-            // 解析 @引用格式（支持从quoteStore取完整内容）
+            // 解析 @引用格式（支持从quoteStore取完整内容，兼容旧格式）
             let userContent = text;
             let refText = '';
-            const refMatch = text.match(/@引用：「[^」]*」#(q\d+)/);
+            const refMatch = text.match(/@引用：「[^」]*」(?:#(q\d+))?/);
             if (refMatch) {
                 const quoteId = refMatch[1];
-                refText = quoteStore.get(quoteId) || refMatch[0].match(/「([^」]*)」/)?.[1] || '';
-                quoteStore.delete(quoteId); // 用完即删
-                userContent = text.replace(/@引用：「[^」]*」#q\d+/, '').trim() + '\n\n【引用内容】\n' + refText;
+                if (quoteId) {
+                    refText = quoteStore.get(quoteId) || refMatch[0].match(/「([^」]*)」/)?.[1] || '';
+                    quoteStore.delete(quoteId);
+                } else {
+                    refText = refMatch[0].match(/「([^」]*)」/)?.[1] || '';
+                }
+                userContent = text.replace(/@引用：「[^」]*」(?:#q\d+)?/, '').trim() + '\n\n【引用内容】\n' + refText;
             }
 
-            // 添加用户消息到界面（显示原文，不显示解析后的内容）
-            chatMessages.appendChild(createUserBubble(text));
+            // UI 显示时隐藏 #qid 标记
+            const displayText = text.replace(/(@引用：「[^」]*」)#q\d+/, '$1');
+            chatMessages.appendChild(createUserBubble(displayText));
             chatMessages.scrollTop = chatMessages.scrollHeight;
             chatInput.value = '';
             trackAiUsage();
@@ -5370,7 +5410,7 @@ async function initPageInteractions(page) {
         };
 
         // 重新生成消息
-        async function regenerateMessage(contextMessages, msgIndex, contentEl) {
+        async function regenerateMessage(contextMessages, msgIndex, contentEl, signal) {
             let fullResponse = '';
             try {
                 const baseBody = currentWorkId ? { workId: Number(currentWorkId) } : {};
@@ -5390,7 +5430,7 @@ async function initPageInteractions(page) {
 
                 const aiBubble = contentEl?.closest('.ai-msg-bubble') || null;
                 const result = await runChatWithTools(
-                    contextMessages, baseBody, contentEl, aiBubble, undefined,
+                    contextMessages, baseBody, contentEl, aiBubble, signal,
                 );
                 fullResponse = result.content;
 
@@ -5413,7 +5453,13 @@ async function initPageInteractions(page) {
                 }
 
             } catch (err) {
-                if (contentEl) contentEl.textContent = '重新生成失败: ' + err.message;
+                if (err && err.name === 'AbortError') {
+                    const stopped = (fullResponse || '') + (fullResponse ? '\n\n[已停止]' : '[已停止]');
+                    if (contentEl) contentEl.innerHTML = formatAiParagraphs(stopped);
+                    showToast('已停止重新生成', 'info');
+                } else {
+                    if (contentEl) contentEl.textContent = '重新生成失败: ' + err.message;
+                }
             }
         }
 
@@ -10315,6 +10361,11 @@ function sendSelectionToChat() {
 
     // 存储完整引用，UI显示精简版
     const quoteId = `q${++quoteCounter}`;
+    // 防止泄漏：超过50个引用时清理最早的
+    if (quoteStore.size > 50) {
+        const firstKey = quoteStore.keys().next().value;
+        quoteStore.delete(firstKey);
+    }
     quoteStore.set(quoteId, selText);
     const displayText = selText.length > 30 ? selText.slice(0, 30) + '...' : selText;
     const refText = `@引用：「${displayText}」#${quoteId}\n`;

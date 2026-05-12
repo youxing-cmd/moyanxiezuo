@@ -2358,6 +2358,10 @@ body, .sidebar, .main-content, .card, .btn, .nav-item, .topbar,
 #editorArea {
     background: color-mix(in srgb, var(--bg-secondary) 34%, transparent);
     color: #1a1a1a;
+    font-size: 16px;
+    font-weight: 400;
+    font-family: 'Noto Serif SC', Georgia, serif;
+    line-height: 1.8;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: 34px 42px;
@@ -2813,19 +2817,22 @@ body, .sidebar, .main-content, .card, .btn, .nav-item, .topbar,
 }
 
 /* ========== Markdown 内容颜色继承 ========== */
-/* 确保编辑器中所有元素继承编辑器颜色 */
+/* 确保编辑器中所有元素继承编辑器颜色和字体（覆盖粘贴/插入的 inline 样式） */
 #editorArea *,
 #editorArea *[style] {
-    color: inherit;
+    color: inherit !important;
+    font-family: inherit !important;
 }
 
-/* 编辑器内字号继承（覆盖 AI 渲染时附带的 inline font-size:XXpx） */
+/* 编辑器内字号和粗细继承 */
 #editorArea p, #editorArea div, #editorArea span,
 #editorArea blockquote, #editorArea li, #editorArea ul, #editorArea ol,
 #editorArea strong, #editorArea em, #editorArea del,
 #editorArea ins, #editorArea u, #editorArea s,
 #editorArea code, #editorArea pre {
     font-size: inherit !important;
+    font-weight: inherit !important;
+    line-height: inherit !important;
 }
 
 /* 标题用相对单位，随编辑器字号缩放 */

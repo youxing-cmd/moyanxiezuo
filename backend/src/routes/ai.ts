@@ -727,7 +727,7 @@ aiRouter.post('/chat', async (c) => {
   }
 
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const { messages, workId, tool, style, tools: toolNames } = parsed.data;
 
   // 根据 tool/style 注入 system prompt
@@ -814,7 +814,7 @@ aiRouter.post('/conversations', async (c) => {
 aiRouter.post('/continue', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = continueSchema.safeParse(body);
   if (!parsed.success) {
     return c.json({ error: '参数错误' }, 400);
@@ -843,7 +843,7 @@ aiRouter.post('/continue', async (c) => {
 aiRouter.post('/polish', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = polishSchema.safeParse(body);
   if (!parsed.success) {
     return c.json({ error: '参数错误' }, 400);
@@ -871,7 +871,7 @@ aiRouter.post('/polish', async (c) => {
 aiRouter.post('/outline', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = outlineSchema.safeParse(body);
   if (!parsed.success) {
     return c.json({ error: '参数错误' }, 400);
@@ -942,7 +942,7 @@ const detectSchema = z.object({
 aiRouter.post('/expand', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = expandSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: '参数错误' }, 400);
 
@@ -966,7 +966,7 @@ aiRouter.post('/expand', async (c) => {
 aiRouter.post('/character', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = characterSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: '参数错误' }, 400);
 
@@ -988,7 +988,7 @@ aiRouter.post('/character', async (c) => {
 aiRouter.post('/chapter-outline', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = chapterOutlineSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: '参数错误' }, 400);
 
@@ -1010,7 +1010,7 @@ aiRouter.post('/chapter-outline', async (c) => {
 aiRouter.post('/inspiration', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = inspirationSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: '参数错误' }, 400);
 
@@ -1032,7 +1032,7 @@ aiRouter.post('/inspiration', async (c) => {
 aiRouter.post('/fuse-inspirations', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = fuseInspirationsSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: '参数错误：至少选择2个灵感，最多5个' }, 400);
 
@@ -1058,7 +1058,7 @@ aiRouter.post('/fuse-inspirations', async (c) => {
 aiRouter.post('/titles', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = titlesSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: '参数错误' }, 400);
 
@@ -1080,7 +1080,7 @@ aiRouter.post('/titles', async (c) => {
 aiRouter.post('/rewrite', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = rewriteSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: '参数错误' }, 400);
 
@@ -1104,7 +1104,7 @@ aiRouter.post('/rewrite', async (c) => {
 aiRouter.post('/detect', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = detectSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: '参数错误' }, 400);
 
@@ -1141,7 +1141,7 @@ const deAiSchema = z.object({
 aiRouter.post('/de-ai', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = deAiSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: '参数错误' }, 400);
 
@@ -1175,7 +1175,7 @@ const blurbSchema = z.object({ outline: z.string().min(1), genre: z.string().opt
 aiRouter.post('/scene', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = sceneSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: '参数错误' }, 400);
   const { scene, mood, style } = parsed.data;
@@ -1195,7 +1195,7 @@ aiRouter.post('/scene', async (c) => {
 aiRouter.post('/dialogue', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = dialogueSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: '参数错误' }, 400);
   const { characters, context, tone } = parsed.data;
@@ -1215,7 +1215,7 @@ aiRouter.post('/dialogue', async (c) => {
 aiRouter.post('/conflict', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = conflictSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: '参数错误' }, 400);
   const { context, level } = parsed.data;
@@ -1235,7 +1235,7 @@ aiRouter.post('/conflict', async (c) => {
 aiRouter.post('/foreshadow', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = foreshadowSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: '参数错误' }, 400);
   const { context, target } = parsed.data;
@@ -1255,7 +1255,7 @@ aiRouter.post('/foreshadow', async (c) => {
 aiRouter.post('/pacing', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = pacingSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: '参数错误' }, 400);
   const { text } = parsed.data;
@@ -1275,7 +1275,7 @@ aiRouter.post('/pacing', async (c) => {
 aiRouter.post('/hook', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = hookSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: '参数错误' }, 400);
   const { opening, genre } = parsed.data;
@@ -1295,7 +1295,7 @@ aiRouter.post('/hook', async (c) => {
 aiRouter.post('/blurb', async (c) => {
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = blurbSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: '参数错误' }, 400);
   const { outline, genre } = parsed.data;
@@ -1348,7 +1348,7 @@ aiRouter.post('/tool-match', async (c) => {
   }
 
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const { text } = parsed.data;
 
   const toolList = Object.entries(TOOL_NAME_MAP)
@@ -1485,7 +1485,7 @@ aiRouter.post('/tool-prompts/:tool/test', async (c) => {
   const tool = c.req.param('tool');
   const body = await c.req.json();
   const userId = c.get('userId');
-  const modelConfig = resolveModelConfig(userId, body.modelId);
+  const modelConfig = await resolveModelConfig(userId, body.modelId);
   const parsed = testPromptSchema.safeParse(body);
   if (!parsed.success) {
     return c.json({ error: '参数错误' }, 400);
