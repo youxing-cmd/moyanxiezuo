@@ -1,0 +1,38 @@
+name: jiuzhang
+
+services:
+  jiuzhang:
+    build: .
+    image: jiuzhang:latest
+    container_name: jiuzhang
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend/logs:/app/backend/logs
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: jiuzhang-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: jiuzhang
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg_data:

@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: jiuzhang
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: DISABLE_PLAYWRIGHT_CRAWL
+        value: "true"
+      - key: ENABLE_DYNAMIC_TRENDS
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jiuzhang-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+    healthCheckPath: /health
+
+databases:
+  - name: jiuzhang-db
+    plan: free
+    postgresMajorVersion: 15

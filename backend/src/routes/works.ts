@@ -1,0 +1,754 @@
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { db } from '../db/index.js';
+import { works, chapters, chapterVersions } from '../db/schema.js';
+import { authMiddleware } from '../middleware/auth.js';
+import { eq, and, ilike, desc, isNull, isNotNull } from 'drizzle-orm';
+
+const worksRouter = new Hono();
+
+worksRouter.use('*', authMiddleware);
+
+const createSchema = z.object({
+  title: z.string().min(1).max(200),
+  genre: z.string().min(1).max(50),
+  status: z.string().default('unfinished'),
+  tags: z.array(z.string()).default([]),
+  emoji: z.string().default('📖'),
+  gradient: z.string().default('135deg, #1e3a5f, #0f2744'),
+  perspective: z.enum(['first', 'third']).default('third'),
+  channel: z.enum(['male', 'female', 'all']).default('male'),
+  intro: z.string().default(''),
+  cover: z.string().default(''),
+  inspiration: z.string().default(''),
+  analysis: z.string().default(''),
+  lengthType: z.enum(['long', 'short']).default('long'),
+  source: z.enum(['original', 'analysis']).default('original'),
+});
+
+// GET /api/works
+worksRouter.get('/', async (c) => {
+  const userId = c.get('userId');
+  const search = c.req.query('search') || '';
+  const status = c.req.query('status');
+  const length = c.req.query('length');
+  const source = c.req.query('source');
+
+  const conditions = [eq(works.userId, userId)];
+  if (status) conditions.push(eq(works.status, status));
+  if (length && length !== 'all') conditions.push(eq(works.lengthType, length));
+  if (source) conditions.push(eq(works.source, source));
+  if (search) conditions.push(ilike(works.title, `%${search}%`));
+
+  conditions.push(isNull(works.deletedAt));
+
+  const list = await db.select().from(works)
+    .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+    .orderBy(desc(works.updatedAt));
+
+  return c.json(list.map(w => ({
+    id: w.id,
+    title: w.title,
+    genre: w.genre,
+    status: w.status,
+    source: w.source,
+    chapters: w.chapterCount,
+    words: formatWordCount(w.wordCount),
+    lastUpdate: formatTime(w.updatedAt),
+    tags: w.tags,
+    emoji: w.emoji,
+    gradient: w.gradient,
+  })));
+});
+
+// POST /api/works
+worksRouter.post('/', async (c) => {
+  const userId = c.get('userId');
+  const body = await c.req.json();
+  const parsed = createSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: '参数错误: ' + parsed.error.message }, 400);
+  }
+
+  const [result] = await db.insert(works).values({
+    userId,
+    ...parsed.data,
+  }).returning();
+
+  // 自动创建第一章
+  await db.insert(chapters).values({
+    workId: result.id,
+    title: '第一章',
+    content: '',
+    orderIndex: 0,
+  });
+
+  await db.update(works).set({ chapterCount: 1 }).where(eq(works.id, result.id));
+
+  return c.json({
+    id: result.id,
+    title: result.title,
+    genre: result.genre,
+    status: result.status,
+    chapters: 1,
+    words: '0字',
+    lastUpdate: '刚刚',
+    tags: result.tags,
+    emoji: result.emoji,
+    gradient: result.gradient,
+  });
+});
+
+// GET /api/works/trash — 回收站列表（必须在 /:id 之前）
+worksRouter.get('/trash', async (c) => {
+  const userId = c.get('userId');
+
+  const list = await db.select().from(works)
+    .where(and(eq(works.userId, userId), isNotNull(works.deletedAt)))
+    .orderBy(desc(works.updatedAt));
+
+  return c.json(list.map(w => ({
+    id: w.id,
+    title: w.title,
+    genre: w.genre,
+    status: w.status,
+    words: formatWordCount(w.wordCount),
+    chapters: w.chapterCount,
+    deletedAt: w.deletedAt,
+  })));
+});
+
+// GET /api/works/:id
+worksRouter.get('/:id', async (c) => {
+  const userId = c.get('userId');
+  const id = parseInt(c.req.param('id'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, id)).limit(1);
+  if (!work || work.userId !== userId || work.deletedAt) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const chList = await db.select().from(chapters).where(eq(chapters.workId, id)).orderBy(chapters.orderIndex);
+
+  return c.json({
+    ...work,
+    words: formatWordCount(work.wordCount),
+    chapterList: chList,
+  });
+});
+
+// PUT /api/works/:id
+worksRouter.put('/:id', async (c) => {
+  const userId = c.get('userId');
+  const id = parseInt(c.req.param('id'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, id)).limit(1);
+  if (!work || work.userId !== userId || work.deletedAt) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const body = await c.req.json();
+  const updateData: Record<string, unknown> = { updatedAt: new Date() };
+
+  if (body.title !== undefined) updateData.title = body.title;
+  if (body.genre !== undefined) updateData.genre = body.genre;
+  if (body.status !== undefined) updateData.status = body.status;
+  if (body.tags !== undefined) updateData.tags = body.tags;
+  if (body.emoji !== undefined) updateData.emoji = body.emoji;
+  if (body.gradient !== undefined) updateData.gradient = body.gradient;
+  if (body.settings !== undefined) updateData.settings = body.settings;
+  if (body.perspective !== undefined) updateData.perspective = body.perspective;
+  if (body.channel !== undefined) updateData.channel = body.channel;
+  if (body.intro !== undefined) updateData.intro = body.intro;
+  if (body.cover !== undefined) updateData.cover = body.cover;
+  if (body.inspiration !== undefined) updateData.inspiration = body.inspiration;
+  if (body.analysis !== undefined) updateData.analysis = body.analysis;
+  if (body.lengthType !== undefined) updateData.lengthType = body.lengthType;
+  if (body.source !== undefined) updateData.source = body.source;
+
+  await db.update(works).set(updateData).where(eq(works.id, id));
+
+  const [updated] = await db.select().from(works).where(eq(works.id, id)).limit(1);
+  return c.json(updated);
+});
+
+// DELETE /api/works/:id — 软删除
+worksRouter.delete('/:id', async (c) => {
+  const userId = c.get('userId');
+  const id = parseInt(c.req.param('id'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, id)).limit(1);
+  if (!work || work.userId !== userId || work.deletedAt) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  await db.update(works)
+    .set({ deletedAt: new Date() })
+    .where(eq(works.id, id));
+
+  return c.json({ success: true });
+});
+
+// POST /api/works/:id/restore — 恢复
+worksRouter.post('/:id/restore', async (c) => {
+  const userId = c.get('userId');
+  const id = parseInt(c.req.param('id'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, id)).limit(1);
+  if (!work || work.userId !== userId) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  await db.update(works)
+    .set({ deletedAt: null })
+    .where(eq(works.id, id));
+
+  return c.json({ success: true });
+});
+
+// DELETE /api/works/:id/permanent — 彻底删除
+worksRouter.delete('/:id/permanent', async (c) => {
+  const userId = c.get('userId');
+  const id = parseInt(c.req.param('id'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, id)).limit(1);
+  if (!work || work.userId !== userId) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  await db.delete(chapters).where(eq(chapters.workId, id));
+  await db.delete(works).where(eq(works.id, id));
+
+  return c.json({ success: true });
+});
+
+// GET /api/works/:id/chapters
+worksRouter.get('/:id/chapters', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId || work.deletedAt) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const list = await db.select().from(chapters).where(eq(chapters.workId, workId)).orderBy(chapters.orderIndex);
+  return c.json(list);
+});
+
+// POST /api/works/:id/chapters
+worksRouter.post('/:id/chapters', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId || work.deletedAt) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const body = await c.req.json();
+  const title = body.title || `第${work.chapterCount + 1}章`;
+  const content = body.content || '';
+  const volume = body.volume || '';
+
+  const [maxOrder] = await db.select().from(chapters).where(eq(chapters.workId, workId)).orderBy(desc(chapters.orderIndex)).limit(1);
+  const orderIndex = maxOrder ? maxOrder.orderIndex + 1 : 0;
+
+  const [result] = await db.insert(chapters).values({
+    workId,
+    title,
+    content,
+    volume,
+    orderIndex,
+  }).returning();
+
+  await db.update(works).set({
+    chapterCount: work.chapterCount + 1,
+    wordCount: work.wordCount + (content.length || 0),
+    updatedAt: new Date(),
+  }).where(eq(works.id, workId));
+
+  return c.json(result);
+});
+
+// GET /api/works/:id/chapters/:cid — 获取单章详情
+worksRouter.get('/:id/chapters/:cid', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+  const cid = parseInt(c.req.param('cid'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId || work.deletedAt) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const [chapter] = await db.select().from(chapters).where(eq(chapters.id, cid)).limit(1);
+  if (!chapter || chapter.workId !== workId) {
+    return c.json({ error: '章节不存在' }, 404);
+  }
+
+  return c.json(chapter);
+});
+
+// PUT /api/works/:id/chapters/reorder — 批量调整章节顺序（必须在 /:cid 之前）
+worksRouter.put('/:id/chapters/reorder', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId || work.deletedAt) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const body = await c.req.json();
+  if (!Array.isArray(body.ids)) {
+    return c.json({ error: '参数错误' }, 400);
+  }
+
+  await Promise.all(body.ids.map((id: number, index: number) =>
+    db.update(chapters)
+      .set({ orderIndex: index })
+      .where(eq(chapters.id, id))
+  ));
+
+  return c.json({ success: true });
+});
+
+// PUT /api/works/:id/chapters/:cid
+worksRouter.put('/:id/chapters/:cid', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+  const cid = parseInt(c.req.param('cid'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId || work.deletedAt) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const [chapter] = await db.select().from(chapters).where(eq(chapters.id, cid)).limit(1);
+  if (!chapter || chapter.workId !== workId) {
+    return c.json({ error: '章节不存在' }, 404);
+  }
+
+  const body = await c.req.json();
+  const updateData: Record<string, unknown> = { updatedAt: new Date() };
+
+  if (body.title !== undefined) updateData.title = body.title;
+  if (body.content !== undefined) {
+    updateData.content = body.content;
+    // 去除 HTML 标签后计算纯文本字数
+    const plainText = body.content
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .trim();
+    updateData.wordCount = plainText.length || 0;
+  }
+  if (body.orderIndex !== undefined) updateData.orderIndex = body.orderIndex;
+  if (body.volume !== undefined) updateData.volume = body.volume;
+  if (body.outline !== undefined) updateData.outline = body.outline;
+
+  await db.update(chapters).set(updateData).where(eq(chapters.id, cid));
+
+  // 保存历史版本（如果有内容变更）
+  if (body.content !== undefined && body.content !== chapter.content) {
+    await db.insert(chapterVersions).values({
+      chapterId: cid,
+      content: body.content,
+      wordCount: body.content.length || 0,
+      source: body.source || 'auto',
+    });
+
+    // 清理旧版本，只保留最近 20 条
+    const allVersions = await db.select({ id: chapterVersions.id }).from(chapterVersions)
+      .where(eq(chapterVersions.chapterId, cid))
+      .orderBy(desc(chapterVersions.createdAt));
+
+    if (allVersions.length > 20) {
+      const toDelete = allVersions.slice(20);
+      await Promise.all(toDelete.map(v =>
+        db.delete(chapterVersions).where(eq(chapterVersions.id, v.id))
+      ));
+    }
+  }
+
+  // 重新计算作品字数
+  const allChapters = await db.select().from(chapters).where(eq(chapters.workId, workId));
+  const totalWords = allChapters.reduce((sum, ch) => sum + (ch.wordCount || 0), 0);
+
+  await db.update(works).set({
+    wordCount: totalWords,
+    updatedAt: new Date(),
+  }).where(eq(works.id, workId));
+
+  const [updated] = await db.select().from(chapters).where(eq(chapters.id, cid)).limit(1);
+  return c.json(updated);
+});
+
+// DELETE /api/works/:id/chapters/:cid
+worksRouter.delete('/:id/chapters/:cid', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+  const cid = parseInt(c.req.param('cid'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId || work.deletedAt) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const [chapter] = await db.select().from(chapters).where(eq(chapters.id, cid)).limit(1);
+  if (!chapter || chapter.workId !== workId) {
+    return c.json({ error: '章节不存在' }, 404);
+  }
+
+  await db.delete(chapters).where(eq(chapters.id, cid));
+
+  // 重新计算
+  const allChapters = await db.select().from(chapters).where(eq(chapters.workId, workId));
+  const totalWords = allChapters.reduce((sum, ch) => sum + (ch.wordCount || 0), 0);
+
+  await db.update(works).set({
+    chapterCount: allChapters.length,
+    wordCount: totalWords,
+    updatedAt: new Date(),
+  }).where(eq(works.id, workId));
+
+  return c.json({ success: true });
+});
+
+// GET /api/works/:id/export?format=txt — 导出作品
+worksRouter.get('/:id/export', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+  const format = c.req.query('format') || 'txt';
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId || work.deletedAt) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const chList = await db.select().from(chapters)
+    .where(eq(chapters.workId, workId))
+    .orderBy(chapters.orderIndex);
+
+  if (format === 'txt') {
+    let text = `《${work.title}》\n`;
+    text += `作者：${work.userId}\n`;
+    text += `题材：${work.genre}\n`;
+    text += `总字数：${work.wordCount || 0}\n`;
+    text += `总章节：${chList.length}\n`;
+    text += '\n' + '='.repeat(40) + '\n\n';
+
+    chList.forEach(ch => {
+      text += `\n${ch.title}\n`;
+      text += '-'.repeat(ch.title.length * 2) + '\n\n';
+      text += htmlToText(ch.content || '') + '\n\n';
+    });
+
+    const asciiTitle = work.title.replace(/[^\x00-\x7F]/g, '');
+    const safeFilename = asciiTitle || 'export';
+    return c.body(text, 200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${safeFilename}.txt"; filename*=UTF-8''${encodeURIComponent(work.title)}.txt`,
+    });
+  }
+
+  return c.json({ error: '不支持的格式' }, 400);
+});
+
+// GET /api/works/:id/chapters/:cid/export?format=txt — 导出章节
+worksRouter.get('/:id/chapters/:cid/export', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+  const cid = parseInt(c.req.param('cid'));
+  const format = c.req.query('format') || 'txt';
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId || work.deletedAt) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const [chapter] = await db.select().from(chapters).where(eq(chapters.id, cid)).limit(1);
+  if (!chapter || chapter.workId !== workId) {
+    return c.json({ error: '章节不存在' }, 404);
+  }
+
+  if (format === 'txt') {
+    let text = `《${work.title}》\n`;
+    text += `${chapter.title}\n`;
+    text += '='.repeat(40) + '\n\n';
+    text += htmlToText(chapter.content || '');
+
+    const asciiWorkTitle = work.title.replace(/[^\x00-\x7F]/g, '');
+    const asciiChapterTitle = chapter.title.replace(/[^\x00-\x7F]/g, '');
+    const safeFilename = `${asciiWorkTitle || 'work'}_${asciiChapterTitle || 'chapter'}`;
+    const fullFilename = `${work.title}_${chapter.title}.txt`;
+    return c.body(text, 200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${safeFilename}.txt"; filename*=UTF-8''${encodeURIComponent(fullFilename)}`,
+    });
+  }
+
+  return c.json({ error: '不支持的格式' }, 400);
+});
+
+// --- helpers ---
+
+function htmlToText(html: string): string {
+  return html
+    .replace(/<h1[^>]*>(.*?)<\/h1>/gi, '$1\n')
+    .replace(/<h2[^>]*>(.*?)<\/h2>/gi, '$1\n')
+    .replace(/<h3[^>]*>(.*?)<\/h3>/gi, '$1\n')
+    .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<li[^>]*>(.*?)<\/li>/gi, '• $1\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function formatWordCount(n: number): string {
+  if (n >= 10000) return (n / 10000).toFixed(1) + '万字';
+  if (n >= 1000) return (n / 1000).toFixed(1) + '千字';
+  return n + '字';
+}
+
+// ========== 章节历史版本 ==========
+
+const versionSchema = z.object({
+  content: z.string().default(''),
+  wordCount: z.number().default(0),
+  source: z.enum(['auto', 'manual', 'local']).default('auto'),
+});
+
+// GET /api/works/:id/chapters/:cid/versions
+worksRouter.get('/:id/chapters/:cid/versions', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+  const cid = parseInt(c.req.param('cid'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const [chapter] = await db.select().from(chapters).where(eq(chapters.id, cid)).limit(1);
+  if (!chapter || chapter.workId !== workId) {
+    return c.json({ error: '章节不存在' }, 404);
+  }
+
+  const list = await db.select().from(chapterVersions)
+    .where(eq(chapterVersions.chapterId, cid))
+    .orderBy(desc(chapterVersions.createdAt));
+
+  return c.json(list.map(v => ({
+    id: v.id,
+    wordCount: v.wordCount,
+    source: v.source,
+    createdAt: v.createdAt,
+  })));
+});
+
+// POST /api/works/:id/chapters/:cid/versions — 保存新版本
+worksRouter.post('/:id/chapters/:cid/versions', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+  const cid = parseInt(c.req.param('cid'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const [chapter] = await db.select().from(chapters).where(eq(chapters.id, cid)).limit(1);
+  if (!chapter || chapter.workId !== workId) {
+    return c.json({ error: '章节不存在' }, 404);
+  }
+
+  const body = await c.req.json();
+  const parsed = versionSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: '参数错误' }, 400);
+  }
+
+  const { content, wordCount, source } = parsed.data;
+
+  // 检查是否已有相同内容且间隔小于 30 秒的版本
+  const [recent] = await db.select().from(chapterVersions)
+    .where(eq(chapterVersions.chapterId, cid))
+    .orderBy(desc(chapterVersions.createdAt))
+    .limit(1);
+
+  if (recent && recent.content === content) {
+    return c.json({ id: recent.id, skipped: true, reason: '内容未变化' });
+  }
+
+  // 创建新版本
+  const [result] = await db.insert(chapterVersions)
+    .values({ chapterId: cid, content, wordCount, source })
+    .returning();
+
+  // 清理旧版本，只保留最近 20 条
+  const allVersions = await db.select({ id: chapterVersions.id }).from(chapterVersions)
+    .where(eq(chapterVersions.chapterId, cid))
+    .orderBy(desc(chapterVersions.createdAt));
+
+  if (allVersions.length > 20) {
+    const toDelete = allVersions.slice(20);
+    await Promise.all(toDelete.map(v =>
+      db.delete(chapterVersions).where(eq(chapterVersions.id, v.id))
+    ));
+  }
+
+  return c.json({ id: result.id, created: true });
+});
+
+// GET /api/works/:id/chapters/:cid/versions/:vid
+worksRouter.get('/:id/chapters/:cid/versions/:vid', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+  const cid = parseInt(c.req.param('cid'));
+  const vid = parseInt(c.req.param('vid'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const [chapter] = await db.select().from(chapters).where(eq(chapters.id, cid)).limit(1);
+  if (!chapter || chapter.workId !== workId) {
+    return c.json({ error: '章节不存在' }, 404);
+  }
+
+  const [version] = await db.select().from(chapterVersions).where(eq(chapterVersions.id, vid)).limit(1);
+  if (!version || version.chapterId !== cid) {
+    return c.json({ error: '版本不存在' }, 404);
+  }
+
+  return c.json(version);
+});
+
+// POST /api/works/:id/chapters/:cid/versions/:vid/restore
+worksRouter.post('/:id/chapters/:cid/versions/:vid/restore', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+  const cid = parseInt(c.req.param('cid'));
+  const vid = parseInt(c.req.param('vid'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const [chapter] = await db.select().from(chapters).where(eq(chapters.id, cid)).limit(1);
+  if (!chapter || chapter.workId !== workId) {
+    return c.json({ error: '章节不存在' }, 404);
+  }
+
+  const [version] = await db.select().from(chapterVersions).where(eq(chapterVersions.id, vid)).limit(1);
+  if (!version || version.chapterId !== cid) {
+    return c.json({ error: '版本不存在' }, 404);
+  }
+
+  // 恢复章节内容
+  await db.update(chapters)
+    .set({
+      content: version.content,
+      wordCount: version.wordCount,
+      updatedAt: new Date(),
+    })
+    .where(eq(chapters.id, cid));
+
+  // 重新计算作品字数
+  const allChapters = await db.select().from(chapters).where(eq(chapters.workId, workId));
+  const totalWords = allChapters.reduce((sum, ch) => sum + (ch.wordCount || 0), 0);
+
+  await db.update(works)
+    .set({ wordCount: totalWords, updatedAt: new Date() })
+    .where(eq(works.id, workId));
+
+  return c.json({ success: true, wordCount: version.wordCount });
+});
+
+function formatTime(d: Date | null): string {
+  if (!d) return '未知';
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes}分钟前`;
+  if (hours < 24) return `${hours}小时前`;
+  if (days < 7) return `${days}天前`;
+  return d.toLocaleDateString('zh-CN');
+}
+
+// POST /api/works/import — 导入作品（txt）
+const importSchema = z.object({
+  title: z.string().min(1).max(15),
+  chapters: z.array(z.object({
+    title: z.string().min(1),
+    content: z.string().default(''),
+  })).min(1),
+  genre: z.string().default('未分类'),
+  emoji: z.string().default('📖'),
+  gradient: z.string().default('135deg, #1e3a5f, #0f2744'),
+});
+
+worksRouter.post('/import', async (c) => {
+  const userId = c.get('userId');
+  const body = await c.req.json();
+  const parsed = importSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: '参数错误: ' + parsed.error.message }, 400);
+  }
+
+  const { title, chapters: chapterList, genre, emoji, gradient } = parsed.data;
+
+  const [work] = await db.insert(works).values({
+    userId,
+    title,
+    genre,
+    status: 'unfinished',
+    tags: [],
+    emoji,
+    gradient,
+  }).returning();
+
+  let totalWords = 0;
+  await Promise.all(chapterList.map(async (ch, i) => {
+    const wordCount = ch.content.replace(/\s/g, '').length;
+    totalWords += wordCount;
+    await db.insert(chapters).values({
+      workId: work.id,
+      title: ch.title.slice(0, 100),
+      content: ch.content,
+      wordCount,
+      orderIndex: i,
+    });
+  }));
+
+  await db.update(works).set({
+    chapterCount: chapterList.length,
+    wordCount: totalWords,
+  }).where(eq(works.id, work.id));
+
+  return c.json({
+    id: work.id,
+    title: work.title,
+    chapterCount: chapterList.length,
+    wordCount: totalWords,
+  });
+});
+
+export default worksRouter;

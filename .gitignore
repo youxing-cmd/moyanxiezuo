@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+
+# Vercel
+.vercel
+
+# 依赖
+node_modules/
+
+# 数据库
+backend/data/
+*.db
+*.db-shm
+*.db-wal
+
+# 环境变量
+.env
+.env.local
+*.env
+
+# 日志
+*.log
+npm-debug.log*
+
+# OCR 训练数据（体积大，运行时从 CDN 下载）
+*.traineddata
+.github/workflows/

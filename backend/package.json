@@ -1,0 +1,43 @@
+{
+  "name": "jiuzhang-backend",
+  "version": "1.0.0",
+  "description": "九章写作后端服务",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "dependencies": {
+    "@hono/node-server": "^1.19.11",
+    "@neondatabase/serverless": "^1.1.0",
+    "@sentry/node": "^10.52.0",
+    "bcryptjs": "^3.0.2",
+    "cheerio": "^1.2.0",
+    "dailyhot-api": "^2.0.8",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.1",
+    "hono": "^4.12.9",
+    "jose": "^6.0.10",
+    "node-cron": "^4.2.1",
+    "opentype.js": "^2.0.0",
+    "pg": "^8.15.5",
+    "playwright": "^1.59.1",
+    "tesseract.js": "^7.0.0",
+    "ws": "^8.20.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.14.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.11.14",
+    "@types/ws": "^8.18.1",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.21.0",
+    "typescript": "^5.8.3"
+  }
+}
