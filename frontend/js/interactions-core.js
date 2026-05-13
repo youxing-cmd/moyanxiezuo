@@ -1346,6 +1346,7 @@ async function initPageInteractions(page) {
                     const err = await res.json().catch(() => ({ error: '请求失败' }));
                     throw new Error(err.error || 'AI服务异常');
                 }
+                const routeId = res.headers.get('X-Route-Id') || res.headers.get('x-route-id');
                 const reader = res.body.getReader();
                 // 当前轮的 content 累积，叠加到 totalContent 的尾部展示
                 const baseShown = totalContent;
@@ -1360,6 +1361,7 @@ async function initPageInteractions(page) {
                 // 没有 tool_calls：本次回复就是最终输出
                 if (!sseResult.toolCalls || sseResult.toolCalls.length === 0) {
                     maybeShowUndoButton(aiBubble);
+                    maybeShowRouteFeedback(aiBubble, routeId);
                     // 最终 assistant 消息也加入 messages，用于持久化
                     if (sseResult.content) {
                         messages.push({ role: 'assistant', content: sseResult.content });
@@ -1426,6 +1428,61 @@ async function initPageInteractions(page) {
             btn.style.cssText = 'padding:3px 8px; border:none; background:transparent; color:var(--accent); border-radius:4px; cursor:pointer; font-size:11px; display:flex; align-items:center; gap:3px;';
             btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"/></svg>撤销刚才的写入`;
             feedback.appendChild(btn);
+        }
+
+        // 在 AI 消息底部显示路由决策反馈（仅 agent 模式有 routeId）
+        function maybeShowRouteFeedback(aiBubble, routeId) {
+            if (!aiBubble || !routeId) return;
+            // 清除旧的反馈栏（重新生成时）
+            const old = aiBubble.querySelector('[data-route-feedback]');
+            if (old) old.remove();
+
+            const wrap = document.createElement('div');
+            wrap.dataset.routeFeedback = '1';
+            wrap.style.cssText = 'margin-top:6px; padding-top:4px; border-top:1px solid var(--border); font-size:11px; color:var(--text-secondary); display:flex; align-items:center; gap:6px; flex-wrap:wrap;';
+            wrap.innerHTML = `
+                <span>模型选得对吗？</span>
+                <button data-action="route-good" style="background:none;border:none;cursor:pointer;font-size:13px;opacity:0.55;" title="满意">👍</button>
+                <button data-action="route-bad" style="background:none;border:none;cursor:pointer;font-size:13px;opacity:0.55;" title="不满意">👎</button>
+            `;
+
+            wrap.querySelector('[data-action="route-good"]').addEventListener('click', async () => {
+                await submitRouteFeedback(Number(routeId), 'good');
+                wrap.innerHTML = '<span style="color:var(--success);">感谢反馈 ✓</span>';
+            });
+            wrap.querySelector('[data-action="route-bad"]').addEventListener('click', () => {
+                wrap.innerHTML = `
+                    <span>哪不对？</span>
+                    <button data-action="bad-model" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--accent);text-decoration:underline;padding:0;">模型</button>
+                    <button data-action="bad-tools" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--accent);text-decoration:underline;padding:0;">工具</button>
+                `;
+                wrap.querySelector('[data-action="bad-model"]').addEventListener('click', async () => {
+                    await submitRouteFeedback(Number(routeId), 'wrong_model');
+                    wrap.innerHTML = '<span style="color:var(--accent);">已记录 ✓</span>';
+                });
+                wrap.querySelector('[data-action="bad-tools"]').addEventListener('click', async () => {
+                    await submitRouteFeedback(Number(routeId), 'wrong_tools');
+                    wrap.innerHTML = '<span style="color:var(--accent);">已记录 ✓</span>';
+                });
+            });
+
+            const feedback = aiBubble.querySelector('.msg-feedback');
+            if (feedback) {
+                feedback.parentNode.insertBefore(wrap, feedback.nextSibling);
+            } else {
+                aiBubble.appendChild(wrap);
+            }
+        }
+
+        async function submitRouteFeedback(routeId, feedback) {
+            try {
+                await api('/ai/route-feedback', {
+                    method: 'POST',
+                    body: { routeId, feedback },
+                });
+            } catch (err) {
+                console.warn('[route-feedback] 提交失败:', err);
+            }
         }
 
         const sendAiMessage = async () => {

@@ -1,10 +1,3 @@
-// 编辑器撤销栈
-const MAX_UNDO_STEPS = 50;
-let editorUndoStack = [];
-let editorUndoIndex = -1;
-let editorUndoTimer = null;
-let isUndoRedoAction = false;
-
 // === L2 Agent: 编辑器对外 API（供 AI 工具调用使用）===
 // 每个方法内部按需获取 DOM，不依赖时序；方法只对 #editorArea 这一个编辑器实例操作
 // 写入类方法返回 JSON 字符串（含 ok/error 字段）作为 tool result 喂给模型
