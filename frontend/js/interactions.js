@@ -2577,6 +2577,10 @@ async function enterWorkDetail(mode, workId = null) {
     if (mode === 'edit' && workId) {
         try {
             const work = await api(`/works/${workId}`);
+            if (!work) {
+                showToast('加载作品失败，请检查登录状态', 'error');
+                return;
+            }
             workDetailState.title = work.title || '';
             workDetailState.perspective = work.perspective || 'third';
             workDetailState.channel = work.channel || 'male';
@@ -4775,6 +4779,10 @@ async function loadWritingPage() {
 
     try {
         const work = await api(`/works/${currentWorkId}`);
+        if (!work) {
+            showToast('加载作品失败，请检查登录状态', 'error');
+            return;
+        }
         currentWorkData = work;
 
         // 更新顶部信息
@@ -7554,6 +7562,10 @@ async function handleCreateChapter() {
         showToast('章节创建成功', 'success');
         // 刷新章节列表
         const work = await api(`/works/${currentWorkId}`);
+        if (!work) {
+            showToast('刷新章节列表失败，请检查登录状态', 'error');
+            return;
+        }
         renderChapterList(work.chapterList || []);
     } catch (err) {
         showToast(err.message || '创建失败', 'danger');

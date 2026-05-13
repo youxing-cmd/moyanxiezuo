@@ -157,7 +157,7 @@ function setTheme(theme) {
 }
 
 function initTheme() {
-    const saved = localStorage.getItem('jz-theme') || 'dark';
+    const saved = localStorage.getItem('jz-theme') || 'warm';
     setTheme(saved);
 }
 
