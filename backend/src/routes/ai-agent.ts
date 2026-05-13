@@ -4,7 +4,7 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
 import { db } from '../db/index.js';
 import { users, pointTransactions, agentRoutes } from '../db/schema.js';
@@ -183,6 +183,93 @@ agentChatRouter.post('/agent-chat', async (c) => {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg || 'Agent 调用失败' }, 500);
   }
+});
+
+// ========== L4 反馈与统计 API ==========
+
+// POST /api/ai/route-feedback — 用户对路由决策的反馈
+const routeFeedbackSchema = z.object({
+  routeId: z.number().positive(),
+  feedback: z.enum(['good', 'bad', 'wrong_model', 'wrong_tools']),
+  correctedModelId: z.string().optional(),
+  correctedTools: z.array(z.string()).optional(),
+});
+
+agentChatRouter.post('/route-feedback', async (c) => {
+  const body = await c.req.json();
+  const parsed = routeFeedbackSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: '参数错误: ' + parsed.error.message }, 400);
+  }
+
+  const userId = c.get('userId');
+  const { routeId, feedback, correctedModelId, correctedTools } = parsed.data;
+
+  const [route] = await db
+    .select()
+    .from(agentRoutes)
+    .where(and(eq(agentRoutes.id, routeId), eq(agentRoutes.userId, userId)))
+    .limit(1);
+  if (!route) {
+    return c.json({ error: '路由记录不存在或无权限' }, 404);
+  }
+
+  await db
+    .update(agentRoutes)
+    .set({
+      userFeedback: feedback,
+      correctedModelId: correctedModelId ?? null,
+      correctedTools: correctedTools ?? null,
+    })
+    .where(eq(agentRoutes.id, routeId));
+
+  return c.json({ success: true });
+});
+
+// GET /api/ai/route-stats — 当前用户的路由统计
+agentChatRouter.get('/route-stats', async (c) => {
+  const userId = c.get('userId');
+
+  const [overview] = await db
+    .select({
+      total: sql<number>`count(*)`,
+      fallbackCount: sql<number>`sum(case when ${agentRoutes.fallback} = true then 1 else 0 end)`,
+      avgConfidence: sql<number>`avg(${agentRoutes.confidence})`,
+      avgLatency: sql<number>`avg(${agentRoutes.latencyMs})`,
+    })
+    .from(agentRoutes)
+    .where(eq(agentRoutes.userId, userId));
+
+  const intentDist = await db
+    .select({
+      intent: agentRoutes.intent,
+      count: sql<number>`count(*)`,
+    })
+    .from(agentRoutes)
+    .where(eq(agentRoutes.userId, userId))
+    .groupBy(agentRoutes.intent);
+
+  const modelDist = await db
+    .select({
+      model: agentRoutes.targetModelId,
+      count: sql<number>`count(*)`,
+    })
+    .from(agentRoutes)
+    .where(eq(agentRoutes.userId, userId))
+    .groupBy(agentRoutes.targetModelId);
+
+  const total = Number(overview?.total ?? 0);
+  const fallbackCount = Number(overview?.fallbackCount ?? 0);
+
+  return c.json({
+    total,
+    fallbackCount,
+    fallbackRate: total > 0 ? fallbackCount / total : 0,
+    avgConfidence: overview?.avgConfidence ? Number(overview.avgConfidence) : null,
+    avgLatencyMs: overview?.avgLatency ? Number(overview.avgLatency) : null,
+    intentDistribution: intentDist.map((r) => ({ intent: r.intent, count: Number(r.count) })),
+    modelDistribution: modelDist.map((r) => ({ model: r.model, count: Number(r.count) })),
+  });
 });
 
 export default agentChatRouter;
