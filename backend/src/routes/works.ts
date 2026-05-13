@@ -725,10 +725,8 @@ worksRouter.post('/import', async (c) => {
     gradient,
   }).returning();
 
-  let totalWords = 0;
-  await Promise.all(chapterList.map(async (ch, i) => {
+  const wordCounts = await Promise.all(chapterList.map(async (ch, i) => {
     const wordCount = ch.content.replace(/\s/g, '').length;
-    totalWords += wordCount;
     await db.insert(chapters).values({
       workId: work.id,
       title: ch.title.slice(0, 100),
@@ -736,7 +734,9 @@ worksRouter.post('/import', async (c) => {
       wordCount,
       orderIndex: i,
     });
+    return wordCount;
   }));
+  const totalWords = wordCounts.reduce((sum, w) => sum + w, 0);
 
   await db.update(works).set({
     chapterCount: chapterList.length,

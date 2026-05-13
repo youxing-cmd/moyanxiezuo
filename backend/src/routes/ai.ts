@@ -829,7 +829,7 @@ aiRouter.post('/continue', async (c) => {
     const res = await callLLM([
       { role: 'system', content: TOOL_PROMPTS.continue },
       { role: 'user', content: `请根据以下内容续写小说，${styleHint}，续写长度约${lengthHint}：\n\n${context}` },
-    ], stream);
+    ], stream, modelConfig);
 
     if (stream) return streamResponse(res);
 
@@ -857,7 +857,7 @@ aiRouter.post('/polish', async (c) => {
     const res = await callLLM([
       { role: 'system', content: TOOL_PROMPTS.polish },
       { role: 'user', content: `请对以下文字进行润色，要求：${styleHint}。\n\n${text}` },
-    ], stream);
+    ], stream, modelConfig);
 
     if (stream) return streamResponse(res);
 
@@ -952,7 +952,7 @@ aiRouter.post('/expand', async (c) => {
     const res = await callLLM([
       { role: 'system', content: TOOL_PROMPTS.expand },
       { role: 'user', content: `将以下文本扩写为更完整的小说段落。${style ? `风格要求：${style}` : ''}\n\n${text}` },
-    ], stream);
+    ], stream, modelConfig);
 
     if (stream) return streamResponse(res);
 
@@ -1090,7 +1090,7 @@ aiRouter.post('/rewrite', async (c) => {
     const res = await callLLM([
       { role: 'system', content: TOOL_PROMPTS.rewrite },
       { role: 'user', content: `将以下文本改写为${targetStyle || '更流畅自然'}的风格。\n\n${text}` },
-    ], stream);
+    ], stream, modelConfig);
 
     if (stream) return streamResponse(res);
 
@@ -1121,7 +1121,7 @@ aiRouter.post('/detect', async (c) => {
     const res = await callLLM([
       { role: 'system', content: TOOL_PROMPTS.detect },
       { role: 'user', content: `请对以下文本进行全维度深度审计：\n\n${text}` },
-    ], stream);
+    ], stream, modelConfig);
 
     if (stream) return streamResponse(res);
 
@@ -1152,7 +1152,7 @@ aiRouter.post('/de-ai', async (c) => {
     const res = await callLLM([
       { role: 'system', content: TOOL_PROMPTS['de-ai'] },
       { role: 'user', content: `请重写以下内容以去除AI味：\n\n${text}` },
-    ], stream);
+    ], stream, modelConfig);
 
     if (stream) return streamResponse(res);
 

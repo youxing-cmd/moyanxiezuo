@@ -94,34 +94,52 @@ pointsRouter.get('/', async (c) => {
 // POST /api/points/check-in — 每日签到
 pointsRouter.post('/check-in', async (c) => {
   const userId = c.get('userId');
-  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  if (!user) return c.json({ error: '用户不存在' }, 404);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  try {
+    const result = await db.transaction(async (tx) => {
+      const [user] = await tx.select().from(users).where(eq(users.id, userId)).limit(1);
+      if (!user) return { error: '用户不存在', status: 404 };
 
-  if (user.lastCheckInAt && new Date(user.lastCheckInAt) >= today) {
-    return c.json({ error: '今日已签到' }, 400);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (user.lastCheckInAt && new Date(user.lastCheckInAt) >= today) {
+        return { error: '今日已签到', status: 400 };
+      }
+
+      const config = getUserSubscriptionConfig(user);
+      const reward = config.dailyCheckIn;
+
+      await tx.update(users)
+        .set({
+          points: user.points + reward,
+          totalEarnedPoints: user.totalEarnedPoints + reward,
+          lastCheckInAt: new Date(),
+        })
+        .where(eq(users.id, userId));
+
+      await tx.insert(pointTransactions).values({
+        userId,
+        type: 'earn',
+        amount: reward,
+        description: '每日签到',
+      });
+
+      return { success: true, reward, points: user.points + reward };
+    });
+
+    if (result.error) {
+      return c.json({ error: result.error }, result.status as any);
+    }
+
+    return c.json({
+      reward: result.reward,
+      points: result.points,
+      message: `签到成功，获得 ${result.reward} 积分`,
+    });
+  } catch {
+    return c.json({ error: '签到失败，请重试' }, 500);
   }
-
-  const config = getUserSubscriptionConfig(user);
-  const reward = config.dailyCheckIn;
-
-  await db.update(users)
-    .set({
-      points: user.points + reward,
-      totalEarnedPoints: user.totalEarnedPoints + reward,
-      lastCheckInAt: new Date(),
-    })
-    .where(eq(users.id, userId));
-
-  await recordPointTransaction(userId, 'earn', reward, '每日签到');
-
-  return c.json({
-    reward,
-    points: user.points + reward,
-    message: `签到成功，获得 ${reward} 积分`,
-  });
 });
 
 // POST /api/points/earn — 完成任务获得积分

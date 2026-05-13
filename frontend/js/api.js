@@ -15,7 +15,10 @@ async function api(path, options = {}) {
     const data = await res.json().catch(() => null);
     if (!res.ok) {
         if (res.status === 401) {
-            return null;
+            authToken = '';
+            currentUser = null;
+            localStorage.removeItem('jz_token');
+            throw new Error(data?.error || '登录已过期，请重新登录');
         }
         if (res.status === 403 && data?.code === 'INSUFFICIENT_POINTS') {
             showToast(`积分不足，当前剩余 ${data.have ?? 0} 积分，每次调用消耗 1 积分`, 'warning');

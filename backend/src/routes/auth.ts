@@ -229,12 +229,20 @@ auth.put('/me', authMiddleware, async (c) => {
   if (body.username !== undefined) updateData.username = body.username;
   if (body.phone !== undefined) updateData.phone = body.phone;
   if (body.avatar !== undefined) updateData.avatar = body.avatar;
-  if (body.membership !== undefined) updateData.membership = body.membership;
-  if (body.points !== undefined) updateData.points = body.points;
-  if (body.tokenPercent !== undefined) updateData.tokenPercent = body.tokenPercent;
 
-  if (body.password) {
-    updateData.passwordHash = await bcrypt.hash(body.password, 10);
+  if (body.newPassword) {
+    if (!body.oldPassword) {
+      return c.json({ error: '请提供旧密码' }, 400);
+    }
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user) {
+      return c.json({ error: '用户不存在' }, 404);
+    }
+    const valid = await bcrypt.compare(body.oldPassword, user.passwordHash);
+    if (!valid) {
+      return c.json({ error: '旧密码错误' }, 401);
+    }
+    updateData.passwordHash = await bcrypt.hash(body.newPassword, 10);
   }
 
   await db.update(users).set(updateData).where(eq(users.id, userId));

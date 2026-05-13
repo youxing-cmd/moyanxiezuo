@@ -518,7 +518,7 @@ async function saveProfile(field) {
         if (!oldP || !newP) { showToast('请填写密码', 'warning'); return; }
         if (newP !== confirmP) { showToast('两次密码不一致', 'warning'); return; }
         try {
-            await api('/auth/me', { method: 'PUT', body: { password: newP } });
+            await api('/auth/me', { method: 'PUT', body: { oldPassword: oldP, newPassword: newP } });
             showToast('密码已修改', 'success');
             document.querySelector('.jz-modal-overlay')?.remove();
         } catch (err) {

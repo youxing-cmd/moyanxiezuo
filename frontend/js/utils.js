@@ -141,8 +141,8 @@ function parseMarkdownToHtml(text) {
     // 删除线
     html = html.replace(/~~([^\n]+?)~~/g, '<del style="text-decoration:line-through; opacity:0.6; color:#1a1a1a;">$1</del>');
 
-    // 引用
-    html = html.replace(/^>\s*(.+)$/gm, '<blockquote style="border-left:3px solid var(--accent); padding-left:10px; margin:8px 0; color:#1a1a1a;">$1</blockquote>');
+    // 引用（兼容先 escapeHtml 后的 &gt;）
+    html = html.replace(/^(?:>|&gt;)\s*(.+)$/gm, '<blockquote style="border-left:3px solid var(--accent); padding-left:10px; margin:8px 0; color:#1a1a1a;">$1</blockquote>');
 
     // 标题
     html = html.replace(/^#{3}\s+(.+)$/gm, '<h3 style="font-size:1.2em; font-weight:700; margin:16px 0 8px; color:#1a1a1a;">$1</h3>');
