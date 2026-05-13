@@ -27,6 +27,7 @@ export interface RouteDecision {
   confidence: number;          // 路由置信度 0-1
   fallback: boolean;           // true 表示用了降级策略
   rawResponse?: string;        // 调试用：原始 LLM 响应
+  latencyMs?: number;          // 路由耗时（毫秒）
 }
 
 export interface RouteContext {
@@ -130,18 +131,20 @@ export async function routeAgentRequest(
   messages: ChatMessage[],
   _ctx: RouteContext,
 ): Promise<RouteDecision> {
+  const startTime = Date.now();
+
   // 1. 取最后一条 user message 作为 query
   const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
   const userQuery = (lastUserMsg?.content || '').trim();
   if (!userQuery) {
-    return buildFallbackDecision('empty', 'no user message');
+    return { ...buildFallbackDecision('empty', 'no user message'), latencyMs: Date.now() - startTime };
   }
 
   // 2. 取路由模型配置
   const routerModel: PresetModel | null = getPresetModelById(ROUTER_MODEL_ID);
   if (!routerModel) {
     console.warn(`[agentRouter] 路由模型 ${ROUTER_MODEL_ID} 不可用，降级`);
-    return buildFallbackDecision('no_router_model');
+    return { ...buildFallbackDecision('no_router_model'), latencyMs: Date.now() - startTime };
   }
   const routerConfig: ModelConfig = {
     provider: routerModel.provider,
@@ -163,11 +166,11 @@ export async function routeAgentRequest(
   } catch (err: unknown) {
     const msg = err instanceof LLMError ? err.message : err instanceof Error ? err.message : String(err);
     console.warn(`[agentRouter] 路由模型调用失败: ${msg}，降级`);
-    return buildFallbackDecision('router_call_failed', msg);
+    return { ...buildFallbackDecision('router_call_failed', msg), latencyMs: Date.now() - startTime };
   }
 
   if (!content) {
-    return buildFallbackDecision('empty_response', content);
+    return { ...buildFallbackDecision('empty_response', content), latencyMs: Date.now() - startTime };
   }
 
   // 4. 解析 JSON
@@ -189,7 +192,7 @@ export async function routeAgentRequest(
     console.warn(
       `[agentRouter] 模型 "${targetModelId}" 不在预设清单内，降级`,
     );
-    return buildFallbackDecision(intent, content);
+    return { ...buildFallbackDecision(intent, content), latencyMs: Date.now() - startTime };
   }
 
   // 6. 校验：enabledTools 必须在注册表内（非法剔除）
@@ -203,5 +206,6 @@ export async function routeAgentRequest(
     confidence,
     fallback: false,
     rawResponse: content,
+    latencyMs: Date.now() - startTime,
   };
 }

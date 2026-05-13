@@ -230,3 +230,21 @@ export const bookRankings = pgTable('book_rankings', {
   url: text('url').notNull().default(''),
   fetchedAt: timestamp('fetched_at', { mode: 'date' }).$defaultFn(() => new Date()),
 });
+
+export const agentRoutes = pgTable('agent_routes', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull(),
+  workId: integer('work_id'),
+  query: text('query').notNull(),
+  intent: text('intent').notNull(),
+  targetModelId: text('target_model_id').notNull(),
+  enabledTools: jsonb('enabled_tools').$type<string[]>().notNull().default([]),
+  confidence: real('confidence').notNull(),
+  fallback: boolean('fallback').notNull().default(false),
+  rawResponse: text('raw_response'),
+  userFeedback: text('user_feedback'),
+  correctedModelId: text('corrected_model_id'),
+  correctedTools: jsonb('corrected_tools').$type<string[]>(),
+  latencyMs: integer('latency_ms'),
+  createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
+});

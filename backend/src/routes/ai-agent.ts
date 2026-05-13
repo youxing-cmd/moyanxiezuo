@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
 import { db } from '../db/index.js';
-import { users, pointTransactions } from '../db/schema.js';
+import { users, pointTransactions, agentRoutes } from '../db/schema.js';
 import { callLLM, resolveModelConfig, type ChatMessage } from '../services/llm.js';
 import { getEnabledTools } from '../config/tools.js';
 import { routeAgentRequest } from '../services/agentRouter.js';
@@ -97,6 +97,30 @@ agentChatRouter.post('/agent-chat', async (c) => {
     { userId, workId: workId ?? null },
   );
 
+  // 持久化路由决策到数据库（失败不打断用户请求）
+  let routeLogId: number | null = null;
+  try {
+    const [routeLog] = await db
+      .insert(agentRoutes)
+      .values({
+        userId,
+        workId: workId ?? null,
+        query: messages[messages.length - 1]?.content ?? '',
+        intent: decision.intent,
+        targetModelId: decision.targetModelId,
+        enabledTools: decision.enabledTools,
+        confidence: decision.confidence,
+        fallback: decision.fallback,
+        rawResponse: decision.rawResponse ?? null,
+        latencyMs: decision.latencyMs ?? null,
+      })
+      .returning({ id: agentRoutes.id });
+    routeLogId = routeLog?.id ?? null;
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn('[agent-chat] 路由日志写入失败:', msg);
+  }
+
   // 路由决策只写日志，不写入 SSE body（确保对前端透明）
   console.log(
     `[agent-chat] route: intent=${decision.intent}, model=${decision.targetModelId}, tools=[${decision.enabledTools.join(',')}], confidence=${decision.confidence.toFixed(2)}${decision.fallback ? ', fallback=true' : ''}`,
@@ -141,7 +165,7 @@ agentChatRouter.post('/agent-chat', async (c) => {
       tools.length > 0 ? tools : undefined,
     );
 
-    return streamResponse(res, {
+    const extraHeaders: Record<string, string> = {
       // 路由决策放在 header 里方便后端日志和前端调试（如有需要）
       'X-Agent-Route': encodeURIComponent(JSON.stringify({
         intent: decision.intent,
@@ -150,7 +174,11 @@ agentChatRouter.post('/agent-chat', async (c) => {
         confidence: decision.confidence,
         fallback: decision.fallback,
       })),
-    });
+    };
+    if (routeLogId != null) {
+      extraHeaders['X-Route-Id'] = String(routeLogId);
+    }
+    return streamResponse(res, extraHeaders);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg || 'Agent 调用失败' }, 500);
