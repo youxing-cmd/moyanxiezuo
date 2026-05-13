@@ -1,0 +1,104 @@
+/* ===== 基础重置 ===== */
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --bg-primary: #0a0a0f;
+    --bg-secondary: #111116;
+    --bg-tertiary: #16161c;
+    --bg-card: #1c1c24;
+    --bg-hover: #22222a;
+    --bg-active: #2a2a34;
+    --bg-elevated: #24242e;
+
+    --text-primary: #f0f0f5;
+    --text-secondary: #9ca3af;
+    --text-tertiary: #6b7280;
+    --text-muted: #4b5563;
+    --text-ghost: #374151;
+
+    --accent: #6366f1;
+    --accent-light: #818cf8;
+    --accent-lighter: #a5b4fc;
+    --accent-dark: #4f46e5;
+    --accent-dim: #4338ca;
+    --accent-glow: rgba(99, 102, 241, 0.12);
+    --accent-soft: rgba(99, 102, 241, 0.08);
+    --primary: var(--accent);
+
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --info: #3b82f6;
+    --warning-soft: rgba(245, 158, 11, 0.1);
+    --success-soft: rgba(16, 185, 129, 0.1);
+    --danger-soft: rgba(239, 68, 68, 0.1);
+    --info-soft: rgba(59, 130, 246, 0.1);
+
+    --border: rgba(255, 255, 255, 0.04);
+    --border-light: rgba(255, 255, 255, 0.08);
+    --border-active: rgba(99, 102, 241, 0.25);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.2);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.15);
+    --shadow-elevated: 0 4px 6px rgba(0, 0, 0, 0.2), 0 12px 24px rgba(0, 0, 0, 0.25);
+    --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.08);
+
+    --radius-sm: 6px;
+    --radius: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+
+    --font-sans: 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+    --font-serif: 'Noto Serif SC', 'Georgia', serif;
+
+    --transition: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    --editor-text: #f0f0f5;
+}
+
+html {
+    font-size: 14px;
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: var(--font-sans);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.65;
+    letter-spacing: 0.01em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+    text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+textarea,
+select {
+    font: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[contenteditable="true"]:focus-visible {
+    outline: 2px solid var(--accent-light);
+    outline-offset: 2px;
+}
+
+/* ===== 应用布局 ===== */
+/* 平滑主题过渡 */
+body, .sidebar, .main-content, .card, .btn, .nav-item, .topbar,
+.editor-toolbar, .editor-area, .split-sidebar, .split-main,
+.tool-card, .workflow-node, .character-card, .list-item,
+.search-box, .tabs, .tab, .theme-dropdown {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}

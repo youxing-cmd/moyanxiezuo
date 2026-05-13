@@ -1,0 +1,87 @@
+/* ===== 浅色主题 ===== */
+[data-theme="light"] {
+    --bg-primary: #f8f9fa;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f1f3f5;
+    --bg-card: #ffffff;
+    --bg-hover: #e9ecef;
+    --bg-active: #dee2e6;
+    --bg-elevated: #f8f9fa;
+
+    --text-primary: #111827;
+    --text-secondary: #4b5563;
+    --text-tertiary: #6b7280;
+    --text-muted: #9ca3af;
+    --text-ghost: #d1d5db;
+
+    --accent: #4f46e5;
+    --accent-light: #6366f1;
+    --accent-lighter: #818cf8;
+    --accent-dark: #3730a3;
+    --accent-dim: #312e81;
+    --accent-glow: rgba(99, 102, 241, 0.08);
+    --accent-soft: rgba(99, 102, 241, 0.06);
+    --primary: var(--accent);
+
+    --success: #059669;
+    --warning: #d97706;
+    --danger: #dc2626;
+    --info: #2563eb;
+    --warning-soft: rgba(217, 119, 6, 0.08);
+    --success-soft: rgba(5, 150, 105, 0.08);
+    --danger-soft: rgba(220, 38, 38, 0.08);
+    --info-soft: rgba(37, 99, 235, 0.08);
+
+    --border: rgba(0, 0, 0, 0.06);
+    --border-light: rgba(0, 0, 0, 0.1);
+    --border-active: rgba(99, 102, 241, 0.2);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.04);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.03);
+    --shadow-elevated: 0 4px 6px rgba(0, 0, 0, 0.04), 0 12px 24px rgba(0, 0, 0, 0.06);
+    --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.06);
+    --editor-text: #1a1a1a;
+}
+
+/* ===== 暖色主题（护眼纸纹） ===== */
+[data-theme="warm"] {
+    --bg-primary: #f5f0e6;
+    --bg-secondary: #faf6ee;
+    --bg-tertiary: #ede8dc;
+    --bg-card: #fdfaf4;
+    --bg-hover: #e5dfd2;
+    --bg-active: #dbd4c6;
+    --bg-elevated: #f7f2e8;
+
+    --text-primary: #2c2418;
+    --text-secondary: #5c5040;
+    --text-tertiary: #8a7e6e;
+    --text-muted: #b0a694;
+    --text-ghost: #c4b8a4;
+
+    --accent: #b85c38;
+    --accent-light: #c9704a;
+    --accent-lighter: #d48a68;
+    --accent-dark: #9a4a2a;
+    --accent-dim: #7c3d20;
+    --accent-glow: rgba(184, 92, 56, 0.08);
+    --accent-soft: rgba(184, 92, 56, 0.06);
+    --primary: var(--accent);
+
+    --success: #5a8f3c;
+    --warning: #c4851a;
+    --danger: #b84040;
+    --info: #3a7a9e;
+    --warning-soft: rgba(196, 133, 26, 0.08);
+    --success-soft: rgba(90, 143, 60, 0.08);
+    --danger-soft: rgba(184, 64, 64, 0.08);
+    --info-soft: rgba(58, 122, 158, 0.08);
+
+    --border: rgba(44, 36, 24, 0.06);
+    --border-light: rgba(44, 36, 24, 0.1);
+    --border-active: rgba(184, 92, 56, 0.2);
+    --shadow: 0 1px 3px rgba(44, 36, 24, 0.05), 0 4px 12px rgba(44, 36, 24, 0.04);
+    --shadow-card: 0 1px 2px rgba(44, 36, 24, 0.04), 0 2px 8px rgba(44, 36, 24, 0.03);
+    --shadow-elevated: 0 4px 6px rgba(44, 36, 24, 0.04), 0 12px 24px rgba(44, 36, 24, 0.06);
+    --shadow-glow: 0 0 20px rgba(184, 92, 56, 0.06);
+    --editor-text: #2d2418;
+}
