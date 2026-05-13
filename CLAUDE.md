@@ -8,7 +8,7 @@ AI辅助小说创作平台。完整TypeScript全栈应用。
 
 | 层级 | 技术 |
 |------|------|
-| 后端 | Hono + Drizzle ORM + better-sqlite3 + jose(JWT) |
+| 后端 | Hono + Drizzle ORM + PostgreSQL (Neon/pg) + jose(JWT) |
 | 前端 | 原生HTML + CSS + JS（纯CSS变量主题） |
 | AI | OpenAI兼容API（通过.env配置） |
 
@@ -19,20 +19,28 @@ AI辅助小说创作平台。完整TypeScript全栈应用。
 │   ├── src/
 │   │   ├── index.ts           # 入口 + 静态文件托管
 │   │   ├── db/
-│   │   │   ├── schema.ts      # 数据库表定义
+│   │   │   ├── schema.ts      # 数据库表定义（PostgreSQL）
 │   │   │   └── index.ts       # Drizzle连接
 │   │   ├── routes/
-│   │   │   ├── auth.ts        # 认证（注册/登录/用户信息）
+│   │   │   ├── auth.ts        # 认证
 │   │   │   ├── works.ts       # 作品CRUD + 章节CRUD
-│   │   │   └── ai.ts          # AI对话/续写/润色/大纲
+│   │   │   ├── ai.ts          # AI对话/续写/润色/大纲
+│   │   │   ├── ai-agent.ts    # L3 Agent路由端点 + L4反馈统计API
+│   │   │   └── points.ts      # 积分/订阅系统
+│   │   ├── services/
+│   │   │   ├── llm.ts         # LLM调用层（稳定，禁止改动）
+│   │   │   └── agentRouter.ts # L3路由层（小模型意图分析）
+│   │   ├── config/
+│   │   │   ├── tools.ts       # 工具注册表
+│   │   │   └── presetModels.ts# 预设模型清单
 │   │   └── middleware/
 │   │       └── auth.ts        # JWT验证
-│   └── data/jiuzhang.db       # SQLite数据库
 ├── frontend/        # 前端静态文件
 │   ├── index.html
-│   ├── css/style.css
-│   └── js/app.js
-└── CLAUDE.md        # 本文件
+│   ├── css/
+│   └── js/
+├── CLAUDE.md        # 本文件
+└── L3-agent-router.md # L3/L4 设计文档
 ```
 
 ## 命令
@@ -47,16 +55,26 @@ npm run typecheck # TypeScript类型检查
 ```
 
 ### 访问
-- 前端：http://localhost:3000
-- API：http://localhost:3000/api/*
-- 健康检查：http://localhost:3000/health
+- 前端：http://localhost:3001
+- API：http://localhost:3001/api/*
+- 健康检查：http://localhost:3001/health
 
 ## 数据库Schema
 
-- **users**：id, username, phone, passwordHash, avatar, membership, points, tokenPercent, workCount
-- **works**：id, userId, title, genre, status, tags[], emoji, gradient, wordCount, chapterCount, settings
-- **chapters**：id, workId, title, content, wordCount, orderIndex
+- **users**：id, username, phone, passwordHash, avatar, membership, points, tokenPercent, workCount, subscriptionType, subscriptionExpireAt
+- **works**：id, userId, title, genre, status, tags[], emoji, gradient, wordCount, chapterCount, settings, perspective, channel, intro, cover, inspiration, analysis
+- **chapters**：id, workId, title, content, wordCount, orderIndex, volume, outline
+- **drafts**：id, workId, title, content, sourceType, sourceId
 - **ai_conversations**：id, userId, workId, messages[]
+- **characters**：id, workId, name, role, content, sort
+- **outlines**：id, workId, title, content
+- **settings**（作品设定）：id, workId, type, name, content, sort
+- **inspirations**：id, userId, title, source, tags[], content
+- **point_transactions**：id, userId, type, amount, description, relatedId
+- **submissions**：id, userId, workId, chapterId, status, earnedPoints
+- **model_configs**：id, userId, name, provider, baseUrl, apiKey, modelName, isDefault
+- **trend_hot_data/trend_wind_vane/trend_book_analysis/book_rankings**：热点/榜单数据
+- **agent_routes**：id, userId, workId, query, intent, targetModelId, enabledTools[], confidence, fallback, rawResponse, userFeedback, correctedModelId, correctedTools[], latencyMs
 
 ## API清单
 
@@ -77,9 +95,17 @@ npm run typecheck # TypeScript类型检查
 | DELETE | /api/works/:id/chapters/:cid | 删除章节 |
 | POST | /api/ai/chat | AI对话（SSE流式，支持手动选模型/工具） |
 | POST | /api/ai/agent-chat | L3 路由层（gemini-2.5-flash 自动选模型和工具，SSE 流式） |
+| POST | /api/ai/route-feedback | L4 路由反馈（用户对路由决策评分/修正） |
+| GET | /api/ai/route-stats | L4 路由统计（fallback率、意图/模型分布、平均延迟） |
 | POST | /api/ai/continue | AI续写 |
 | POST | /api/ai/polish | AI润色 |
 | POST | /api/ai/outline | 生成大纲 |
+| GET | /api/points | 积分与订阅状态 |
+| POST | /api/points/check-in | 每日签到 |
+| POST | /api/points/earn | 完成任务得积分 |
+| POST | /api/points/spend | 消费积分 |
+| POST | /api/points/redeem | 积分兑换订阅时长 |
+| GET | /api/points/transactions | 积分变动明细 |
 
 ## 配置
 

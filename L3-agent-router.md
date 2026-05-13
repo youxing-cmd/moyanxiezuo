@@ -49,9 +49,10 @@ L3 路由层在请求进入后端时先用小模型（`gemini-2.5-flash`）做�
   - `ROUTER_MODEL_ID = 'gemini-2.5-flash'` 常量
 
 - `backend/src/routes/ai-agent.ts`
-  - `POST /api/ai/agent-chat`
-  - 流程：JWT 鉴权 → 积分扣减 → 路由 → 注入 system prompt → 调大模型 → SSE 返回
-  - `X-Agent-Route` header 暴露路由决策（前端可选用）
+  - `POST /api/ai/agent-chat` — JWT 鉴权 → 积分扣减 → 路由 → 注入 system prompt → 调大模型 → SSE 返回
+  - `POST /api/ai/route-feedback` — 用户对路由决策提交反馈
+  - `GET /api/ai/route-stats` — 当前用户路由决策统计
+  - `X-Agent-Route` / `X-Route-Id` header 暴露路由决策和日志 ID
 
 ### 修改
 
@@ -67,12 +68,20 @@ L3 路由层在请求进入后端时先用小模型（`gemini-2.5-flash`）做�
   - `runChatWithTools` 加 `?agent=1` 灰度开关
   - 启用时 fetch `/api/ai/agent-chat` 并过滤 `model/modelId/tools` 字段
 
+### L4 修改
+
+- `backend/src/db/schema.ts`
+  - 新增 `agent_routes` 表
+- `backend/src/services/agentRouter.ts`
+  - 所有 return path 补全 `latencyMs`
+- `frontend/js/interactions-core.js`
+  - 读取 `X-Route-Id` header，AI 消息气泡底部显示反馈 UI
+
 ### 不动
 
 - `backend/src/services/llm.ts` 完全不动
 - `backend/src/config/tools.ts` 完全不动
 - `backend/src/config/presetModels.ts` 完全不动
-- 数据库 schema 不动
 
 ## 路由 Prompt（agentRouter.ts:buildRouterPrompt）
 
@@ -139,10 +148,22 @@ mock 路由模型返回非法 JSON 或网络失败 → 日志应显示 `fallback
 - 端到端延迟比 `/api/ai/chat` 多 300-800ms
 - 一次请求占用 2 个 LLM 并发槽位（`MAX_CONCURRENT=10`）
 
-## 后续延伸（V3 范围，不在本次）
+## L4 数据层（已实施，2026-05-13）
+
+目标：让每次路由决策可追溯、可分析、可学习。
+
+| 模块 | 实现 |
+|------|------|
+| 持久化 | `agent_routes` 表记录每次路由决策（intent/model/tools/confidence/latency/fallback） |
+| 反馈 | `POST /api/ai/route-feedback` 接收用户评分（good/bad/wrong_model/wrong_tools） |
+| 统计 | `GET /api/ai/route-stats` 返回当前用户的 fallback 率、意图/模型分布、平均延迟 |
+| 前端 | AI 消息气泡底部显示 👍/👎 反馈栏，联动 route-feedback API |
+| Header | SSE 响应携带 `X-Route-Id`（日志 ID）+ `X-Agent-Route`（决策 JSON） |
+
+## 后续延伸（V3 范围）
 
 - 路由结果缓存（同样的 query 直接复用决策）
-- 用户偏好学习（记录用户拒绝路由后的修正，调整路由权重）
+- 基于反馈数据的模型/工具权重自动调整
 - 多步规划（"帮我写一章" 拆解为多步执行计划）
 
 ## 修改路由 prompt 的时机
@@ -157,3 +178,6 @@ mock 路由模型返回非法 JSON 或网络失败 → 日志应显示 `fallback
 
 - `V2 L3 路由层：用 gemini-2.5-flash 做意图路由`（核心实现）
 - `L3 路由层完善：前端灰度切换 + 复用 streamResponse`（前端集成 + 重构）
+- `L4: agent_routes 数据层基础`（表 + latencyMs + 日志写入 + X-Route-Id）
+- `L4: 路由反馈与统计 API`（route-feedback + route-stats 端点）
+- `L4: 前端路由反馈 UI`（👍/👎 反馈栏 + 提交反馈）
