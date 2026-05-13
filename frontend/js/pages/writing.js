@@ -1139,7 +1139,7 @@ const writingViews = {
     `,
 
     // ========== AI 工具库 ==========
-    'ai-tools': () => `
+    pages['ai-tools'] = () => `
         <div class="page-section">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
                 <div>
