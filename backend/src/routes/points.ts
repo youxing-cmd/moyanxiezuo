@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { db } from '../db/index.js';
 import { users, pointTransactions } from '../db/schema.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, gte, lt, sql } from 'drizzle-orm';
 
 const pointsRouter = new Hono();
 pointsRouter.use('*', authMiddleware);
@@ -142,9 +142,15 @@ pointsRouter.post('/check-in', async (c) => {
   }
 });
 
+// 每日任务奖励上限
+const DAILY_EARN_LIMITS: Record<string, number> = {
+  create_work: 5,
+  save_chapter: 20,
+};
+
 // POST /api/points/earn — 完成任务获得积分
 const earnSchema = z.object({
-  task: z.enum(['create_work', 'save_chapter', 'ai_chat']),
+  task: z.enum(['create_work', 'save_chapter']),
   relatedId: z.number().optional(),
 });
 
@@ -161,11 +167,35 @@ pointsRouter.post('/earn', async (c) => {
   const REWARDS: Record<string, { amount: number; description: string }> = {
     create_work: { amount: 50, description: '创建作品' },
     save_chapter: { amount: 20, description: '完成章节' },
-    ai_chat: { amount: 2, description: 'AI对话' },
   };
 
   const reward = REWARDS[task];
   if (!reward) return c.json({ error: '未知任务类型' }, 400);
+
+  // 校验每日上限
+  const dailyLimit = DAILY_EARN_LIMITS[task];
+  if (dailyLimit !== undefined) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const [{ count }] = await db.select({ count: sql<number>`count(*)` })
+      .from(pointTransactions)
+      .where(
+        and(
+          eq(pointTransactions.userId, userId),
+          eq(pointTransactions.type, 'earn'),
+          eq(pointTransactions.description, reward.description),
+          gte(pointTransactions.createdAt, today),
+          lt(pointTransactions.createdAt, tomorrow)
+        )
+      );
+
+    if ((count ?? 0) >= dailyLimit) {
+      return c.json({ error: `今日${reward.description}奖励已达上限（${dailyLimit}次）` }, 429);
+    }
+  }
 
   await db.update(users)
     .set({

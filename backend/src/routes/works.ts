@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { works, chapters, chapterVersions } from '../db/schema.js';
+import { works, chapters, chapterVersions, drafts, characters, outlines, settings, aiConversations } from '../db/schema.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { eq, and, ilike, desc, isNull, isNotNull } from 'drizzle-orm';
+import { eq, and, ilike, desc, isNull, isNotNull, inArray } from 'drizzle-orm';
 
 const worksRouter = new Hono();
 
@@ -216,6 +216,15 @@ worksRouter.delete('/:id/permanent', async (c) => {
     return c.json({ error: '作品不存在' }, 404);
   }
 
+  const chapterIds = await db.select({ id: chapters.id }).from(chapters).where(eq(chapters.workId, id));
+  if (chapterIds.length > 0) {
+    await db.delete(chapterVersions).where(inArray(chapterVersions.chapterId, chapterIds.map(c => c.id)));
+  }
+  await db.delete(drafts).where(eq(drafts.workId, id));
+  await db.delete(characters).where(eq(characters.workId, id));
+  await db.delete(outlines).where(eq(outlines.workId, id));
+  await db.delete(settings).where(eq(settings.workId, id));
+  await db.delete(aiConversations).where(eq(aiConversations.workId, id));
   await db.delete(chapters).where(eq(chapters.workId, id));
   await db.delete(works).where(eq(works.id, id));
 
@@ -404,6 +413,7 @@ worksRouter.delete('/:id/chapters/:cid', async (c) => {
     return c.json({ error: '章节不存在' }, 404);
   }
 
+  await db.delete(chapterVersions).where(eq(chapterVersions.chapterId, cid));
   await db.delete(chapters).where(eq(chapters.id, cid));
 
   // 重新计算
