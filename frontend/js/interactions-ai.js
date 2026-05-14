@@ -1878,7 +1878,7 @@ function renderModelConfigs() {
                         <span style="padding:2px 8px; border-radius:10px; background:var(--bg-tertiary); color:var(--text-muted); font-size:11px;">${escapeHtml(cfg.modelName)}</span>
                     </div>
                     <div>
-                        ${!isCurrent ? `<button class="btn btn-primary btn-sm" onclick="selectTopbarModel('${cfg.id}')">选择当前模型</button>` : ''}
+                        ${!isCurrent ? `<button class="btn btn-primary btn-sm" onclick="handleModelSelectChange('${cfg.id}'); renderModelConfigs(); showToast('已切换模型：${escapeHtml(cfg.name)}', 'success');">选择当前模型</button>` : ''}
                     </div>
                 </div>
                 ${cfg.description ? `<div style="font-size:13px; color:var(--text-secondary); margin-bottom:8px;">${escapeHtml(cfg.description)}</div>` : ''}
@@ -1888,42 +1888,12 @@ function renderModelConfigs() {
 }
 
 function showCreateModelConfigModal() {
-    const providerOptions = Object.entries(PROVIDER_CONFIGS).map(([key, cfg]) =>
-        `<option value="${key}">${escapeHtml(cfg.label)}</option>`
-    ).join('');
-
     showModal('添加 AI 模型', `
-        <div style="max-height:70vh; overflow-y:auto; padding-right:4px;">
-            <div class="form-group">
-                <label class="form-label">模型名称 <span style="font-size:11px; color:var(--text-muted);">（自定义，如"我的GPT-4o"）</span></label>
-                <input type="text" class="form-input" id="newModelName" placeholder="给模型起个名字" maxlength="50">
-            </div>
-            <div class="form-group">
-                <label class="form-label">厂商 <span style="font-size:11px; color:var(--text-muted);">（选择后自动填充接口地址和推荐模型）</span></label>
-                <select class="form-input" id="newModelProviderKey" onchange="onModelProviderChange('new')">
-                    <option value="">-- 选择厂商 --</option>
-                    ${providerOptions}
-                </select>
-            </div>
-            <!-- 隐藏的 provider 字段（openai-compatible / anthropic） -->
-            <input type="hidden" id="newModelProvider" value="openai-compatible">
-            <div class="form-group">
-                <label class="form-label">接口地址 <span style="font-size:11px; color:var(--text-muted);">（选完厂商已自动填入官方地址，用代理才需改）</span></label>
-                <input type="text" class="form-input" id="newModelBaseUrl" placeholder="https://api.xxx.com/v1" onblur="sanitizeBaseUrl('new')">
-                <div id="newModelBaseUrlHint" style="font-size:11px; color:var(--danger); margin-top:4px; display:none;"></div>
-            </div>
-            <div class="form-group">
-                <label class="form-label">API Key</label>
-                <input type="password" class="form-input" id="newModelApiKey" placeholder="sk-...">
-            </div>
-            <div class="form-group">
-                <label class="form-label">模型标识 <span style="font-size:11px; color:var(--text-muted);">（选择厂商后自动推荐，可直接修改）</span></label>
-                <input type="text" class="form-input" id="newModelModelName" placeholder="gpt-4o-mini">
-            </div>
-            <div class="form-actions">
-                <button class="btn btn-ghost" onclick="this.closest('.jz-modal-overlay').remove()">取消</button>
-                <button class="btn btn-primary" onclick="saveModelConfig()">保存</button>
-            </div>
+        <div style="text-align:center; padding:32px 16px;">
+            <div style="font-size:40px; margin-bottom:16px;">🔒</div>
+            <div style="font-size:15px; color:var(--text-primary); margin-bottom:8px; font-weight:600;">模型由平台统一预置</div>
+            <div style="font-size:13px; color:var(--text-muted); margin-bottom:20px;">当前版本暂不支持自定义添加模型，平台已内置多个主流模型供选择。</div>
+            <button class="btn btn-primary" onclick="this.closest('.jz-modal-overlay').remove()">知道了</button>
         </div>
     `);
 }
@@ -2002,125 +1972,26 @@ function applyPresetModel(name, provider, baseUrl, modelName) {
 }
 
 async function showEditModelConfigModal(id) {
-    try {
-        const list = await api('/model-configs');
-        const cfg = list.find(c => c.id === id);
-        if (!cfg) return showToast('配置不存在', 'error');
-
-        // 尝试匹配厂商
-        let matchedKey = '';
-        for (const [key, pcfg] of Object.entries(PROVIDER_CONFIGS)) {
-            if (pcfg.provider === cfg.provider && (pcfg.baseUrl === cfg.baseUrl || cfg.baseUrl.includes(pcfg.baseUrl.replace('https://','').split('/')[0]))) {
-                matchedKey = key;
-                break;
-            }
-        }
-
-        const providerOptions = Object.entries(PROVIDER_CONFIGS).map(([key, pcfg]) =>
-            `<option value="${key}" ${key === matchedKey ? 'selected' : ''}>${escapeHtml(pcfg.label)}</option>`
-        ).join('');
-
-        showModal('编辑 AI 模型', `
-            <div class="form-group">
-                <label class="form-label">模型名称 <span style="font-size:11px; color:var(--text-muted);">（自定义）</span></label>
-                <input type="text" class="form-input" id="editModelName" value="${escapeHtml(cfg.name)}" maxlength="50">
-            </div>
-            <div class="form-group">
-                <label class="form-label">厂商</label>
-                <select class="form-input" id="editModelProviderKey" onchange="onModelProviderChange('edit')">
-                    <option value="">-- 选择厂商 --</option>
-                    ${providerOptions}
-                </select>
-            </div>
-            <input type="hidden" id="editModelProvider" value="${escapeHtml(cfg.provider)}">
-            <div class="form-group">
-                <label class="form-label">接口地址 <span style="font-size:11px; color:var(--text-muted);">（官方地址已自动填入，用代理才需改）</span></label>
-                <input type="text" class="form-input" id="editModelBaseUrl" value="${escapeHtml(cfg.baseUrl)}" onblur="sanitizeBaseUrl('edit')">
-                <div id="editModelBaseUrlHint" style="font-size:11px; color:var(--danger); margin-top:4px; display:none;"></div>
-            </div>
-            <div class="form-group">
-                <label class="form-label">API Key <span style="font-size:11px; color:var(--text-muted);">（留空则保持不变）</span></label>
-                <input type="password" class="form-input" id="editModelApiKey" placeholder="******">
-            </div>
-            <div class="form-group">
-                <label class="form-label">模型标识 <span style="font-size:11px; color:var(--text-muted);">（选择厂商后自动推荐，可直接修改）</span></label>
-                <input type="text" class="form-input" id="editModelModelName" value="${escapeHtml(cfg.modelName)}">
-            </div>
-            <div class="form-actions">
-                <button class="btn btn-ghost" onclick="this.closest('.jz-modal-overlay').remove()">取消</button>
-                <button class="btn btn-primary" onclick="saveModelConfig(${cfg.id})">保存</button>
-            </div>
-        `);
-    } catch (err) {
-        showToast('加载失败：' + err.message, 'error');
-    }
+    showToast('模型由平台统一预置，不支持编辑', 'info');
 }
 
 async function saveModelConfig(id) {
-    const isEdit = !!id;
-    const prefix = isEdit ? 'edit' : 'new';
-    const name = document.getElementById(prefix + 'ModelName')?.value?.trim();
-    const provider = document.getElementById(prefix + 'ModelProvider')?.value || 'openai-compatible';
-    const baseUrl = document.getElementById(prefix + 'ModelBaseUrl')?.value?.trim();
-    const apiKey = document.getElementById(prefix + 'ModelApiKey')?.value?.trim();
-    const modelName = document.getElementById(prefix + 'ModelModelName')?.value?.trim();
-
-    if (!name) { showToast('请输入模型名称', 'warning'); return; }
-    if (!baseUrl) { showToast('请输入接口地址', 'warning'); return; }
-    if (!isEdit && !apiKey) { showToast('请输入 API Key', 'warning'); return; }
-    if (!modelName) { showToast('请输入模型标识', 'warning'); return; }
-
-    try {
-        const body = { name, provider, baseUrl, apiKey, modelName };
-        if (isEdit) {
-            // 编辑时如果 apiKey 为空则不传
-            if (!apiKey) delete body.apiKey;
-            await api(`/model-configs/${id}`, { method: 'PUT', body });
-            showToast('模型已更新', 'success');
-        } else {
-            await api('/model-configs', { method: 'POST', body });
-            showToast('模型已添加', 'success');
-        }
-        document.querySelector('.jz-modal-overlay')?.remove();
-        loadModelConfigs();
-    } catch (err) {
-        showToast('保存失败：' + err.message, 'error');
-    }
+    showToast('模型由平台统一预置，暂不支持自定义保存', 'info');
+    document.querySelector('.jz-modal-overlay')?.remove();
 }
 
 async function deleteModelConfig(id) {
-    if (!confirm('确定要删除这个模型配置吗？')) return;
-    try {
-        await api(`/model-configs/${id}`, { method: 'DELETE' });
-        showToast('已删除', 'success');
-        if (currentModelId === id) {
-            currentModelId = null;
-            localStorage.removeItem('jz_current_model_id');
-        }
-        loadModelConfigs();
-    } catch (err) {
-        showToast('删除失败：' + err.message, 'error');
-    }
+    showToast('模型由平台统一预置，不支持删除', 'info');
 }
 
 async function testModelConfig(id) {
-    showToast('正在测试连接...', 'info');
-    try {
-        const result = await api(`/model-configs/${id}/test`, { method: 'POST' });
-        showToast(result.message || '连接成功', 'success');
-    } catch (err) {
-        showToast('连接失败：' + err.message, 'error');
-    }
+    showToast('模型由平台统一预置，无需测试', 'info');
 }
 
 async function setDefaultModelConfig(id) {
-    try {
-        await api(`/model-configs/${id}/set-default`, { method: 'POST' });
-        showToast('已设为默认模型', 'success');
-        loadModelConfigs();
-    } catch (err) {
-        showToast('设置失败：' + err.message, 'error');
-    }
+    handleModelSelectChange(id);
+    renderModelConfigs();
+    showToast('已设为当前使用模型', 'success');
 }
 
 // 获取当前要使用的 modelId（用于 AI 调用）

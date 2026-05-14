@@ -23,11 +23,23 @@ async function init() {
     // 预绑定登录表单事件（硬编码表单）
     bindAuthFormEvents();
 
-    // 初始化用户信息（游客状态）
+    // 初始化用户信息
     updateUserInfo();
 
-    // 检查登录状态（不强制弹登录框，未登录以游客身份浏览）
-    await checkAuth();
+    // 检查登录状态：未登录强制弹登录框
+    const isLoggedIn = await checkAuth();
+    if (!isLoggedIn) {
+        showAuth();
+        // 导航点击也引导登录
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                showAuth();
+            });
+        });
+        return;
+    }
+
     hideAuth();
 
     // 绑定导航点击事件

@@ -1,12 +1,11 @@
 import cron from 'node-cron';
 import { fetchAllHotData } from '../services/dailyHotApi.js';
 import { generateWindVaneForAllCategories, hasTodayWindVane } from '../services/trendsAnalysis.js';
-import { crawlAllBookRankings } from '../services/bookCrawler.js';
 
 let isRunning = false;
 
 export function initScheduler() {
-  // 每天 9:00 和 21:00 执行跑批（热点数据 + 风向分析 + 书籍榜单爬虫）
+  // 每天 9:00 和 21:00 执行跑批（热点数据 + 风向分析）
   cron.schedule('0 9,21 * * *', async () => {
     if (isRunning) {
       console.log('[scheduler] 上一次跑批尚未完成，跳过本次');
@@ -41,10 +40,10 @@ async function runDailyBatch() {
   console.log('[scheduler] 生成风向分析...');
   await generateWindVaneForAllCategories();
 
-  // 3. 书籍平台榜单爬虫
-  console.log('[scheduler] 开始抓取书籍榜单...');
-  await crawlAllBookRankings();
-  console.log('[scheduler] 书籍榜单抓取完成');
+  // 3. 书籍平台榜单爬虫 — 已禁用（合规风险，无官方 API）
+  // console.log('[scheduler] 开始抓取书籍榜单...');
+  // await crawlAllBookRankings();
+  // console.log('[scheduler] 书籍榜单抓取完成');
 }
 
 async function runOnStartup() {

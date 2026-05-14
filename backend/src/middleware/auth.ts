@@ -20,11 +20,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   const authHeader = c.req.header('Authorization');
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    // 未登录：使用游客身份（userId = 1）
-    c.set('userId', 1);
-    c.set('user', { userId: 1, username: 'guest', role: 'guest' });
-    await next();
-    return;
+    return c.json({ error: '请先登录' }, 401);
   }
 
   const token = authHeader.slice(7);
@@ -34,10 +30,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     c.set('user', payload);
     await next();
   } catch {
-    // token 过期也降级为游客身份
-    c.set('userId', 1);
-    c.set('user', { userId: 1, username: 'guest', role: 'guest' });
-    await next();
+    return c.json({ error: '登录已过期，请重新登录' }, 401);
   }
 });
 
