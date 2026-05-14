@@ -391,7 +391,7 @@ const writingViews = {
                             <textarea id="aiChatInput" placeholder="输入「/」唤起工具..." style="width:100%; min-height:60px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius); padding:10px; color:var(--text-primary); font-size:13px; resize:none; outline:none; font-family:inherit;"></textarea>
                             <!-- 底行：模型 + 工具 + 发送 -->
                             <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
-                                <!-- 模型切换 -->
+                                <!-- 模型切换（高级能力） -->
                                 <div id="chatModelPicker" style="position:relative; flex:1;">
                                     <button id="chatModelTrigger" style="padding:4px 10px; border-radius:16px; border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); font-size:11px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:5px; transition:all 0.2s; width:100%;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
                                         <span id="chatModelTriggerName">默认模型</span> <span id="chatModelArrow" style="font-size:10px; transition:transform 0.2s;">▼</span>
@@ -407,7 +407,7 @@ const writingViews = {
                                 <select id="chatToolSelect" style="display:none;">
                                     <option value="default">🛠️ 九章默认工具</option>
                                 </select>
-                                <!-- 工具选择器 -->
+                                <!-- 工具选择器（高级能力） -->
                                 <div id="chatToolPicker" style="position:relative; flex:1;">
                                     <button id="chatToolTrigger" style="padding:4px 10px; border-radius:16px; border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); font-size:11px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:5px; transition:all 0.2s; width:100%;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
                                         <span id="chatToolTriggerName">默认工具</span> <span id="chatToolArrow" style="font-size:10px; transition:transform 0.2s;">▼</span>
@@ -556,14 +556,10 @@ const writingViews = {
             </div>
 
             <div id="aiToolResult" style="margin-top:24px; display:none;">
-                <div class="card">
+                <div class="card" id="aiToolResultCard">
                     <div class="card-header">
                         <div>
                             <div class="card-title" id="aiToolResultTitle">生成结果</div>
-                        </div>
-                        <div style="display:flex; gap:8px;">
-                            <button class="btn btn-ghost btn-sm" id="aiToolCopy">📋 复制</button>
-                            <button class="btn btn-primary btn-sm" id="aiToolRetry">🔄 重新生成</button>
                         </div>
                     </div>
                     <div id="aiToolResultContent" style="padding:16px; white-space:pre-wrap; line-height:1.8; color:var(--text-secondary); font-size:14px; max-height:400px; overflow-y:auto;"></div>

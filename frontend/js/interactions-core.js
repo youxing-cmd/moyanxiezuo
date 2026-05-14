@@ -422,6 +422,12 @@ async function initPageInteractions(page) {
         // 加载模型选择器
         loadModelSelector();
 
+        // 高级模式：控制模型选择器、工具选择器的显示
+        const chatModelPicker = document.getElementById('chatModelPicker');
+        if (chatModelPicker) chatModelPicker.style.display = isAdvancedMode() ? '' : 'none';
+        const chatToolPicker = document.getElementById('chatToolPicker');
+        if (chatToolPicker) chatToolPicker.style.display = isAdvancedMode() ? '' : 'none';
+
         // 恢复字体和字号设置
         let editorArea = document.getElementById('editorArea');
         const savedFont = localStorage.getItem('jz_editor_font');
@@ -955,27 +961,64 @@ async function initPageInteractions(page) {
                     <div style="font-size:12px; color:var(--accent); font-weight:600; margin-bottom:4px;">九章</div>
                     <div class="ai-msg-content" style="font-size:13px; color:var(--text-primary); line-height:1.6;">${contentHtml}</div>
                 </div>
-                <div class="msg-feedback" style="display:flex; gap:6px; margin-top:6px; padding-left:4px;">
-                    <button class="msg-btn" data-action="copy" style="padding:3px 8px; border:none; background:transparent; color:var(--text-muted); border-radius:4px; cursor:pointer; font-size:11px; display:flex; align-items:center; gap:3px;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制
-                    </button>
-                    <button class="msg-btn" data-action="insert" style="padding:3px 8px; border:none; background:transparent; color:var(--text-muted); border-radius:4px; cursor:pointer; font-size:11px; display:flex; align-items:center; gap:3px;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>插入正文
-                    </button>
-                    <button class="msg-btn" data-action="replace" style="padding:3px 8px; border:none; background:transparent; color:var(--text-muted); border-radius:4px; cursor:pointer; font-size:11px; display:flex; align-items:center; gap:3px;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>替换原文
-                    </button>
-                    <button class="msg-btn" data-action="regenerate" style="padding:3px 8px; border:none; background:transparent; color:var(--text-muted); border-radius:4px; cursor:pointer; font-size:11px; display:flex; align-items:center; gap:3px;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>重新生成
-                    </button>
-                    <button class="msg-btn" data-action="like" style="padding:3px 8px; border:none; background:transparent; color:var(--text-muted); border-radius:4px; cursor:pointer; font-size:11px;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
-                    </button>
-                    <button class="msg-btn" data-action="dislike" style="padding:3px 8px; border:none; background:transparent; color:var(--text-muted); border-radius:4px; cursor:pointer; font-size:11px;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
-                    </button>
-                </div>`;
-            bindMsgFeedback(el);
+                <div class="msg-feedback" style="margin-top:6px; padding-left:4px;"></div>`;
+            // 使用统一结果操作栏
+            const feedbackEl = el.querySelector('.msg-feedback');
+            if (feedbackEl) {
+                createResultActionBar(feedbackEl, {
+                    text: text || '',
+                    actions: ['copy', 'insert', 'replace', 'retry', 'like', 'dislike'],
+                    onCopy: () => {
+                        const contentEl = el.querySelector('.ai-msg-content');
+                        const txt = contentEl?.textContent || '';
+                        if (!txt) { showToast('内容为空', 'warning'); return; }
+                        if (navigator.clipboard && window.isSecureContext) {
+                            navigator.clipboard.writeText(txt).then(() => showToast('已复制', 'success')).catch(() => fallbackCopy(txt));
+                        } else {
+                            fallbackCopy(txt);
+                        }
+                    },
+                    onInsert: () => {
+                        const contentEl = el.querySelector('.ai-msg-content');
+                        const txt = contentEl?.textContent || '';
+                        if (!txt) { showToast('内容为空', 'warning'); return; }
+                        insertIntoEditor(txt);
+                    },
+                    onReplace: () => {
+                        const contentEl = el.querySelector('.ai-msg-content');
+                        const txt = contentEl?.textContent || '';
+                        if (!txt) { showToast('内容为空', 'warning'); return; }
+                        replaceRefText(txt);
+                    },
+                    onRetry: () => {
+                        if (aiChatStreaming) {
+                            showToast('正在生成中，请稍候', 'warning');
+                            return;
+                        }
+                        const idx = parseInt(el.dataset.msgIndex);
+                        if (isNaN(idx) || idx <= 0 || idx >= aiChatHistory.length) {
+                            showToast('无法重新生成', 'warning');
+                            return;
+                        }
+                        const userMsgIndex = idx - 1;
+                        const userMsg = aiChatHistory[userMsgIndex];
+                        if (!userMsg || userMsg.role !== 'user') {
+                            showToast('历史记录异常', 'warning');
+                            return;
+                        }
+                        showToast('正在重新生成...', 'info');
+                        const contentEl = el.querySelector('.ai-msg-content');
+                        if (contentEl) contentEl.textContent = '';
+                        const contextMessages = aiChatHistory.slice(0, userMsgIndex + 1);
+                        aiChatAbortCtrl = new AbortController();
+                        setAiSendButtonStreaming(true);
+                        regenerateMessage(contextMessages, idx, contentEl, aiChatAbortCtrl.signal).finally(() => {
+                            aiChatAbortCtrl = null;
+                            setAiSendButtonStreaming(false);
+                        });
+                    }
+                });
+            }
             return el;
         }
 
@@ -2038,21 +2081,9 @@ async function initPageInteractions(page) {
 
     if (page === 'ai-tools') {
         renderToolLibrary();
-
-        // 复制按钮
-        const copyBtn = document.getElementById('aiToolCopy');
-        if (copyBtn) {
-            copyBtn.addEventListener('click', () => {
-                const text = document.getElementById('aiToolResultContent')?.textContent;
-                if (text) navigator.clipboard.writeText(text).then(() => showToast('已复制', 'success'));
-            });
-        }
-
-        // 重新生成按钮
-        const retryBtn = document.getElementById('aiToolRetry');
-        if (retryBtn) {
-            retryBtn.addEventListener('click', () => retryAiTool());
-        }
+        // 高级模式：控制提示词调试 Tab 的显示
+        const promptDebugTab = document.querySelector('.tool-tab[data-tab="prompt-debug"]');
+        if (promptDebugTab) promptDebugTab.style.display = isAdvancedMode() ? '' : 'none';
     }
 
     if (page === 'inspiration') {

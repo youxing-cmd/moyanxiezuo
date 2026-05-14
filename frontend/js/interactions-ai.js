@@ -566,7 +566,7 @@ async function showToolDetailModal(tool) {
         </div>
         <div class="form-actions" style="margin-top:16px;">
             <button class="btn btn-ghost" onclick="this.closest('.jz-modal-overlay').remove()">关闭</button>
-            <button class="btn btn-primary" onclick="goToPromptDebug('${tool}')">🧪 调试提示词</button>
+            ${isAdvancedMode() ? `<button class="btn btn-primary" onclick="goToPromptDebug('${tool}')">🧪 调试提示词</button>` : ''}
             <button class="btn btn-primary" onclick="this.closest('.jz-modal-overlay').remove(); runAiTool('${tool}');">▶ 直接使用</button>
         </div>
     `);
@@ -798,11 +798,27 @@ async function executeAiTool(tool, body, customTool = null) {
             resultContent.style.display = 'block';
             resultContent.textContent = data.content || '无结果';
         }
+        const card = document.getElementById('aiToolResultCard');
+        if (card) {
+            createResultActionBar(card, {
+                text: data.content || '',
+                actions: ['copy', 'retry'],
+                onRetry: () => retryAiTool()
+            });
+        }
     } catch (err) {
         if (resultLoading) resultLoading.style.display = 'none';
         if (resultContent) {
             resultContent.style.display = 'block';
             resultContent.textContent = '生成失败: ' + err.message;
+        }
+        const card = document.getElementById('aiToolResultCard');
+        if (card) {
+            createResultActionBar(card, {
+                text: '生成失败: ' + err.message,
+                actions: ['retry'],
+                onRetry: () => retryAiTool()
+            });
         }
     }
 }
@@ -945,10 +961,9 @@ async function quickRunAiTool(tool) {
         <div style="margin-bottom:8px;"><span style="font-size:12px; color:var(--text-muted);">原文（${sel.length}字）</span></div>
         <div style="padding:8px; background:var(--bg-tertiary); border-radius:var(--radius-sm); font-size:12px; color:var(--text-secondary); line-height:1.5; max-height:80px; overflow-y:auto; margin-bottom:12px;">${escapeHtml(sel)}</div>
         <div id="quickToolResult" style="min-height:60px; max-height:300px; overflow-y:auto; line-height:1.8; color:var(--text-secondary); font-size:13px; white-space:pre-wrap;"><div style="color:var(--text-muted);">⚡ AI 正在生成...</div></div>
+        <div id="quickToolActionBar" style="margin-top:10px;"></div>
         <div class="form-actions" style="margin-top:16px;">
             <button class="btn btn-ghost" onclick="this.closest('.jz-modal-overlay').remove()">关闭</button>
-            <button class="btn btn-primary" id="btnQuickToolCopy">📋 复制</button>
-            <button class="btn btn-primary" id="btnQuickToolReplace" style="display:none;">✓ 替换原文</button>
         </div>
     `);
 
@@ -961,9 +976,31 @@ async function quickRunAiTool(tool) {
         (text) => {
             const el = document.getElementById('quickToolResult');
             if (el) el.innerHTML = formatAiParagraphs(text);
-            // 显示替换按钮
-            const replaceBtn = document.getElementById('btnQuickToolReplace');
-            if (replaceBtn) replaceBtn.style.display = 'inline-block';
+            const actionBarContainer = document.getElementById('quickToolActionBar');
+            if (actionBarContainer) {
+                const hasDiff = ['polish', 'expand', 'rewrite', 'de-ai'].includes(tool);
+                createResultActionBar(actionBarContainer, {
+                    text: text,
+                    actions: hasDiff ? ['copy', 'replace', 'diff'] : ['copy', 'replace'],
+                    originalText: sel,
+                    resultSelector: '#quickToolResult',
+                    onReplace: (txt, html) => {
+                        const editorArea = document.getElementById('editorArea');
+                        if (!editorArea) return;
+                        const selection = window.getSelection();
+                        if (selection.rangeCount > 0) {
+                            const range = selection.getRangeAt(0);
+                            range.deleteContents();
+                            const fragment = document.createRange().createContextualFragment(html || ('<p>' + (typeof escapeHtml === 'function' ? escapeHtml(txt) : txt).replace(/\n/g, '</p><p>') + '</p>'));
+                            range.insertNode(fragment);
+                            selection.removeAllRanges();
+                        }
+                        document.querySelector('.jz-modal-overlay')?.remove();
+                        showToast('已替换', 'success');
+                        if (currentWorkId && currentChapterId) saveCurrentChapter(false);
+                    }
+                });
+            }
             // 替换类工具：注入差异对比面板
             if (['polish', 'expand', 'rewrite', 'de-ai'].includes(tool)) {
                 injectDiffPanel('quickToolResult', sel);
@@ -973,37 +1010,15 @@ async function quickRunAiTool(tool) {
         (err) => {
             const el = document.getElementById('quickToolResult');
             if (el) el.textContent = '生成失败: ' + err;
+            const actionBarContainer = document.getElementById('quickToolActionBar');
+            if (actionBarContainer) {
+                createResultActionBar(actionBarContainer, {
+                    text: '生成失败: ' + err,
+                    actions: ['copy']
+                });
+            }
         }
     );
-
-    // 绑定复制按钮
-    setTimeout(() => {
-        document.getElementById('btnQuickToolCopy')?.addEventListener('click', () => {
-            const text = document.getElementById('quickToolResult')?.textContent || '';
-            if (!text) { showToast('内容为空', 'warning'); return; }
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text).then(() => showToast('已复制', 'success')).catch(() => fallbackCopy(text));
-            } else {
-                fallbackCopy(text);
-            }
-        });
-        document.getElementById('btnQuickToolReplace')?.addEventListener('click', () => {
-            const editorArea = document.getElementById('editorArea');
-            if (!editorArea) return;
-            const selection = window.getSelection();
-            if (selection.rangeCount > 0) {
-                const range = selection.getRangeAt(0);
-                const html = document.getElementById('quickToolResult')?.innerHTML || '';
-                range.deleteContents();
-                const fragment = document.createRange().createContextualFragment(html);
-                range.insertNode(fragment);
-                selection.removeAllRanges();
-            }
-            document.querySelector('.jz-modal-overlay')?.remove();
-            showToast('已替换', 'success');
-            if (currentWorkId && currentChapterId) saveCurrentChapter(false);
-        });
-    }, 0);
 }
 
 // 清除引用高亮（全局函数，供划词和@引用共用）
@@ -1124,10 +1139,38 @@ async function handleContinueText() {
             const el = document.getElementById('continueResultText');
             if (el) el.innerHTML = formatAiParagraphs(text);
             showToast('续写完成', 'success');
+            const actionBarContainer = document.getElementById('continueActionBar');
+            if (actionBarContainer) {
+                createResultActionBar(actionBarContainer, {
+                    text: finalContent,
+                    actions: ['insert', 'copy'],
+                    onInsert: (txt, html) => {
+                        const editorArea = document.getElementById('editorArea');
+                        if (!editorArea) return;
+                        const placeholder = editorArea.querySelector('#editorPlaceholder');
+                        if (placeholder) placeholder.remove();
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = html || ('<p>' + (typeof escapeHtml === 'function' ? escapeHtml(txt) : txt).replace(/\n/g, '</p><p>') + '</p>');
+                        while (tempDiv.firstChild) {
+                            editorArea.appendChild(tempDiv.firstChild);
+                        }
+                        document.getElementById('continueResultFloat')?.remove();
+                        showToast('已插入到正文末尾', 'success');
+                        if (currentWorkId && currentChapterId) saveCurrentChapter(false);
+                    }
+                });
+            }
         },
         (err) => {
             const el = document.getElementById('continueResultText');
             if (el) el.textContent = '续写失败: ' + err;
+            const actionBarContainer = document.getElementById('continueActionBar');
+            if (actionBarContainer) {
+                createResultActionBar(actionBarContainer, {
+                    text: '续写失败: ' + err,
+                    actions: ['copy']
+                });
+            }
         }
     );
 }
@@ -1192,43 +1235,34 @@ function insertContinueResult(content, title, onUpdate, onDone) {
             <button onclick="document.getElementById('continueResultFloat').remove()" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:16px;">✕</button>
         </div>
         <div id="continueResultText" style="padding:12px 16px; overflow-y:auto; flex:1; line-height:1.8; color:var(--text-secondary); font-size:13px;">${isLoading ? '<div style="color:var(--text-muted); font-size:13px;">⚡ AI 正在生成，请稍候...</div>' : formatAiParagraphs(content)}</div>
-        <div style="display:flex; gap:8px; padding:10px 16px; border-top:1px solid var(--border);">
-            <button class="btn btn-primary btn-sm" id="btnInsertContinue" style="flex:1;">✓ 插入到末尾</button>
-            <button class="btn btn-ghost btn-sm" id="btnCopyContinue">📋 复制</button>
+        <div style="display:flex; gap:8px; padding:10px 16px; border-top:1px solid var(--border); align-items:center;">
+            <div id="continueActionBar" style="display:flex; gap:8px; flex:1;"></div>
             <button class="btn btn-ghost btn-sm" onclick="document.getElementById('continueResultFloat').remove()">取消</button>
         </div>
     `;
     document.body.appendChild(float);
 
-    document.getElementById('btnCopyContinue')?.addEventListener('click', () => {
-        const text = document.getElementById('continueResultText')?.textContent || '';
-        if (!text) { showToast('内容为空', 'warning'); return; }
-        if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(text).then(() => showToast('已复制到剪贴板', 'success')).catch(() => fallbackCopy(text));
-        } else {
-            fallbackCopy(text);
+    if (!isLoading) {
+        const actionBarContainer = document.getElementById('continueActionBar');
+        if (actionBarContainer) {
+            createResultActionBar(actionBarContainer, {
+                text: content,
+                actions: ['insert', 'copy'],
+                onInsert: (txt, html) => {
+                    const placeholder = editorArea.querySelector('#editorPlaceholder');
+                    if (placeholder) placeholder.remove();
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = html || ('<p>' + (typeof escapeHtml === 'function' ? escapeHtml(txt) : txt).replace(/\n/g, '</p><p>') + '</p>');
+                    while (tempDiv.firstChild) {
+                        editorArea.appendChild(tempDiv.firstChild);
+                    }
+                    float.remove();
+                    showToast('已插入到正文末尾', 'success');
+                    if (currentWorkId && currentChapterId) saveCurrentChapter(false);
+                }
+            });
         }
-    });
-
-    document.getElementById('btnInsertContinue')?.addEventListener('click', () => {
-        const el = document.getElementById('continueResultText');
-        const html = el?.innerHTML || '';
-        // 移除 placeholder
-        const placeholder = editorArea.querySelector('#editorPlaceholder');
-        if (placeholder) placeholder.remove();
-        // 插入渲染后的 HTML（保留 Markdown 格式）
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-        while (tempDiv.firstChild) {
-            editorArea.appendChild(tempDiv.firstChild);
-        }
-        float.remove();
-        showToast('已插入到正文末尾', 'success');
-        // 自动保存
-        if (currentWorkId && currentChapterId) {
-            saveCurrentChapter(false);
-        }
-    });
+    }
 }
 
 async function handleReplaceText() {
@@ -1253,6 +1287,32 @@ async function handleReplaceText() {
         (text) => {
             const el = document.getElementById('replaceResultText');
             if (el) el.innerHTML = formatAiParagraphs(text);
+            const actionBarContainer = document.getElementById('replaceActionBar');
+            if (actionBarContainer) {
+                createResultActionBar(actionBarContainer, {
+                    text: text,
+                    actions: ['copy', 'replace', 'diff'],
+                    originalText: sel,
+                    resultSelector: '#replaceResultText',
+                    onReplace: (txt, html) => {
+                        const editorArea = document.getElementById('editorArea');
+                        if (!editorArea) return;
+                        const resultEl = document.getElementById('replaceResultText');
+                        const resultHtml = resultEl?.innerHTML || html || '';
+                        const selection = window.getSelection();
+                        if (selection.rangeCount > 0) {
+                            const range = selection.getRangeAt(0);
+                            range.deleteContents();
+                            const fragment = document.createRange().createContextualFragment(resultHtml);
+                            range.insertNode(fragment);
+                            selection.removeAllRanges();
+                        }
+                        document.querySelector('.jz-modal-overlay')?.remove();
+                        showToast('已替换选中文本', 'success');
+                        if (currentWorkId && currentChapterId) saveCurrentChapter(false);
+                    }
+                });
+            }
             injectDiffPanel('replaceResultText', sel);
             showToast('改写完成', 'success');
         },
@@ -1276,46 +1336,11 @@ function showReplaceModal(original, rewritten, isLoading) {
             <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">改写结果</div>
             <div id="replaceResultText" style="padding:8px; background:var(--bg-tertiary); border-radius:var(--radius-sm); font-size:13px; color:var(--text-secondary); line-height:1.6; max-height:200px; overflow-y:auto;">${resultHtml}</div>
         </div>
+        <div id="replaceActionBar" style="margin-top:10px;"></div>
         <div class="form-actions">
             <button class="btn btn-ghost" onclick="this.closest('.jz-modal-overlay').remove()">取消</button>
-            <button class="btn btn-primary" id="btnCopyReplace">📋 复制</button>
-            <button class="btn btn-primary" id="btnApplyReplace">✓ 应用替换</button>
         </div>
     `);
-
-    setTimeout(() => {
-        document.getElementById('btnCopyReplace')?.addEventListener('click', () => {
-            const text = document.getElementById('replaceResultText')?.textContent || '';
-            if (!text) { showToast('内容为空', 'warning'); return; }
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text).then(() => showToast('已复制到剪贴板', 'success')).catch(() => fallbackCopy(text));
-            } else {
-                fallbackCopy(text);
-            }
-        });
-    }, 0);
-
-    setTimeout(() => {
-        document.getElementById('btnApplyReplace')?.addEventListener('click', () => {
-            const editorArea = document.getElementById('editorArea');
-            if (!editorArea) return;
-            const resultEl = document.getElementById('replaceResultText');
-            const html = resultEl?.innerHTML || '';
-            const sel = window.getSelection();
-            if (sel.rangeCount > 0) {
-                const range = sel.getRangeAt(0);
-                range.deleteContents();
-                const fragment = document.createRange().createContextualFragment(html);
-                range.insertNode(fragment);
-                sel.removeAllRanges();
-            }
-            document.querySelector('.jz-modal-overlay')?.remove();
-            showToast('已替换选中文本', 'success');
-            if (currentWorkId && currentChapterId) {
-                saveCurrentChapter(false);
-            }
-        });
-    }, 0);
 }
 
 async function handleDetectText() {
@@ -1344,12 +1369,9 @@ async function handleDetectText() {
         <div style="margin-bottom:8px;"><span style="font-size:12px; color:var(--text-muted);">原文（${plainText.length}字）</span></div>
         <div style="padding:8px; background:var(--bg-tertiary); border-radius:var(--radius-sm); font-size:12px; color:var(--text-secondary); line-height:1.5; max-height:80px; overflow-y:auto; margin-bottom:12px;">${escapeHtml(plainText.slice(0, 200))}${plainText.length > 200 ? '...' : ''}</div>
         <div id="detectResultContent" style="min-height:60px; max-height:400px; overflow-y:auto; line-height:1.8; color:var(--text-secondary); font-size:13px; white-space:pre-wrap;"><div style="color:var(--text-muted);">⚡ AI 正在审计...</div></div>
+        <div id="detectActionBar" style="margin-top:10px;"></div>
         <div class="form-actions" style="margin-top:16px;">
             <button class="btn btn-ghost" onclick="this.closest('.jz-modal-overlay').remove()">关闭</button>
-            <button class="btn btn-ghost" id="btnDetectRegen" title="重新生成">🔄 重新生成</button>
-            <button class="btn btn-ghost" id="btnDetectLike" title="赞" data-active="0">👍</button>
-            <button class="btn btn-ghost" id="btnDetectDislike" title="踩" data-active="0">👎</button>
-            <button class="btn btn-primary" id="btnDetectCopy">📋 复制</button>
         </div>
     `);
 
@@ -1361,40 +1383,31 @@ async function handleDetectText() {
         (text) => {
             const el = document.getElementById('detectResultContent');
             if (el) el.innerHTML = formatAiParagraphs(text);
+            const actionBarContainer = document.getElementById('detectActionBar');
+            if (actionBarContainer) {
+                createResultActionBar(actionBarContainer, {
+                    text: text,
+                    actions: ['copy', 'retry', 'like', 'dislike'],
+                    onRetry: () => {
+                        document.querySelector('.jz-modal-overlay')?.remove();
+                        handleDetectText();
+                    }
+                });
+            }
             showToast('AI 纠错完成', 'success');
         },
         (err) => {
             const el = document.getElementById('detectResultContent');
             if (el) el.textContent = '纠错失败: ' + err;
+            const actionBarContainer = document.getElementById('detectActionBar');
+            if (actionBarContainer) {
+                createResultActionBar(actionBarContainer, {
+                    text: '纠错失败: ' + err,
+                    actions: ['copy']
+                });
+            }
         }
     );
-
-    // 绑定按钮（复制 / 重新生成 / 点赞 / 点踩）
-    setTimeout(() => {
-        document.getElementById('btnDetectCopy')?.addEventListener('click', () => {
-            const text = document.getElementById('detectResultContent')?.textContent || '';
-            if (!text) { showToast('内容为空', 'warning'); return; }
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text).then(() => showToast('已复制', 'success')).catch(() => fallbackCopy(text));
-            } else {
-                fallbackCopy(text);
-            }
-            console.log('[埋点]', { event: 'ai_detect_copy', timestamp: new Date().toISOString() });
-        });
-        document.getElementById('btnDetectRegen')?.addEventListener('click', () => {
-            document.querySelector('.jz-modal-overlay')?.remove();
-            handleDetectText();
-            console.log('[埋点]', { event: 'ai_detect_regenerate', timestamp: new Date().toISOString() });
-        });
-        document.getElementById('btnDetectLike')?.addEventListener('click', (e) => {
-            toggleFeedbackBtn(e.currentTarget, 'btnDetectDislike');
-            console.log('[埋点]', { event: 'ai_detect_like', active: e.currentTarget.dataset.active === '1', timestamp: new Date().toISOString() });
-        });
-        document.getElementById('btnDetectDislike')?.addEventListener('click', (e) => {
-            toggleFeedbackBtn(e.currentTarget, 'btnDetectLike');
-            console.log('[埋点]', { event: 'ai_detect_dislike', active: e.currentTarget.dataset.active === '1', timestamp: new Date().toISOString() });
-        });
-    }, 0);
 }
 
 // 点赞/点踩按钮互斥切换
@@ -1435,13 +1448,9 @@ async function handleDeAiText() {
         <div style="margin-bottom:8px;"><span style="font-size:12px; color:var(--text-muted);">原文（${plainText.length}字）</span></div>
         <div style="padding:8px; background:var(--bg-tertiary); border-radius:var(--radius-sm); font-size:12px; color:var(--text-secondary); line-height:1.5; max-height:80px; overflow-y:auto; margin-bottom:12px;">${escapeHtml(plainText.slice(0, 200))}${plainText.length > 200 ? '...' : ''}</div>
         <div id="deAiResultContent" style="min-height:60px; max-height:400px; overflow-y:auto; line-height:1.8; color:var(--text-secondary); font-size:13px; white-space:pre-wrap;"><div style="color:var(--text-muted);">⚡ AI 正在重写...</div></div>
+        <div id="deAiActionBar" style="margin-top:10px;"></div>
         <div class="form-actions" style="margin-top:16px;">
             <button class="btn btn-ghost" onclick="this.closest('.jz-modal-overlay').remove()">关闭</button>
-            <button class="btn btn-ghost" id="btnDeAiRegen" title="重新生成">🔄 重新生成</button>
-            <button class="btn btn-ghost" id="btnDeAiLike" title="赞" data-active="0">👍</button>
-            <button class="btn btn-ghost" id="btnDeAiDislike" title="踩" data-active="0">👎</button>
-            <button class="btn btn-primary" id="btnDeAiCopy">📋 复制</button>
-            <button class="btn btn-primary" id="btnDeAiReplace" style="display:none;">✓ 替换原文</button>
         </div>
     `);
 
@@ -1453,72 +1462,64 @@ async function handleDeAiText() {
         (text) => {
             const el = document.getElementById('deAiResultContent');
             if (el) el.innerHTML = formatAiParagraphs(text);
-            const replaceBtn = document.getElementById('btnDeAiReplace');
-            if (replaceBtn) replaceBtn.style.display = 'inline-block';
+            const actionBarContainer = document.getElementById('deAiActionBar');
+            if (actionBarContainer) {
+                createResultActionBar(actionBarContainer, {
+                    text: text,
+                    actions: ['copy', 'replace', 'diff', 'retry', 'like', 'dislike'],
+                    originalText: plainText,
+                    resultSelector: '#deAiResultContent',
+                    onReplace: (txt, html) => {
+                        const editorArea = document.getElementById('editorArea');
+                        if (!editorArea) return;
+                        const resultEl = document.getElementById('deAiResultContent');
+                        const resultHtml = resultEl?.innerHTML || html || '';
+                        const sel = window.getSelection();
+                        if (sel.rangeCount > 0) {
+                            const range = sel.getRangeAt(0);
+                            range.deleteContents();
+                            const fragment = document.createRange().createContextualFragment(resultHtml);
+                            range.insertNode(fragment);
+                            sel.removeAllRanges();
+                        } else {
+                            const titleEl = editorArea.querySelector('h1');
+                            const titleHtml = titleEl ? titleEl.outerHTML : '';
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = resultHtml;
+                            editorArea.innerHTML = titleHtml;
+                            while (tempDiv.firstChild) {
+                                editorArea.appendChild(tempDiv.firstChild);
+                            }
+                        }
+                        document.querySelector('.jz-modal-overlay')?.remove();
+                        showToast('已替换文本', 'success');
+                        if (currentWorkId && currentChapterId) saveCurrentChapter(false);
+                    },
+                    onRetry: () => {
+                        document.querySelector('.jz-modal-overlay')?.remove();
+                        handleDeAiText();
+                    }
+                });
+            }
             injectDiffPanel('deAiResultContent', plainText);
             showToast('去AI味完成', 'success');
         },
         (err) => {
             const el = document.getElementById('deAiResultContent');
             if (el) el.textContent = '失败: ' + err;
+            const actionBarContainer = document.getElementById('deAiActionBar');
+            if (actionBarContainer) {
+                createResultActionBar(actionBarContainer, {
+                    text: '失败: ' + err,
+                    actions: ['copy', 'retry'],
+                    onRetry: () => {
+                        document.querySelector('.jz-modal-overlay')?.remove();
+                        handleDeAiText();
+                    }
+                });
+            }
         }
     );
-
-    // 绑定按钮（复制 / 替换 / 重新生成 / 点赞 / 点踩）
-    setTimeout(() => {
-        document.getElementById('btnDeAiCopy')?.addEventListener('click', () => {
-            const text = document.getElementById('deAiResultContent')?.textContent || '';
-            if (!text) { showToast('内容为空', 'warning'); return; }
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text).then(() => showToast('已复制', 'success')).catch(() => fallbackCopy(text));
-            } else {
-                fallbackCopy(text);
-            }
-            console.log('[埋点]', { event: 'ai_de_ai_copy', timestamp: new Date().toISOString() });
-        });
-        document.getElementById('btnDeAiReplace')?.addEventListener('click', () => {
-            const editorArea = document.getElementById('editorArea');
-            if (!editorArea) return;
-            const resultEl = document.getElementById('deAiResultContent');
-            const html = resultEl?.innerHTML || '';
-            const sel = window.getSelection();
-            if (sel.rangeCount > 0) {
-                const range = sel.getRangeAt(0);
-                range.deleteContents();
-                const fragment = document.createRange().createContextualFragment(html);
-                range.insertNode(fragment);
-                sel.removeAllRanges();
-            } else {
-                // 没有选区，替换编辑器全部内容
-                const titleEl = editorArea.querySelector('h1');
-                const titleHtml = titleEl ? titleEl.outerHTML : '';
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = html;
-                editorArea.innerHTML = titleHtml;
-                while (tempDiv.firstChild) {
-                    editorArea.appendChild(tempDiv.firstChild);
-                }
-            }
-            document.querySelector('.jz-modal-overlay')?.remove();
-            showToast('已替换文本', 'success');
-            if (currentWorkId && currentChapterId) {
-                saveCurrentChapter(false);
-            }
-        });
-        document.getElementById('btnDeAiRegen')?.addEventListener('click', () => {
-            document.querySelector('.jz-modal-overlay')?.remove();
-            handleDeAiText();
-            console.log('[埋点]', { event: 'ai_de_ai_regenerate', timestamp: new Date().toISOString() });
-        });
-        document.getElementById('btnDeAiLike')?.addEventListener('click', (e) => {
-            toggleFeedbackBtn(e.currentTarget, 'btnDeAiDislike');
-            console.log('[埋点]', { event: 'ai_de_ai_like', active: e.currentTarget.dataset.active === '1', timestamp: new Date().toISOString() });
-        });
-        document.getElementById('btnDeAiDislike')?.addEventListener('click', (e) => {
-            toggleFeedbackBtn(e.currentTarget, 'btnDeAiLike');
-            console.log('[埋点]', { event: 'ai_de_ai_dislike', active: e.currentTarget.dataset.active === '1', timestamp: new Date().toISOString() });
-        });
-    }, 0);
 }
 
 function formatAiParagraphs(text) {

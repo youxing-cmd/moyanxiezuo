@@ -37,3 +37,11 @@ let editorUndoStack = [];
 let editorUndoIndex = -1;
 let editorUndoTimer = null;
 let isUndoRedoAction = false;
+
+// 高级模式开关（控制模型选择、工具选择、提示词调试等高级功能的显示）
+function isAdvancedMode() {
+    return localStorage.getItem('jz_advanced_mode') === '1';
+}
+function setAdvancedMode(val) {
+    localStorage.setItem('jz_advanced_mode', val ? '1' : '0');
+}
