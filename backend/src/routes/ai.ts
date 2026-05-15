@@ -820,9 +820,18 @@ aiRouter.post('/continue', async (c) => {
     return c.json({ error: '参数错误' }, 400);
   }
 
-  const { context, style, length } = parsed.data;
+  let { context, style, length } = parsed.data;
   const lengthHint = length || '500字左右';
   const styleHint = style || '保持原文风格';
+
+  // 按模型上下文窗口动态截断：system prompt + user prompt 模板约 500 tokens
+  // 安全余量 0.8，1 中文字符 ≈ 1.5 tokens（保守估计）
+  const contextTokens = modelConfig?.contextTokens || 128000;
+  const systemReserve = 500;
+  const maxChars = Math.max(3000, Math.floor((contextTokens - systemReserve) * 0.8 / 1.5));
+  if (context.length > maxChars) {
+    context = context.slice(-maxChars);
+  }
 
   try {
     const stream = body.stream === true;

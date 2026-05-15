@@ -558,6 +558,7 @@ async function initPageInteractions(page) {
                     range.collapse(false);
                     sel.removeAllRanges();
                     sel.addRange(range);
+                    editorArea.dispatchEvent(new Event('input', { bubbles: true }));
                     return;
                 }
 
@@ -570,6 +571,7 @@ async function initPageInteractions(page) {
                     range.collapse(false);
                     sel.removeAllRanges();
                     sel.addRange(range);
+                    editorArea.dispatchEvent(new Event('input', { bubbles: true }));
                     showToast('已解析 Markdown 格式', 'success');
                     return;
                 }
@@ -585,6 +587,7 @@ async function initPageInteractions(page) {
                 range.collapse(false);
                 sel.removeAllRanges();
                 sel.addRange(range);
+                editorArea.dispatchEvent(new Event('input', { bubbles: true }));
             });
 
             // 键盘快捷键：Ctrl+Z 撤销，Ctrl+Y / Ctrl+Shift+Z 重做
@@ -1470,6 +1473,16 @@ async function initPageInteractions(page) {
             btn.dataset.action = 'undo-tool';
             btn.style.cssText = 'padding:3px 8px; border:none; background:transparent; color:var(--accent); border-radius:4px; cursor:pointer; font-size:11px; display:flex; align-items:center; gap:3px;';
             btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"/></svg>撤销刚才的写入`;
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const ok = window.jzEditor && window.jzEditor.restoreLastSnapshot();
+                if (ok) {
+                    showToast('已撤销最近一次的 AI 写入', 'success');
+                } else {
+                    showToast('没有可撤销的操作', 'warning');
+                }
+                btn.style.display = 'none';
+            });
             feedback.appendChild(btn);
         }
 

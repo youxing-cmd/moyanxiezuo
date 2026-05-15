@@ -1113,11 +1113,13 @@ async function handleContinueText() {
     trackAiUsage();
     const editorArea = document.getElementById('editorArea');
     if (!editorArea) return;
-    const content = editorArea.innerText.trim();
-    if (!content || content === '在左侧章节列表中选择一个章节，或创建新章节') {
+    const fullText = editorArea.innerText.trim();
+    if (!fullText || fullText === '在左侧章节列表中选择一个章节，或创建新章节') {
         showToast('编辑器为空，无法续写', 'warning');
         return;
     }
+    // 后端会根据模型上下文窗口动态截断，前端传全文
+    const content = fullText;
     showToast('AI 正在续写...', 'info');
 
     let finalContent = '';

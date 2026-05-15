@@ -41,7 +41,7 @@ async function loadWritingPage() {
         // 自动选中第一个章节
         if (work.chapterList && work.chapterList.length > 0) {
             const first = work.chapterList[0];
-            switchChapter(first.id, first.title, first.content);
+            await switchChapter(first.id, first.title, first.content);
         }
 
         // 恢复展开状态
@@ -90,7 +90,7 @@ function renderWorkDetailInfo(work) {
     const tags = Array.isArray(work.tags) ? work.tags : [];
 
     container.innerHTML = `
-        <div style="padding:8px; background:var(--bg-tertiary); border-radius:var(--radius-sm);"
+        <div style="padding:8px; background:var(--bg-tertiary); border-radius:var(--radius-sm);">
             ${work.intro ? `<div style="margin-bottom:8px; color:var(--text-secondary);">${escapeHtml(work.intro)}</div>` : ''}
             <div style="display:flex; flex-wrap:wrap; gap:8px; font-size:11px; color:var(--text-muted);">
                 <span>视角：${perspectiveMap[work.perspective] || '第三人称'}</span>
@@ -352,11 +352,11 @@ async function renameChapter(chapterId, currentTitle) {
     }
 }
 
-function switchChapter(chapterId, title, content, outline) {
+async function switchChapter(chapterId, title, content, outline) {
     // 如果有未保存的内容，先保存
     if (currentChapterId && currentChapterId !== chapterId) {
-        saveCurrentChapter(false);
-        saveChapterOutline(false);
+        await saveCurrentChapter(false);
+        await saveChapterOutline(false);
     }
 
     currentChapterId = chapterId;
@@ -463,44 +463,8 @@ async function loadNextChapter() {
             return;
         }
 
-        // 切换章节
-        currentChapterId = nextChapter.id;
-
-        // 更新章节列表高亮
-        document.querySelectorAll('.chapter-tree-item[data-chapter-id]').forEach(el => {
-            const isActive = parseInt(el.dataset.chapterId) === currentChapterId;
-            el.classList.toggle('active', isActive);
-            el.style.color = isActive ? 'var(--accent)' : 'var(--text-secondary)';
-            el.style.background = isActive ? 'rgba(99,102,241,0.08)' : '';
-        });
-
-        // 追加到编辑器（不替换，追加）
-        const editorArea = document.getElementById('editorArea');
-        if (editorArea) {
-            const nextTitle = document.createElement('h1');
-            nextTitle.style.cssText = 'font-size:28px; font-weight:700; margin-top:48px; margin-bottom:16px; padding-top:24px; border-top:2px solid var(--border);';
-            nextTitle.textContent = nextCh.title || '未命名章节';
-            editorArea.appendChild(nextTitle);
-
-            if (nextCh.content) {
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = nextCh.content;
-                while (tempDiv.firstChild) {
-                    editorArea.appendChild(tempDiv.firstChild);
-                }
-            } else {
-                const placeholder = document.createElement('p');
-                placeholder.style.color = 'var(--text-muted)';
-                placeholder.textContent = '（本章暂无内容）';
-                editorArea.appendChild(placeholder);
-            }
-
-            // 滚动到新章节开始位置
-            nextTitle.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-
-        lastSavedContent = '';
-        setupLocalAutoSave();
+        // 正常切换到下一章（不再追加到同一编辑器，避免内容污染）
+        await switchChapter(nextChapter.id, nextCh.title, nextCh.content, nextCh.outline);
         showToast(`已加载: ${nextCh.title || '下一章'}`, 'info');
     } catch (err) {
         showToast('加载下一章失败: ' + err.message, 'danger');
@@ -753,7 +717,7 @@ async function restoreChapterVersion(chapterId, versionId) {
         document.querySelector('.jz-modal-overlay')?.remove();
         // 刷新当前章节内容
         const chapter = await api(`/works/${currentWorkId}/chapters/${chapterId}`);
-        switchChapter(chapterId, chapter.title, chapter.content, chapter.outline);
+        await switchChapter(chapterId, chapter.title, chapter.content, chapter.outline);
     } catch (err) {
         showToast('恢复失败: ' + err.message, 'danger');
     }

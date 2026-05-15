@@ -12,6 +12,7 @@ export type PresetModel = {
   apiKey: string;          // API key（仅运行时用，不传给前端）
   modelName: string;       // 上游 API 实际使用的模型名
   description?: string;    // 前端 tooltip 介绍
+  contextTokens?: number;  // 模型上下文窗口（tokens），用于动态截断
   isDefault?: boolean;     // 是否默认模型（最多一个）
   enabled: boolean;        // 是否可用（key 缺失自动为 false）
 };
@@ -41,6 +42,7 @@ const ALL_MODELS: PresetModel[] = [
     apiKey: WANGSU_KEY,
     modelName: 'claude-sonnet-4-6',
     description: '综合能力最强，适合长文创作与复杂任务',
+    contextTokens: 200000,
     isDefault: true,
     enabled: wangsuOK,
   },
@@ -52,6 +54,7 @@ const ALL_MODELS: PresetModel[] = [
     apiKey: WANGSU_KEY,
     modelName: 'gpt-5.4',
     description: 'OpenAI 旗舰模型，逻辑严谨、风格稳健',
+    contextTokens: 128000,
     enabled: wangsuOK,
   },
   {
@@ -62,6 +65,7 @@ const ALL_MODELS: PresetModel[] = [
     apiKey: WANGSU_KEY,
     modelName: 'gemini-2.5-pro',
     description: 'Google 旗舰模型，长上下文优秀',
+    contextTokens: 1000000,
     enabled: wangsuOK,
   },
   {
@@ -72,6 +76,7 @@ const ALL_MODELS: PresetModel[] = [
     apiKey: WANGSU_KEY,
     modelName: 'gemini-3.1-pro-preview',
     description: 'Gemini 3.1 旗舰预览版，能力最强但可能不稳定',
+    contextTokens: 1000000,
     enabled: wangsuOK,
   },
   {
@@ -82,6 +87,7 @@ const ALL_MODELS: PresetModel[] = [
     apiKey: WANGSU_KEY,
     modelName: 'gemini-2.5-flash',
     description: '速度快、成本低，适合短文与快速反馈',
+    contextTokens: 1000000,
     enabled: wangsuOK,
   },
   {
@@ -92,6 +98,7 @@ const ALL_MODELS: PresetModel[] = [
     apiKey: WANGSU_KEY,
     modelName: 'gemini-3-flash-preview',
     description: 'Gemini 3 快速版预览，速度优先',
+    contextTokens: 1000000,
     enabled: wangsuOK,
   },
 ];

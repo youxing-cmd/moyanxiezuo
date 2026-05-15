@@ -13,6 +13,7 @@ export interface ModelConfig {
   baseUrl: string;
   apiKey: string;
   modelName: string;
+  contextTokens?: number; // 模型上下文窗口（tokens），用于动态截断
 }
 
 // === Tool Use（function calling）相关类型 ===
@@ -50,6 +51,7 @@ function presetToModelConfig(p: PresetModel): ModelConfig {
     baseUrl: p.baseUrl,
     apiKey: p.apiKey,
     modelName: p.modelName,
+    contextTokens: p.contextTokens,
   };
 }
 
