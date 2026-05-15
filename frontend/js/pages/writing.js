@@ -389,6 +389,14 @@ const writingViews = {
                             </div>
                             <!-- 输入框 -->
                             <textarea id="aiChatInput" placeholder="输入「/」唤起工具..." style="width:100%; min-height:60px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius); padding:10px; color:var(--text-primary); font-size:13px; resize:none; outline:none; font-family:inherit;"></textarea>
+                            <!-- AI 模式切换 -->
+                            <div id="agentModeBar" style="display:flex; align-items:center; justify-content:space-between; margin-top:6px;">
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <span style="font-size:11px; color:var(--text-muted);">AI 模式</span>
+                                    <button id="agentModeBtn" onclick="toggleAgentMode()" style="padding:2px 10px; border-radius:10px; border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); font-size:11px; cursor:pointer; transition:all 0.2s;">手动</button>
+                                </div>
+                                <span id="agentModeHint" style="font-size:11px; color:var(--text-muted);">手动选择模型和工具</span>
+                            </div>
                             <!-- 底行：模型 + 工具 + 发送 -->
                             <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
                                 <!-- 模型切换（高级能力） -->

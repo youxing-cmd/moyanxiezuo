@@ -422,11 +422,8 @@ async function initPageInteractions(page) {
         // 加载模型选择器
         loadModelSelector();
 
-        // 模型选择器、工具选择器默认一直显示
-        const chatModelPicker = document.getElementById('chatModelPicker');
-        if (chatModelPicker) chatModelPicker.style.display = '';
-        const chatToolPicker = document.getElementById('chatToolPicker');
-        if (chatToolPicker) chatToolPicker.style.display = '';
+        // 初始化 Agent 模式 UI
+        updateAgentModeUI();
 
         // 恢复字体和字号设置
         let editorArea = document.getElementById('editorArea');
@@ -1370,7 +1367,7 @@ async function initPageInteractions(page) {
             const messages = [...initialMessages];
             let totalContent = '';
 
-            const useAgent = new URLSearchParams(location.search).get('agent') === '1';
+            const useAgent = getAgentMode() === 'auto';
             const endpoint = useAgent ? `${API_BASE}/ai/agent-chat` : `${API_BASE}/ai/chat`;
             // agent 模式下后端路由决定模型和工具，前端透传 model/tools 无意义
             const filteredBody = useAgent
@@ -2179,5 +2176,39 @@ function trackFeedback(type) {
         }
     }
     console.log('[埋点]', { event: 'chapter_feedback', type, chapterId: currentChapterId || null, timestamp: new Date().toISOString() });
+}
+
+// ========== Agent 模式开关 ==========
+function getAgentMode() {
+    const url = new URLSearchParams(location.search).get('agent');
+    if (url === '1') return 'auto';
+    if (url === '0') return 'manual';
+    return localStorage.getItem('jz_agent_mode') || 'manual';
+}
+
+function setAgentMode(mode) {
+    localStorage.setItem('jz_agent_mode', mode);
+}
+
+function toggleAgentMode() {
+    const next = getAgentMode() === 'auto' ? 'manual' : 'auto';
+    setAgentMode(next);
+    updateAgentModeUI();
+}
+
+function updateAgentModeUI() {
+    const btn = document.getElementById('agentModeBtn');
+    const hint = document.getElementById('agentModeHint');
+    const modelPicker = document.getElementById('chatModelPicker');
+    const toolPicker = document.getElementById('chatToolPicker');
+    const isAuto = getAgentMode() === 'auto';
+    if (btn) {
+        btn.textContent = isAuto ? '智能' : '手动';
+        btn.style.color = isAuto ? 'var(--accent)' : 'var(--text-secondary)';
+        btn.style.borderColor = isAuto ? 'var(--accent)' : 'var(--border)';
+    }
+    if (hint) hint.textContent = isAuto ? '由 AI 自动选择模型和工具' : '手动选择模型和工具';
+    if (modelPicker) modelPicker.style.display = isAuto ? 'none' : '';
+    if (toolPicker) toolPicker.style.display = isAuto ? 'none' : '';
 }
 
