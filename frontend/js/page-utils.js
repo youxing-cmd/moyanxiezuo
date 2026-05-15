@@ -254,6 +254,12 @@ function selectTopbarModel(modelId) {
         const activeCfg = modelConfigList.find(c => c.id === modelId);
         chatModelTriggerName.textContent = activeCfg ? activeCfg.name : '默认模型';
     }
+    // 同步顶部栏模型选择器
+    const topbarModelName = document.getElementById('topbarModelName');
+    if (topbarModelName) {
+        const activeCfg = modelConfigList.find(c => c.id === modelId);
+        topbarModelName.textContent = activeCfg ? activeCfg.name : '默认模型';
+    }
 
     // 更新下拉列表选中状态
     document.querySelectorAll('.model-option').forEach(opt => {

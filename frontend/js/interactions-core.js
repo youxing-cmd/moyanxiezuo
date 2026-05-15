@@ -422,11 +422,11 @@ async function initPageInteractions(page) {
         // 加载模型选择器
         loadModelSelector();
 
-        // 高级模式：控制模型选择器、工具选择器的显示
+        // 模型选择器、工具选择器默认一直显示
         const chatModelPicker = document.getElementById('chatModelPicker');
-        if (chatModelPicker) chatModelPicker.style.display = isAdvancedMode() ? '' : 'none';
+        if (chatModelPicker) chatModelPicker.style.display = '';
         const chatToolPicker = document.getElementById('chatToolPicker');
-        if (chatToolPicker) chatToolPicker.style.display = isAdvancedMode() ? '' : 'none';
+        if (chatToolPicker) chatToolPicker.style.display = '';
 
         // 恢复字体和字号设置
         let editorArea = document.getElementById('editorArea');

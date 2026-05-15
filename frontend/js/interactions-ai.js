@@ -1131,7 +1131,7 @@ async function handleContinueText() {
         showToast('续写完成', 'success');
     });
 
-    await streamSSE(`${API_BASE}/ai/continue`, { context: content, stream: true, modelId: getActiveModelId() },
+    await streamSSE(`${API_BASE}/ai/continue`, { context: content, stream: true, modelId: getActiveModelId(), workId: currentWorkId || undefined, chapterId: currentChapterId || undefined },
         (text) => {
             const el = document.getElementById('continueResultText');
             if (el) el.innerHTML = formatAiParagraphs(text);

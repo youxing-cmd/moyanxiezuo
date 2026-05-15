@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { db } from '../db/index.js';
-import { aiConversations, works, outlines, characters, users, pointTransactions, toolPrompts } from '../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { aiConversations, works, chapters, outlines, characters, users, pointTransactions, toolPrompts } from '../db/schema.js';
+import { eq, and, desc, lt } from 'drizzle-orm';
 import { callLLM, resolveModelConfig, type ChatMessage, type ModelConfig } from '../services/llm.js';
 import { getEnabledTools, getTool } from '../config/tools.js';
 
@@ -88,6 +88,8 @@ const continueSchema = z.object({
   context: z.string().min(1),
   style: z.string().optional(),
   length: z.string().optional(),
+  workId: z.number().optional(),
+  chapterId: z.number().optional(),
 });
 
 const polishSchema = z.object({
@@ -820,24 +822,66 @@ aiRouter.post('/continue', async (c) => {
     return c.json({ error: '参数错误' }, 400);
   }
 
-  let { context, style, length } = parsed.data;
+  let { context, style, length, workId, chapterId } = parsed.data;
   const lengthHint = length || '500字左右';
   const styleHint = style || '保持原文风格';
 
-  // 按模型上下文窗口动态截断：system prompt + user prompt 模板约 500 tokens
-  // 安全余量 0.8，1 中文字符 ≈ 1.5 tokens（保守估计）
+  // 构建 system prompt：续写指令 + 作品设定
+  let systemPrompt = TOOL_PROMPTS.continue;
+  if (workId) {
+    const workContext = await buildWorkContextPrompt(workId, userId);
+    if (workContext) {
+      systemPrompt = workContext + '\n\n' + systemPrompt;
+    }
+  }
+
+  // 构建 user prompt：上一章结尾 + 当前章内容
+  let userPrompt = '';
+  if (workId && chapterId) {
+    const [currentChapter] = await db.select().from(chapters).where(and(eq(chapters.id, chapterId), eq(chapters.workId, workId))).limit(1);
+    if (currentChapter) {
+      const prevChapter = await db.select().from(chapters)
+        .where(and(eq(chapters.workId, workId), lt(chapters.orderIndex, currentChapter.orderIndex)))
+        .orderBy(desc(chapters.orderIndex))
+        .limit(1);
+      if (prevChapter.length > 0) {
+        const prevTail = prevChapter[0].content ? prevChapter[0].content.slice(-2000) : '';
+        if (prevTail) {
+          userPrompt += `=== 上一章结尾 ===\n${prevTail}\n\n`;
+        }
+      }
+    }
+  }
+  userPrompt += `=== 当前章节 ===\n${context}\n\n请根据以上内容续写小说正文，${styleHint}，续写长度约${lengthHint}。`;
+
+  // 按模型上下文窗口动态截断
   const contextTokens = modelConfig?.contextTokens || 128000;
   const systemReserve = 500;
   const maxChars = Math.max(3000, Math.floor((contextTokens - systemReserve) * 0.8 / 1.5));
-  if (context.length > maxChars) {
-    context = context.slice(-maxChars);
+  const totalContext = userPrompt.length;
+  if (totalContext > maxChars) {
+    // 优先保留当前章，上一章可压缩
+    const currentChapterMarker = '=== 当前章节 ===\n';
+    const idx = userPrompt.indexOf(currentChapterMarker);
+    if (idx !== -1) {
+      const currentPart = userPrompt.slice(idx);
+      const prevPart = userPrompt.slice(0, idx);
+      const remainingBudget = maxChars - currentPart.length;
+      if (remainingBudget > 500) {
+        userPrompt = prevPart.slice(-remainingBudget) + currentPart;
+      } else {
+        userPrompt = currentPart;
+      }
+    } else {
+      userPrompt = userPrompt.slice(-maxChars);
+    }
   }
 
   try {
     const stream = body.stream === true;
     const res = await callLLM([
-      { role: 'system', content: TOOL_PROMPTS.continue },
-      { role: 'user', content: `请根据以下内容续写小说，${styleHint}，续写长度约${lengthHint}：\n\n${context}` },
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
     ], stream, modelConfig);
 
     if (stream) return streamResponse(res);
