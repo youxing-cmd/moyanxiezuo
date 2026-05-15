@@ -12,11 +12,11 @@ import { callLLM, resolveModelConfig, type ChatMessage } from '../services/llm.j
 import { getEnabledTools } from '../config/tools.js';
 import { routeAgentRequest } from '../services/agentRouter.js';
 import {
-  buildWorkContextPrompt,
   TOOL_PROMPTS,
   STYLE_PROMPTS,
   streamResponse,
 } from './ai.js';
+import { buildWorkContextPrompt } from '../services/contextBuilder.js';
 
 const agentChatRouter = new Hono();
 
