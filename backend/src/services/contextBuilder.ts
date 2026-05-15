@@ -134,13 +134,19 @@ export async function buildContext(options: BuildContextOptions): Promise<Contex
       }
       break;
     }
+    case 'chapter_review': {
+      if (chapterId && currentText) {
+        userContext = `=== 当前章节 ===\n${currentText}`;
+        usedTables.push('chapters');
+      }
+      break;
+    }
     case 'polish':
     case 'chat':
     case 'outline':
-    case 'chapter_review':
     case 'character_check':
     default:
-      // 基础上下文即可；polish/review 等后续按需扩展
+      // 基础上下文即可；polish 等后续按需扩展
       break;
   }
 

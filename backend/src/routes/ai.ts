@@ -2,10 +2,11 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { db } from '../db/index.js';
-import { aiConversations, works, users, pointTransactions, toolPrompts } from '../db/schema.js';
+import { aiConversations, works, chapters, users, pointTransactions, toolPrompts } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { callLLM, resolveModelConfig, type ChatMessage, type ModelConfig } from '../services/llm.js';
 import { getEnabledTools, getTool } from '../config/tools.js';
+import { REVIEW_AGENT_PROMPTS } from '../config/reviewAgents.js';
 import { buildWorkContextPrompt, buildContext } from '../services/contextBuilder.js';
 
 const aiRouter = new Hono();
@@ -33,6 +34,7 @@ aiRouter.use('*', async (c, next) => {
     '/api/ai/rewrite', '/api/ai/detect', '/api/ai/de-ai', '/api/ai/scene',
     '/api/ai/dialogue', '/api/ai/conflict', '/api/ai/foreshadow',
     '/api/ai/pacing', '/api/ai/hook', '/api/ai/blurb', '/api/ai/tool-match',
+    '/api/ai/chapter-review',
   ];
   const shouldConsume =
     consumePaths.includes(path) ||
@@ -1553,6 +1555,92 @@ aiRouter.post('/tools/:name', async (c) => {
   } catch (err: any) {
     return c.json({ ok: false, error: err.message || '工具执行失败' }, 500);
   }
+});
+
+// POST /api/ai/chapter-review — 多 Agent 章节审查委员会
+const chapterReviewSchema = z.object({
+  workId: z.number(),
+  chapterId: z.number(),
+});
+
+aiRouter.post('/chapter-review', async (c) => {
+  const body = await c.req.json();
+  const parsed = chapterReviewSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: '参数错误' }, 400);
+  }
+
+  const userId = c.get('userId');
+  const { workId, chapterId } = parsed.data;
+
+  // 权限验证
+  const [work] = await db.select().from(works)
+    .where(and(eq(works.id, workId), eq(works.userId, userId)))
+    .limit(1);
+  if (!work) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const [chapter] = await db.select().from(chapters)
+    .where(and(eq(chapters.id, chapterId), eq(chapters.workId, workId)))
+    .limit(1);
+  if (!chapter) {
+    return c.json({ error: '章节不存在' }, 404);
+  }
+
+  // 构建上下文
+  const ctx = await buildContext({
+    userId,
+    workId,
+    chapterId,
+    taskType: 'chapter_review',
+    currentText: chapter.content || '',
+  });
+
+  const modelConfig = await resolveModelConfig(userId);
+  const agents = ['plot', 'character', 'continuity', 'market'] as const;
+
+  // 并行调用 4 个审查 Agent
+  const results = await Promise.allSettled(
+    agents.map(async (agentType) => {
+      const prompt = REVIEW_AGENT_PROMPTS[agentType];
+      const messages: ChatMessage[] = [
+        { role: 'system', content: (ctx.systemContext || '') + '\n\n' + prompt },
+        { role: 'user', content: ctx.userContext || '' },
+      ];
+      const res = await callLLM(messages, false, modelConfig);
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content || '';
+
+      // 解析 JSON（兼容 markdown fence）
+      try {
+        const jsonStr = text.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
+        const parsed = JSON.parse(jsonStr);
+        return {
+          agent: agentType,
+          score: Math.max(0, Math.min(100, Number(parsed.score) || 0)),
+          issues: Array.isArray(parsed.issues) ? parsed.issues : [],
+        };
+      } catch {
+        return { agent: agentType, score: 0, issues: [] };
+      }
+    }),
+  );
+
+  const agentResults = results.map((r, i) => {
+    if (r.status === 'fulfilled') return r.value;
+    return { agent: agents[i], score: 0, issues: [] };
+  });
+
+  const summary = agentResults.map((r) => `${r.agent}: ${r.score}分`).join(', ');
+
+  return c.json({
+    summary: `本章审查完成。${summary}`,
+    score: Object.fromEntries(agentResults.map((r) => [r.agent, r.score])),
+    issues: agentResults.flatMap((r) =>
+      r.issues.map((issue: any) => ({ ...issue, agent: r.agent })),
+    ),
+  });
 });
 
 export { TOOL_PROMPTS, DEFAULT_TOOL_PROMPTS, STYLE_PROMPTS };
