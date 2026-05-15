@@ -362,12 +362,12 @@ worksRouter.put('/:id/chapters/:cid', async (c) => {
 
   await db.update(chapters).set(updateData).where(eq(chapters.id, cid));
 
-  // 保存历史版本（如果有内容变更）
+  // 保存历史版本（如果有内容变更）——存旧内容，用于回滚
   if (body.content !== undefined && body.content !== chapter.content) {
     await db.insert(chapterVersions).values({
       chapterId: cid,
-      content: body.content,
-      wordCount: body.content.length || 0,
+      content: chapter.content,
+      wordCount: chapter.wordCount || 0,
       source: body.source || 'auto',
     });
 
