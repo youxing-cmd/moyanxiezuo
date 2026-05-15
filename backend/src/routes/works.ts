@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { works, chapters, chapterVersions, drafts, characters, outlines, settings, aiConversations } from '../db/schema.js';
+import { works, chapters, chapterVersions, chapterSummaries, drafts, characters, outlines, settings, aiConversations } from '../db/schema.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { generateChapterSummary } from '../services/chapterSummary.js';
 import { eq, and, ilike, desc, isNull, isNotNull, inArray } from 'drizzle-orm';
 
 const worksRouter = new Hono();
@@ -170,6 +171,46 @@ worksRouter.put('/:id', async (c) => {
 
   const [updated] = await db.select().from(works).where(eq(works.id, id)).limit(1);
   return c.json(updated);
+});
+
+// GET /api/works/:id/chapter-summaries — 查询章节摘要（支持关键词过滤）
+worksRouter.get('/:id/chapter-summaries', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+  const keyword = c.req.query('keyword')?.toLowerCase();
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const chapterList = await db.select().from(chapters).where(eq(chapters.workId, workId)).orderBy(chapters.orderIndex);
+  const summaries = await db.select().from(chapterSummaries).where(eq(chapterSummaries.workId, workId));
+
+  const result = chapterList.map(ch => {
+    const s = summaries.find(sum => sum.chapterId === ch.id);
+    return {
+      chapterId: ch.id,
+      title: ch.title,
+      orderIndex: ch.orderIndex,
+      summary: s?.summary || '',
+      keyEvents: s?.keyEvents || [],
+      involvedCharacters: s?.involvedCharacters || [],
+      openHooks: s?.openHooks || [],
+      characterChanges: s?.characterChanges || [],
+    };
+  });
+
+  if (keyword) {
+    return c.json(result.filter(r =>
+      r.summary.toLowerCase().includes(keyword) ||
+      r.keyEvents.some(e => e.toLowerCase().includes(keyword)) ||
+      r.involvedCharacters.some(c => c.name.toLowerCase().includes(keyword)) ||
+      r.openHooks.some(h => h.toLowerCase().includes(keyword))
+    ));
+  }
+
+  return c.json(result);
 });
 
 // DELETE /api/works/:id — 软删除
@@ -382,6 +423,24 @@ worksRouter.put('/:id/chapters/:cid', async (c) => {
         db.delete(chapterVersions).where(eq(chapterVersions.id, v.id))
       ));
     }
+
+    // 异步生成章节摘要（不阻塞响应）
+    const summaryTitle = body.title !== undefined ? body.title : chapter.title;
+    generateChapterSummary(body.content, summaryTitle)
+      .then(async (summary) => {
+        if (!summary) return;
+        await db.delete(chapterSummaries).where(eq(chapterSummaries.chapterId, cid));
+        await db.insert(chapterSummaries).values({
+          chapterId: cid,
+          workId,
+          summary: summary.summary,
+          keyEvents: summary.keyEvents,
+          involvedCharacters: summary.involvedCharacters,
+          openHooks: summary.openHooks,
+          characterChanges: summary.characterChanges,
+        });
+      })
+      .catch(() => {});
   }
 
   // 重新计算作品字数

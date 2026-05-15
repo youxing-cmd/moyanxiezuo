@@ -3,7 +3,7 @@
 // 不处理：模型选择、积分扣减、流式响应、上下文截断（由调用方按模型预算执行）
 
 import { db } from '../db/index.js';
-import { works, chapters, outlines, characters } from '../db/schema.js';
+import { works, chapters, outlines, characters, chapterSummaries } from '../db/schema.js';
 import { eq, and, desc, lt } from 'drizzle-orm';
 
 export type TaskType = 'chat' | 'continue' | 'polish' | 'outline' | 'chapter_review' | 'character_check';
@@ -107,6 +107,31 @@ async function buildContinueContext(
       if (prevTail) {
         userContext += `=== 上一章结尾 ===\n${prevTail}\n\n`;
       }
+    }
+
+    // L2：取最近 3 章摘要，提供近期叙事脉络
+    const recentSummaries = await db.select({
+      title: chapters.title,
+      summary: chapterSummaries.summary,
+      keyEvents: chapterSummaries.keyEvents,
+      openHooks: chapterSummaries.openHooks,
+    }).from(chapterSummaries)
+      .innerJoin(chapters, eq(chapters.id, chapterSummaries.chapterId))
+      .where(and(
+        eq(chapters.workId, workId),
+        lt(chapters.orderIndex, currentChapter.orderIndex),
+      ))
+      .orderBy(desc(chapters.orderIndex))
+      .limit(3);
+
+    if (recentSummaries.length > 0) {
+      userContext += `=== 近期章节脉络 ===\n`;
+      for (const s of recentSummaries.reverse()) {
+        userContext += `【${s.title || '未命名'}】${s.summary}\n`;
+        if (s.keyEvents?.length) userContext += `  关键事件：${s.keyEvents.join('、')}\n`;
+        if (s.openHooks?.length) userContext += `  未回收钩子：${s.openHooks.join('、')}\n`;
+      }
+      userContext += `\n`;
     }
   }
 

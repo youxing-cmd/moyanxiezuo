@@ -113,6 +113,19 @@ export const chapterVersions = pgTable('chapter_versions', {
   createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
 });
 
+export const chapterSummaries = pgTable('chapter_summaries', {
+  id: serial('id').primaryKey(),
+  chapterId: integer('chapter_id').notNull(),
+  workId: integer('work_id').notNull(),
+  summary: text('summary').notNull().default(''),
+  keyEvents: jsonb('key_events').$type<string[]>().notNull().default([]),
+  involvedCharacters: jsonb('involved_characters').$type<{ name: string; action: string }[]>().notNull().default([]),
+  openHooks: jsonb('open_hooks').$type<string[]>().notNull().default([]),
+  characterChanges: jsonb('character_changes').$type<{ name: string; change: string }[]>().notNull().default([]),
+  createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).$defaultFn(() => new Date()),
+});
+
 export const settings = pgTable('settings', {
   id: serial('id').primaryKey(),
   workId: integer('work_id').notNull(),

@@ -1554,6 +1554,48 @@ async function initPageInteractions(page) {
             }
             if (!chatMessages) return;
 
+            // /recall 命令：查询章节摘要记忆
+            if (text.startsWith('/recall ')) {
+                const keyword = text.slice(8).trim();
+                if (!keyword) {
+                    showToast('请输入查询关键词', 'warning');
+                    return;
+                }
+                if (!currentWorkId) {
+                    showToast('请先选择作品', 'warning');
+                    return;
+                }
+                chatInput.value = '';
+                chatMessages.appendChild(createUserBubble(text));
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                const aiBubble = createAiBubble('');
+                const aiContentEl = aiBubble.querySelector('.ai-msg-content');
+                chatMessages.appendChild(aiBubble);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                try {
+                    const results = await api(`/works/${currentWorkId}/chapter-summaries?keyword=${encodeURIComponent(keyword)}`);
+                    if (!results || results.length === 0) {
+                        if (aiContentEl) aiContentEl.textContent = `未找到与「${keyword}」相关的章节记录。`;
+                    } else {
+                        let html = '<div style="font-size:13px; line-height:1.6;">';
+                        html += `<div style="color:var(--text-muted); margin-bottom:8px;">找到 ${results.length} 条相关记录：</div>`;
+                        results.forEach(r => {
+                            html += '<div style="margin-bottom:10px; padding:8px; background:var(--bg-tertiary); border-radius:var(--radius-sm);">';
+                            html += `<div style="font-weight:600; color:var(--accent); font-size:12px;">${r.title || '未命名章节'}</div>`;
+                            if (r.summary) html += `<div style="margin-top:4px; color:var(--text-secondary);">${r.summary}</div>`;
+                            if (r.keyEvents?.length) html += `<div style="margin-top:4px; font-size:11px; color:var(--text-muted);">关键事件：${r.keyEvents.join('、')}</div>`;
+                            if (r.openHooks?.length) html += `<div style="margin-top:4px; font-size:11px; color:var(--warning);">未回收钩子：${r.openHooks.join('、')}</div>`;
+                            html += '</div>';
+                        });
+                        html += '</div>';
+                        if (aiContentEl) aiContentEl.innerHTML = html;
+                    }
+                } catch (err) {
+                    if (aiContentEl) aiContentEl.textContent = '查询失败: ' + (err.message || '未知错误');
+                }
+                return;
+            }
+
             // 解析 @引用格式（支持从quoteStore取完整内容，兼容旧格式）
             let userContent = text;
             let refText = '';
