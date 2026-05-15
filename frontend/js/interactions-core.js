@@ -515,7 +515,7 @@ async function initPageInteractions(page) {
                 if (inputDebounceTimer) clearTimeout(inputDebounceTimer);
                 inputDebounceTimer = setTimeout(() => {
                     if (currentWorkId && currentChapterId) {
-                        saveCurrentChapter(false);
+                        saveCurrentChapter(false).catch(() => {});
                     }
                 }, 2000);
                 // 撤销栈：防抖 800ms 后推入，避免每一步输入都记录
@@ -655,7 +655,7 @@ async function initPageInteractions(page) {
                         } else {
                             fallbackCopy(text);
                         }
-                        console.log('[埋点]', { event: 'ai_msg_copy', chapterId: 127, msgPreview: msgText.slice(0, 50), timestamp: new Date().toISOString() });
+                        console.log('[埋点]', { event: 'ai_msg_copy', chapterId: currentChapterId || null, msgPreview: msgText.slice(0, 50), timestamp: new Date().toISOString() });
                     } else if (action === 'insert') {
                         const text = contentEl?.textContent || '';
                         if (!text) {
@@ -663,7 +663,7 @@ async function initPageInteractions(page) {
                             return;
                         }
                         insertIntoEditor(text);
-                        console.log('[埋点]', { event: 'ai_msg_insert', chapterId: 127, msgPreview: msgText.slice(0, 50), timestamp: new Date().toISOString() });
+                        console.log('[埋点]', { event: 'ai_msg_insert', chapterId: currentChapterId || null, msgPreview: msgText.slice(0, 50), timestamp: new Date().toISOString() });
                     } else if (action === 'replace') {
                         const text = contentEl?.textContent || '';
                         if (!text) {
@@ -671,7 +671,7 @@ async function initPageInteractions(page) {
                             return;
                         }
                         replaceRefText(text);
-                        console.log('[埋点]', { event: 'ai_msg_replace', chapterId: 127, msgPreview: msgText.slice(0, 50), timestamp: new Date().toISOString() });
+                        console.log('[埋点]', { event: 'ai_msg_replace', chapterId: currentChapterId || null, msgPreview: msgText.slice(0, 50), timestamp: new Date().toISOString() });
                     } else if (action === 'regenerate') {
                         if (aiChatStreaming) {
                             showToast('正在生成中，请稍候', 'warning');
@@ -699,15 +699,15 @@ async function initPageInteractions(page) {
                             aiChatAbortCtrl = null;
                             setAiSendButtonStreaming(false);
                         }
-                        console.log('[埋点]', { event: 'ai_msg_regenerate', chapterId: 127, msgPreview: msgText.slice(0, 50), timestamp: new Date().toISOString() });
+                        console.log('[埋点]', { event: 'ai_msg_regenerate', chapterId: currentChapterId || null, msgPreview: msgText.slice(0, 50), timestamp: new Date().toISOString() });
                     } else if (action === 'like') {
                         btn.style.color = btn.style.color === 'var(--success)' ? 'var(--text-muted)' : 'var(--success)';
                         showToast('已点赞', 'success');
-                        console.log('[埋点]', { event: 'ai_msg_like', chapterId: 127, msgPreview: msgText.slice(0, 50), timestamp: new Date().toISOString() });
+                        console.log('[埋点]', { event: 'ai_msg_like', chapterId: currentChapterId || null, msgPreview: msgText.slice(0, 50), timestamp: new Date().toISOString() });
                     } else if (action === 'dislike') {
                         btn.style.color = btn.style.color === 'var(--danger)' ? 'var(--text-muted)' : 'var(--danger)';
                         showToast('已点踩', 'info');
-                        console.log('[埋点]', { event: 'ai_msg_dislike', chapterId: 127, msgPreview: msgText.slice(0, 50), timestamp: new Date().toISOString() });
+                        console.log('[埋点]', { event: 'ai_msg_dislike', chapterId: currentChapterId || null, msgPreview: msgText.slice(0, 50), timestamp: new Date().toISOString() });
                     } else if (action === 'undo-tool') {
                         const ok = window.jzEditor && window.jzEditor.restoreLastSnapshot();
                         if (ok) {
@@ -2178,6 +2178,6 @@ function trackFeedback(type) {
             showToast(`${type === 'like' ? '点赞' : '点踩'}已记录，感谢反馈！`, 'success');
         }
     }
-    console.log('[埋点]', { event: 'chapter_feedback', type, chapterId: 127, timestamp: new Date().toISOString() });
+    console.log('[埋点]', { event: 'chapter_feedback', type, chapterId: currentChapterId || null, timestamp: new Date().toISOString() });
 }
 

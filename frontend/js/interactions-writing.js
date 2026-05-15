@@ -355,8 +355,13 @@ async function renameChapter(chapterId, currentTitle) {
 async function switchChapter(chapterId, title, content, outline) {
     // 如果有未保存的内容，先保存
     if (currentChapterId && currentChapterId !== chapterId) {
-        await saveCurrentChapter(false);
-        await saveChapterOutline(false);
+        try {
+            await saveCurrentChapter(false);
+            await saveChapterOutline(false);
+        } catch (err) {
+            showToast('保存失败，暂不切换章节', 'danger');
+            return;
+        }
     }
 
     currentChapterId = chapterId;
@@ -399,6 +404,9 @@ async function switchChapter(chapterId, title, content, outline) {
     // 重置本地缓存状态
     lastSavedContent = editorArea.innerHTML;
     setupLocalAutoSave();
+
+    // 重新初始化自动保存 timer（指向新章节）
+    setupAutoSave();
 
     // 初始化撤销栈
     initEditorUndoStack();
@@ -452,7 +460,13 @@ async function loadNextChapter() {
     isScrollingToNextChapter = true;
 
     // 先保存当前章节
-    await saveCurrentChapter(false);
+    try {
+        await saveCurrentChapter(false);
+    } catch (err) {
+        showToast('保存失败，暂不加载下一章', 'danger');
+        isScrollingToNextChapter = false;
+        return;
+    }
 
     // 加载下一章节内容
     try {
@@ -527,7 +541,8 @@ function clearLocalCache() {
 // 编辑器 input 防抖保存到本地（2-3秒）
 function setupLocalAutoSave() {
     const editorArea = document.getElementById('editorArea');
-    if (!editorArea) return;
+    if (!editorArea || editorArea.dataset._localAutoSaveBound) return;
+    editorArea.dataset._localAutoSaveBound = '1';
     editorArea.addEventListener('input', () => {
         if (localSaveDebounceTimer) clearTimeout(localSaveDebounceTimer);
         localSaveDebounceTimer = setTimeout(() => {
@@ -598,6 +613,7 @@ async function saveCurrentChapter(showToastMsg = true, source = 'manual') {
         if (showToastMsg) showToast('保存失败: ' + err.message, 'danger');
         updateSaveButtonState('error');
         setTimeout(() => updateSaveButtonState('unsaved'), 2000);
+        throw err;
     } finally {
         isSaving = false;
     }
@@ -608,8 +624,8 @@ function setupAutoSave() {
     if (saveTimeout) clearInterval(saveTimeout);
     saveTimeout = setInterval(() => {
         if (currentWorkId && currentChapterId) {
-            saveCurrentChapter(false, 'auto');
-            saveChapterOutline(false);
+            saveCurrentChapter(false, 'auto').catch(() => {});
+            saveChapterOutline(false).catch(() => {});
         }
     }, 30000);
 }
