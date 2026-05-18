@@ -126,6 +126,22 @@ export const chapterSummaries = pgTable('chapter_summaries', {
   updatedAt: timestamp('updated_at', { mode: 'date' }).$defaultFn(() => new Date()),
 });
 
+export const workStyleDNA = pgTable('work_style_dna', {
+  id: serial('id').primaryKey(),
+  workId: integer('work_id').notNull().unique(),
+  userId: integer('user_id').notNull(),
+  avgSentenceLength: real('avg_sentence_length'),
+  shortSentenceRatio: real('short_sentence_ratio'),
+  longSentenceRatio: real('long_sentence_ratio'),
+  dialogueRatio: real('dialogue_ratio'),
+  avgParagraphLength: integer('avg_paragraph_length'),
+  commonPhrases: jsonb('common_phrases').$type<string[]>().notNull().default([]),
+  signatureWords: jsonb('signature_words').$type<string[]>().notNull().default([]),
+  pacingPattern: jsonb('pacing_pattern').$type<string[]>().notNull().default([]),
+  sampleSize: integer('sample_size').notNull().default(0),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).$defaultFn(() => new Date()),
+});
+
 export const settings = pgTable('settings', {
   id: serial('id').primaryKey(),
   workId: integer('work_id').notNull(),

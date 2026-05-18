@@ -3,8 +3,9 @@
 // 不处理：模型选择、积分扣减、流式响应、上下文截断（由调用方按模型预算执行）
 
 import { db } from '../db/index.js';
-import { works, chapters, outlines, characters, chapterSummaries } from '../db/schema.js';
+import { works, chapters, outlines, characters, chapterSummaries, workStyleDNA } from '../db/schema.js';
 import { eq, and, desc, lt } from 'drizzle-orm';
+import { formatStyleDNAPrompt } from './styleDNA.js';
 
 export type TaskType = 'chat' | 'continue' | 'polish' | 'outline' | 'chapter_review' | 'character_check';
 
@@ -79,6 +80,22 @@ async function buildBaseContext(workId: number, userId: number): Promise<string>
     prompt += `5. 角色一致性：已有角色的行为必须符合其性格设定，不创造与设定冲突的新属性，不出现男女性别错乱。\n`;
   }
   prompt += `6. 世界观一致：不新增未在总纲或设定中铺垫的世界规则。\n`;
+
+  // 注入风格 DNA（如果已提取）
+  const [dna] = await db.select().from(workStyleDNA).where(eq(workStyleDNA.workId, workId)).limit(1);
+  if (dna && dna.sampleSize > 0) {
+    prompt += formatStyleDNAPrompt({
+      avgSentenceLength: dna.avgSentenceLength ?? 0,
+      shortSentenceRatio: dna.shortSentenceRatio ?? 0,
+      longSentenceRatio: dna.longSentenceRatio ?? 0,
+      dialogueRatio: dna.dialogueRatio ?? 0,
+      avgParagraphLength: dna.avgParagraphLength ?? 0,
+      commonPhrases: dna.commonPhrases ?? [],
+      signatureWords: dna.signatureWords ?? [],
+      pacingPattern: dna.pacingPattern ?? [],
+      sampleSize: dna.sampleSize,
+    });
+  }
 
   return prompt;
 }

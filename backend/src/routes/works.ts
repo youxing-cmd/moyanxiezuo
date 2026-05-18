@@ -4,6 +4,7 @@ import { db } from '../db/index.js';
 import { works, chapters, chapterVersions, chapterSummaries, drafts, characters, outlines, settings, aiConversations } from '../db/schema.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { generateChapterSummary } from '../services/chapterSummary.js';
+import { generateAndSaveStyleDNA } from '../services/styleDNA.js';
 import { eq, and, ilike, desc, isNull, isNotNull, inArray } from 'drizzle-orm';
 
 const worksRouter = new Hono();
@@ -441,6 +442,9 @@ worksRouter.put('/:id/chapters/:cid', async (c) => {
         });
       })
       .catch(() => {});
+
+    // 异步更新风格 DNA（不阻塞响应）
+    generateAndSaveStyleDNA(workId, userId).catch(() => {});
   }
 
   // 重新计算作品字数
