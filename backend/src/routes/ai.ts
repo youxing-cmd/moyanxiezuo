@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { db } from '../db/index.js';
-import { aiConversations, works, chapters, users, pointTransactions, toolPrompts } from '../db/schema.js';
+import { aiConversations, works, chapters, users, pointTransactions, toolPrompts, aiCorrections } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { callLLM, resolveModelConfig, type ChatMessage, type ModelConfig } from '../services/llm.js';
 import { getEnabledTools, getTool } from '../config/tools.js';
@@ -1641,6 +1641,39 @@ aiRouter.post('/chapter-review', async (c) => {
       r.issues.map((issue: any) => ({ ...issue, agent: r.agent })),
     ),
   });
+});
+
+// POST /api/ai/corrections — 记录用户对 AI 输出的反馈（不扣积分）
+const correctionSchema = z.object({
+  workId: z.number().optional(),
+  chapterId: z.number().optional(),
+  aiContent: z.string().min(1),
+  userAction: z.enum(['insert', 'replace', 'regenerate', 'like', 'dislike', 'copy']),
+  toolType: z.string().optional(),
+  modelId: z.string().optional(),
+});
+
+aiRouter.post('/corrections', async (c) => {
+  const body = await c.req.json();
+  const parsed = correctionSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: '参数错误' }, 400);
+  }
+
+  const userId = c.get('userId');
+  const { workId, chapterId, aiContent, userAction, toolType, modelId } = parsed.data;
+
+  await db.insert(aiCorrections).values({
+    userId,
+    workId: workId || null,
+    chapterId: chapterId || null,
+    aiContent: aiContent.slice(0, 2000),
+    userAction,
+    toolType: toolType || null,
+    modelId: modelId || null,
+  });
+
+  return c.json({ success: true });
 });
 
 export { TOOL_PROMPTS, DEFAULT_TOOL_PROMPTS, STYLE_PROMPTS };

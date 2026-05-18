@@ -142,6 +142,18 @@ export const workStyleDNA = pgTable('work_style_dna', {
   updatedAt: timestamp('updated_at', { mode: 'date' }).$defaultFn(() => new Date()),
 });
 
+export const aiCorrections = pgTable('ai_corrections', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull(),
+  workId: integer('work_id'),
+  chapterId: integer('chapter_id'),
+  aiContent: text('ai_content').notNull().default(''),
+  userAction: text('user_action').notNull().default(''),
+  toolType: text('tool_type'),
+  modelId: text('model_id'),
+  createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
+});
+
 export const settings = pgTable('settings', {
   id: serial('id').primaryKey(),
   workId: integer('work_id').notNull(),
