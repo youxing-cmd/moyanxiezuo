@@ -233,36 +233,63 @@
 
 /* ===== 工作树 ===== */
 .tree-section {
-    margin-bottom: 2px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+}
+
+.tree-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
 }
 
 .tree-header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 8px;
-    font-size: 12px;
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--text-primary);
     cursor: pointer;
     border-radius: var(--radius-sm);
     user-select: none;
-    transition: background-color var(--transition);
+    transition: all var(--transition);
+    margin-bottom: 2px;
 }
 
 .tree-header:hover {
     background: var(--bg-hover);
+    color: var(--accent);
 }
 
 .tree-toggle {
-    font-size: 10px;
-    color: var(--text-muted);
-    width: 12px;
+    font-size: 11px;
+    color: var(--accent);
+    width: 14px;
     text-align: center;
-    transition: transform var(--transition);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
 }
 
 .tree-body {
-    padding-left: 4px;
+    padding-left: 12px;
+    margin-left: 6px;
+    border-left: 1.5px solid var(--border);
+}
+
+.tree-body:has(> div[style*="display: none"]) {
+    border-left-color: transparent;
+}
+
+/* 树内子标题统一 */
+.tree-body .btn-ghost {
+    opacity: 0.7;
+    transition: opacity var(--transition);
+}
+
+.tree-body .btn-ghost:hover {
+    opacity: 1;
 }
 
