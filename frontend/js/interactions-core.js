@@ -2284,7 +2284,7 @@ function setupDebugPanel() {
     const btn = document.createElement('button');
     btn.className = 'debug-panel-btn';
     btn.textContent = '🔍 调试';
-    btn.style.cssText = 'position:absolute; top:8px; right:8px; padding:4px 10px; font-size:11px; border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); border-radius:4px; cursor:pointer; z-index:999;';
+    btn.style.cssText = 'position:absolute; bottom:8px; right:8px; padding:4px 10px; font-size:11px; border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); border-radius:4px; cursor:pointer; z-index:999;';
     btn.onclick = async () => {
         if (!currentWorkId) { showToast('请先选择作品', 'warning'); return; }
         try {
@@ -2298,35 +2298,65 @@ function setupDebugPanel() {
                 }
             });
             let html = '<div style="max-height:60vh; overflow-y:auto; font-size:12px; line-height:1.6;">';
-            // L3 作品记忆
-            html += `<div style="margin-bottom:16px; padding:10px; background:rgba(99,102,241,0.06); border-radius:var(--radius-sm); border-left:3px solid var(--accent);">`;
-            html += `<div style="font-weight:600; color:var(--accent); margin-bottom:6px;">🧠 L3 作品记忆</div>`;
+            // L3 风格 DNA（独立卡片）
+            html += `<div style="margin-bottom:12px; padding:10px; background:rgba(168,85,247,0.08); border-radius:var(--radius-sm); border-left:3px solid #a855f7;">`;
+            html += `<div style="font-weight:600; color:#a855f7; margin-bottom:6px;">🧬 L3 风格 DNA</div>`;
             if (res.l3DNA) {
-                html += `<div style="margin-bottom:4px;"><span style="color:var(--text-muted);">风格 DNA：</span>平均句长 ${res.l3DNA.avgSentenceLength} 字，对话占比 ${Math.round((res.l3DNA.dialogueRatio||0)*100)}%</div>`;
-                if (res.l3DNA.signatureWords?.length) html += `<div style="font-size:11px; color:var(--text-muted);">标志性词汇：${res.l3DNA.signatureWords.slice(0,8).join('、')}</div>`;
+                html += `<div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:11px;">`;
+                html += `<div>平均句长 <strong>${res.l3DNA.avgSentenceLength}</strong> 字</div>`;
+                html += `<div>对话占比 <strong>${Math.round((res.l3DNA.dialogueRatio||0)*100)}%</strong></div>`;
+                html += `<div>短句占比 <strong>${Math.round((res.l3DNA.shortSentenceRatio||0)*100)}%</strong></div>`;
+                html += `<div>长句占比 <strong>${Math.round((res.l3DNA.longSentenceRatio||0)*100)}%</strong></div>`;
+                html += `<div>平均段落 <strong>${res.l3DNA.avgParagraphLength}</strong> 字</div>`;
+                html += `<div>样本量 <strong>${res.l3DNA.sampleSize}</strong> 字</div>`;
+                html += `</div>`;
+                if (res.l3DNA.signatureWords?.length) html += `<div style="margin-top:6px; font-size:11px;">标志词：${res.l3DNA.signatureWords.slice(0,10).join('、')}</div>`;
+                if (res.l3DNA.commonPhrases?.length) html += `<div style="margin-top:2px; font-size:11px;">常用句式：${res.l3DNA.commonPhrases.slice(0,6).join('、')}</div>`;
+            } else {
+                html += `<div style="color:var(--text-muted); font-size:11px;">⚠️ 暂无 DNA。需要保存至少一章内容才能提取风格特征。</div>`;
             }
-            html += `<div style="margin-top:6px; color:var(--text-secondary); white-space:pre-wrap;">${escapeHtml(res.systemContext || '')}</div>`;
             html += `</div>`;
+            // L3 作品设定
+            html += `<div style="margin-bottom:12px; padding:10px; background:rgba(99,102,241,0.06); border-radius:var(--radius-sm); border-left:3px solid var(--accent);">`;
+            html += `<div style="font-weight:600; color:var(--accent); margin-bottom:6px;">📖 L3 作品设定（${res.baseSetting?.length || 0} 字）</div>`;
+            html += `<details><summary style="cursor:pointer; color:var(--text-muted); font-size:11px;">展开/折叠</summary>`;
+            html += `<div style="margin-top:6px; color:var(--text-secondary); white-space:pre-wrap; font-size:11px;">${escapeHtml(res.baseSetting || '')}</div>`;
+            html += `</details></div>`;
             // L2 章节记忆
-            html += `<div style="margin-bottom:16px; padding:10px; background:rgba(34,197,94,0.06); border-radius:var(--radius-sm); border-left:3px solid var(--success);">`;
-            html += `<div style="font-weight:600; color:var(--success); margin-bottom:6px;">📚 L2 章节记忆（最近 ${res.l2Summaries?.length || 0} 章）</div>`;
-            if (res.l2Summaries?.length) {
+            const l2Count = res.l2Summaries?.length || 0;
+            const stats = res.l2Stats || {};
+            html += `<div style="margin-bottom:12px; padding:10px; background:rgba(34,197,94,0.06); border-radius:var(--radius-sm); border-left:3px solid var(--success);">`;
+            html += `<div style="font-weight:600; color:var(--success); margin-bottom:6px;">📚 L2 章节记忆（注入 ${l2Count} 章 / 已生成 ${stats.summariesCount || 0} / 总章节 ${stats.chaptersCount || 0}）</div>`;
+            if (l2Count > 0) {
                 res.l2Summaries.forEach(s => {
                     html += `<div style="margin-bottom:6px; padding:6px; background:var(--bg-tertiary); border-radius:4px;">`;
-                    html += `<div style="font-weight:500;">${s.title}</div>`;
-                    html += `<div style="color:var(--text-secondary);">${s.summary}</div>`;
-                    if (s.openHooks?.length) html += `<div style="font-size:11px; color:var(--accent);">🪝 ${s.openHooks.join('、')}</div>`;
+                    html += `<div style="font-weight:500; font-size:11px;">${s.title}</div>`;
+                    html += `<div style="color:var(--text-secondary); font-size:11px;">${s.summary}</div>`;
+                    if (s.keyEvents?.length) html += `<div style="font-size:10px; color:var(--text-muted);">📌 ${s.keyEvents.join('、')}</div>`;
+                    if (s.openHooks?.length) html += `<div style="font-size:10px; color:#a855f7;">🪝 ${s.openHooks.join('、')}</div>`;
                     html += `</div>`;
                 });
             } else {
-                html += `<div style="color:var(--text-muted);">暂无章节摘要，保存章节后自动生成</div>`;
+                html += `<div style="font-size:11px; color:var(--text-secondary); padding:8px; background:var(--bg-tertiary); border-radius:4px;">`;
+                html += `<div style="font-weight:600; color:var(--warning); margin-bottom:4px;">⚠️ 当前 L2 为空，AI 不会获得任何"章节脉络"信息</div>`;
+                html += `<div style="margin-top:4px;">可能原因：</div>`;
+                if (!currentChapterId) html += `<div>• 未选择章节（当前 chapterId 为空）</div>`;
+                if (stats.chaptersCount === 0) html += `<div>• 作品还没有任何章节</div>`;
+                if (stats.chaptersCount > 0 && stats.summariesCount === 0) html += `<div>• 章节存在但摘要未生成（保存后异步生成，可能需等待或重试）</div>`;
+                if (stats.summariesCount > 0 && stats.summariesCount < stats.chaptersCount) html += `<div>• 部分章节摘要未生成（${stats.summariesCount}/${stats.chaptersCount}）</div>`;
+                if (currentChapterId && stats.summariesCount > 0) html += `<div>• 当前章是第 1 章（之前没有章节，无 L2 可注入）</div>`;
+                html += `<div style="margin-top:6px;">解决方案：</div>`;
+                html += `<div>• 跑种子脚本：<code style="background:var(--bg-secondary); padding:2px 4px;">npx tsx scripts/seedDemoWork.ts 1</code></div>`;
+                html += `<div>• 或者保存几章内容后再来看</div>`;
+                html += `</div>`;
             }
             html += `</div>`;
             // L1 瞬时记忆
-            html += `<div style="margin-bottom:16px; padding:10px; background:rgba(234,179,8,0.06); border-radius:var(--radius-sm); border-left:3px solid var(--warning);">`;
-            html += `<div style="font-weight:600; color:var(--warning); margin-bottom:6px;">⚡ L1 瞬时记忆</div>`;
-            html += `<div style="color:var(--text-secondary); white-space:pre-wrap;">${escapeHtml(res.userContext || '')}</div>`;
-            html += `</div>`;
+            html += `<div style="margin-bottom:12px; padding:10px; background:rgba(234,179,8,0.06); border-radius:var(--radius-sm); border-left:3px solid var(--warning);">`;
+            html += `<div style="font-weight:600; color:var(--warning); margin-bottom:6px;">⚡ L1 瞬时记忆（${res.userContext?.length || 0} 字）</div>`;
+            html += `<details open><summary style="cursor:pointer; color:var(--text-muted); font-size:11px;">展开/折叠</summary>`;
+            html += `<div style="margin-top:6px; color:var(--text-secondary); white-space:pre-wrap; font-size:11px;">${escapeHtml(res.userContext || '')}</div>`;
+            html += `</details></div>`;
             html += `<div style="font-size:11px; color:var(--text-muted);">usedTables: ${(res.usedTables || []).join(', ')}</div>`;
             html += '</div>';
             showModal('ContextBuilder 记忆分层预览', html);

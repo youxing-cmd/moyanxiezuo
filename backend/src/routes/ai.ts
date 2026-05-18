@@ -1697,8 +1697,16 @@ aiRouter.post('/debug/preview-context', async (c) => {
   const { workId, chapterId, taskType, currentText, selectedText } = parsed.data;
   const ctx = await buildContext({ userId, workId, chapterId, taskType, currentText, selectedText });
 
+  // 拆分 systemContext：作品设定 vs 风格 DNA
+  const dnaMarker = '【风格 DNA】';
+  const dnaIdx = ctx.systemContext.indexOf(dnaMarker);
+  const baseSetting = dnaIdx > 0 ? ctx.systemContext.slice(0, dnaIdx).trim() : ctx.systemContext;
+  const dnaSection = dnaIdx > 0 ? ctx.systemContext.slice(dnaIdx).trim() : '';
+
   const debugInfo: any = {
     systemContext: ctx.systemContext,
+    baseSetting,
+    dnaSection,
     userContext: ctx.userContext,
     usedTables: ctx.usedTables,
   };
@@ -1724,6 +1732,16 @@ aiRouter.post('/debug/preview-context', async (c) => {
         .limit(3);
       debugInfo.l2Summaries = recentSummaries;
     }
+  }
+
+  // L2 诊断：统计该作品已生成的摘要数 + 总章节数
+  if (workId) {
+    const allSummaries = await db.select({ id: chapterSummaries.id }).from(chapterSummaries).where(eq(chapterSummaries.workId, workId));
+    const allChapters = await db.select({ id: chapters.id }).from(chapters).where(eq(chapters.workId, workId));
+    debugInfo.l2Stats = {
+      summariesCount: allSummaries.length,
+      chaptersCount: allChapters.length,
+    };
   }
 
   // L3: 风格 DNA
