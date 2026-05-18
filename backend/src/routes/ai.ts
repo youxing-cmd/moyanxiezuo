@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { db } from '../db/index.js';
-import { aiConversations, works, chapters, users, pointTransactions, toolPrompts, aiCorrections } from '../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { aiConversations, works, chapters, users, pointTransactions, toolPrompts, aiCorrections, chapterSummaries, workStyleDNA } from '../db/schema.js';
+import { eq, and, desc, lt } from 'drizzle-orm';
 import { callLLM, resolveModelConfig, type ChatMessage, type ModelConfig } from '../services/llm.js';
 import { getEnabledTools, getTool } from '../config/tools.js';
 import { REVIEW_AGENT_PROMPTS } from '../config/reviewAgents.js';
@@ -91,8 +91,8 @@ const continueSchema = z.object({
   context: z.string().min(1),
   style: z.string().optional(),
   length: z.string().optional(),
-  workId: z.number().optional(),
-  chapterId: z.number().optional(),
+  workId: z.coerce.number().optional(),
+  chapterId: z.coerce.number().optional(),
 });
 
 const polishSchema = z.object({
@@ -1559,8 +1559,8 @@ aiRouter.post('/tools/:name', async (c) => {
 
 // POST /api/ai/chapter-review — 多 Agent 章节审查委员会
 const chapterReviewSchema = z.object({
-  workId: z.number(),
-  chapterId: z.number(),
+  workId: z.coerce.number(),
+  chapterId: z.coerce.number(),
 });
 
 aiRouter.post('/chapter-review', async (c) => {
@@ -1645,8 +1645,8 @@ aiRouter.post('/chapter-review', async (c) => {
 
 // POST /api/ai/corrections — 记录用户对 AI 输出的反馈（不扣积分）
 const correctionSchema = z.object({
-  workId: z.number().optional(),
-  chapterId: z.number().optional(),
+  workId: z.coerce.number().optional(),
+  chapterId: z.coerce.number().optional(),
   aiContent: z.string().min(1),
   userAction: z.enum(['insert', 'replace', 'regenerate', 'like', 'dislike', 'copy']),
   toolType: z.string().optional(),
@@ -1678,8 +1678,8 @@ aiRouter.post('/corrections', async (c) => {
 
 // POST /api/ai/debug/preview-context — dry-run ContextBuilder（仅开发环境，不调用 LLM、不扣积分）
 const previewContextSchema = z.object({
-  workId: z.number(),
-  chapterId: z.number().optional(),
+  workId: z.coerce.number(),
+  chapterId: z.coerce.number().optional(),
   taskType: z.enum(['chat', 'continue', 'polish', 'outline', 'chapter_review', 'character_check']),
   currentText: z.string().optional(),
   selectedText: z.string().optional(),
@@ -1694,8 +1694,45 @@ aiRouter.post('/debug/preview-context', async (c) => {
   if (!parsed.success) return c.json({ error: '参数错误' }, 400);
 
   const userId = c.get('userId');
-  const ctx = await buildContext({ userId, ...parsed.data });
-  return c.json(ctx);
+  const { workId, chapterId, taskType, currentText, selectedText } = parsed.data;
+  const ctx = await buildContext({ userId, workId, chapterId, taskType, currentText, selectedText });
+
+  const debugInfo: any = {
+    systemContext: ctx.systemContext,
+    userContext: ctx.userContext,
+    usedTables: ctx.usedTables,
+  };
+
+  // L2: 最近章节摘要
+  if (workId && chapterId) {
+    const [currentChapter] = await db.select().from(chapters)
+      .where(and(eq(chapters.id, chapterId), eq(chapters.workId, workId)))
+      .limit(1);
+    if (currentChapter) {
+      const recentSummaries = await db.select({
+        title: chapters.title,
+        summary: chapterSummaries.summary,
+        keyEvents: chapterSummaries.keyEvents,
+        openHooks: chapterSummaries.openHooks,
+      }).from(chapterSummaries)
+        .innerJoin(chapters, eq(chapters.id, chapterSummaries.chapterId))
+        .where(and(
+          eq(chapters.workId, workId),
+          lt(chapters.orderIndex, currentChapter.orderIndex),
+        ))
+        .orderBy(desc(chapters.orderIndex))
+        .limit(3);
+      debugInfo.l2Summaries = recentSummaries;
+    }
+  }
+
+  // L3: 风格 DNA
+  if (workId) {
+    const [dna] = await db.select().from(workStyleDNA).where(eq(workStyleDNA.workId, workId)).limit(1);
+    if (dna) debugInfo.l3DNA = dna;
+  }
+
+  return c.json(debugInfo);
 });
 
 export { TOOL_PROMPTS, DEFAULT_TOOL_PROMPTS, STYLE_PROMPTS };

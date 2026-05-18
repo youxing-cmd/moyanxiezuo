@@ -2292,20 +2292,44 @@ function setupDebugPanel() {
                 method: 'POST',
                 body: {
                     workId: Number(currentWorkId),
-                    chapterId: currentChapterId || undefined,
+                    chapterId: currentChapterId ? Number(currentChapterId) : undefined,
                     taskType: 'continue',
                     currentText: document.getElementById('editorArea')?.textContent?.slice(-500) || '',
                 }
             });
-            showModal('ContextBuilder 预览', `
-                <div style="max-height:60vh; overflow-y:auto; font-size:12px; line-height:1.6;">
-                    <div style="color:var(--accent); font-weight:600; margin-bottom:8px;">systemContext (${res.systemContext?.length || 0} 字)</div>
-                    <pre style="white-space:pre-wrap; background:var(--bg-tertiary); padding:8px; border-radius:4px; margin-bottom:12px;">${escapeHtml(res.systemContext || '')}</pre>
-                    <div style="color:var(--accent); font-weight:600; margin-bottom:8px;">userContext (${res.userContext?.length || 0} 字)</div>
-                    <pre style="white-space:pre-wrap; background:var(--bg-tertiary); padding:8px; border-radius:4px; margin-bottom:12px;">${escapeHtml(res.userContext || '')}</pre>
-                    <div style="color:var(--text-muted); font-size:11px;">usedTables: ${(res.usedTables || []).join(', ')}</div>
-                </div>
-            `);
+            let html = '<div style="max-height:60vh; overflow-y:auto; font-size:12px; line-height:1.6;">';
+            // L3 作品记忆
+            html += `<div style="margin-bottom:16px; padding:10px; background:rgba(99,102,241,0.06); border-radius:var(--radius-sm); border-left:3px solid var(--accent);">`;
+            html += `<div style="font-weight:600; color:var(--accent); margin-bottom:6px;">🧠 L3 作品记忆</div>`;
+            if (res.l3DNA) {
+                html += `<div style="margin-bottom:4px;"><span style="color:var(--text-muted);">风格 DNA：</span>平均句长 ${res.l3DNA.avgSentenceLength} 字，对话占比 ${Math.round((res.l3DNA.dialogueRatio||0)*100)}%</div>`;
+                if (res.l3DNA.signatureWords?.length) html += `<div style="font-size:11px; color:var(--text-muted);">标志性词汇：${res.l3DNA.signatureWords.slice(0,8).join('、')}</div>`;
+            }
+            html += `<div style="margin-top:6px; color:var(--text-secondary); white-space:pre-wrap;">${escapeHtml(res.systemContext || '')}</div>`;
+            html += `</div>`;
+            // L2 章节记忆
+            html += `<div style="margin-bottom:16px; padding:10px; background:rgba(34,197,94,0.06); border-radius:var(--radius-sm); border-left:3px solid var(--success);">`;
+            html += `<div style="font-weight:600; color:var(--success); margin-bottom:6px;">📚 L2 章节记忆（最近 ${res.l2Summaries?.length || 0} 章）</div>`;
+            if (res.l2Summaries?.length) {
+                res.l2Summaries.forEach(s => {
+                    html += `<div style="margin-bottom:6px; padding:6px; background:var(--bg-tertiary); border-radius:4px;">`;
+                    html += `<div style="font-weight:500;">${s.title}</div>`;
+                    html += `<div style="color:var(--text-secondary);">${s.summary}</div>`;
+                    if (s.openHooks?.length) html += `<div style="font-size:11px; color:var(--accent);">🪝 ${s.openHooks.join('、')}</div>`;
+                    html += `</div>`;
+                });
+            } else {
+                html += `<div style="color:var(--text-muted);">暂无章节摘要，保存章节后自动生成</div>`;
+            }
+            html += `</div>`;
+            // L1 瞬时记忆
+            html += `<div style="margin-bottom:16px; padding:10px; background:rgba(234,179,8,0.06); border-radius:var(--radius-sm); border-left:3px solid var(--warning);">`;
+            html += `<div style="font-weight:600; color:var(--warning); margin-bottom:6px;">⚡ L1 瞬时记忆</div>`;
+            html += `<div style="color:var(--text-secondary); white-space:pre-wrap;">${escapeHtml(res.userContext || '')}</div>`;
+            html += `</div>`;
+            html += `<div style="font-size:11px; color:var(--text-muted);">usedTables: ${(res.usedTables || []).join(', ')}</div>`;
+            html += '</div>';
+            showModal('ContextBuilder 记忆分层预览', html);
         } catch (err) {
             showToast('调试请求失败: ' + (err.message || '未知错误'), 'danger');
         }
