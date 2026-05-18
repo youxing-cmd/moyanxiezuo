@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { works, chapters, chapterVersions, chapterSummaries, drafts, characters, outlines, settings, aiConversations } from '../db/schema.js';
+import { works, chapters, chapterVersions, chapterSummaries, workStyleDNA, drafts, characters, outlines, settings, aiConversations } from '../db/schema.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { generateChapterSummary } from '../services/chapterSummary.js';
 import { generateAndSaveStyleDNA } from '../services/styleDNA.js';
@@ -212,6 +212,34 @@ worksRouter.get('/:id/chapter-summaries', async (c) => {
   }
 
   return c.json(result);
+});
+
+// GET /api/works/:id/style-dna — 获取作品风格 DNA
+worksRouter.get('/:id/style-dna', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const [dna] = await db.select().from(workStyleDNA).where(eq(workStyleDNA.workId, workId)).limit(1);
+  if (!dna) {
+    return c.json({ error: '暂无风格 DNA，请先保存章节' }, 404);
+  }
+
+  return c.json({
+    avgSentenceLength: dna.avgSentenceLength,
+    shortSentenceRatio: dna.shortSentenceRatio,
+    longSentenceRatio: dna.longSentenceRatio,
+    dialogueRatio: dna.dialogueRatio,
+    avgParagraphLength: dna.avgParagraphLength,
+    commonPhrases: dna.commonPhrases,
+    signatureWords: dna.signatureWords,
+    sampleSize: dna.sampleSize,
+    updatedAt: dna.updatedAt,
+  });
 });
 
 // DELETE /api/works/:id — 软删除

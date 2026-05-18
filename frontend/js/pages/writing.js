@@ -474,6 +474,7 @@ const writingViews = {
                 <button class="tool-tab active" data-tab="official" onclick="switchToolTab('official')" style="padding:8px 16px; font-size:13px; border:none; background:transparent; cursor:pointer; border-bottom:2px solid var(--accent); color:var(--accent); font-weight:600;">⭐ 官方推荐</button>
                 <button class="tool-tab" data-tab="custom" onclick="switchToolTab('custom')" style="padding:8px 16px; font-size:13px; border:none; background:transparent; cursor:pointer; border-bottom:2px solid transparent; color:var(--text-muted);">🤖 我的工具</button>
                 <button class="tool-tab" data-tab="prompt-debug" onclick="switchToolTab('prompt-debug')" style="padding:8px 16px; font-size:13px; border:none; background:transparent; cursor:pointer; border-bottom:2px solid transparent; color:var(--text-muted);">🧪 提示词调试</button>
+                <button class="tool-tab" data-tab="memory" onclick="switchToolTab('memory')" style="padding:8px 16px; font-size:13px; border:none; background:transparent; cursor:pointer; border-bottom:2px solid transparent; color:var(--text-muted);">🧠 记忆</button>
             </div>
 
             <!-- 官方推荐 -->
@@ -560,6 +561,18 @@ const writingViews = {
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- 作品记忆 -->
+            <div id="toolTabMemory" style="display:none;">
+                <div id="memoryDnaSection" style="margin-bottom:20px;">
+                    <div style="font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:10px;">🧬 风格 DNA</div>
+                    <div id="memoryDnaContent" style="font-size:12px; color:var(--text-secondary); line-height:1.6;">加载中...</div>
+                </div>
+                <div id="memorySummariesSection">
+                    <div style="font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:10px;">📚 章节摘要与未回收钩子</div>
+                    <div id="memorySummariesContent" style="max-height:400px; overflow-y:auto;">加载中...</div>
                 </div>
             </div>
 

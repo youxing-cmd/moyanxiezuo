@@ -34,12 +34,17 @@ function switchToolTab(tab) {
     const officialEl = document.getElementById('toolTabOfficial');
     const customEl = document.getElementById('toolTabCustom');
     const debugEl = document.getElementById('toolTabPromptDebug');
+    const memoryEl = document.getElementById('toolTabMemory');
     if (officialEl) officialEl.style.display = tab === 'official' ? 'block' : 'none';
     if (customEl) customEl.style.display = tab === 'custom' ? 'block' : 'none';
     if (debugEl) debugEl.style.display = tab === 'prompt-debug' ? 'block' : 'none';
+    if (memoryEl) memoryEl.style.display = tab === 'memory' ? 'block' : 'none';
 
     if (tab === 'prompt-debug') {
         loadPromptDebugTools();
+    }
+    if (tab === 'memory') {
+        loadWorkMemory();
     }
 }
 
@@ -2146,6 +2151,74 @@ function handleModelSelectChange(value) {
         localStorage.setItem('jz_current_model_id', String(currentModelId));
     } else {
         localStorage.removeItem('jz_current_model_id');
+    }
+}
+
+// ========== 作品记忆面板 ==========
+async function loadWorkMemory() {
+    if (!currentWorkId) {
+        document.getElementById('memoryDnaContent').textContent = '请先选择作品';
+        document.getElementById('memorySummariesContent').textContent = '';
+        return;
+    }
+
+    const dnaEl = document.getElementById('memoryDnaContent');
+    const sumEl = document.getElementById('memorySummariesContent');
+    dnaEl.textContent = '加载中...';
+    sumEl.textContent = '加载中...';
+
+    try {
+        const [dna, summaries] = await Promise.all([
+            api(`/works/${currentWorkId}/style-dna`).catch(() => null),
+            api(`/works/${currentWorkId}/chapter-summaries`).catch(() => []),
+        ]);
+
+        // 渲染风格 DNA
+        if (dna && dna.sampleSize > 0) {
+            let html = '<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">';
+            html += `<div style="padding:8px; background:var(--bg-tertiary); border-radius:var(--radius-sm);">平均句长 <strong>${dna.avgSentenceLength}</strong> 字</div>`;
+            html += `<div style="padding:8px; background:var(--bg-tertiary); border-radius:var(--radius-sm);">对话占比 <strong>${Math.round((dna.dialogueRatio || 0) * 100)}%</strong></div>`;
+            html += `<div style="padding:8px; background:var(--bg-tertiary); border-radius:var(--radius-sm);">短句占比 <strong>${Math.round((dna.shortSentenceRatio || 0) * 100)}%</strong></div>`;
+            html += `<div style="padding:8px; background:var(--bg-tertiary); border-radius:var(--radius-sm);">长句占比 <strong>${Math.round((dna.longSentenceRatio || 0) * 100)}%</strong></div>`;
+            html += `<div style="padding:8px; background:var(--bg-tertiary); border-radius:var(--radius-sm);">平均段落 <strong>${dna.avgParagraphLength}</strong> 字</div>`;
+            html += `<div style="padding:8px; background:var(--bg-tertiary); border-radius:var(--radius-sm);">统计样本 <strong>${dna.sampleSize}</strong> 字</div>`;
+            html += '</div>';
+            if (dna.signatureWords?.length) {
+                html += `<div style="margin-top:8px; font-size:11px; color:var(--text-muted);">标志性词汇：${dna.signatureWords.slice(0, 10).join('、')}</div>`;
+            }
+            if (dna.commonPhrases?.length) {
+                html += `<div style="margin-top:4px; font-size:11px; color:var(--text-muted);">常用句式：${dna.commonPhrases.slice(0, 6).join('、')}</div>`;
+            }
+            dnaEl.innerHTML = html;
+        } else {
+            dnaEl.textContent = '暂无风格 DNA，保存章节后自动生成';
+        }
+
+        // 渲染章节摘要
+        if (summaries && summaries.length > 0) {
+            const allHooks = summaries.flatMap(s => s.openHooks || []).filter(Boolean);
+            let html = '';
+            if (allHooks.length > 0) {
+                html += `<div style="margin-bottom:12px; padding:8px; background:rgba(99,102,241,0.06); border-radius:var(--radius-sm); border-left:3px solid var(--accent);">`;
+                html += `<div style="font-size:11px; font-weight:600; color:var(--accent); margin-bottom:4px;">🪝 未回收钩子（${allHooks.length}个）</div>`;
+                html += `<div style="font-size:11px; color:var(--text-secondary);">${allHooks.join('、')}</div>`;
+                html += `</div>`;
+            }
+            summaries.forEach(s => {
+                html += `<div style="margin-bottom:10px; padding:8px; background:var(--bg-tertiary); border-radius:var(--radius-sm);">`;
+                html += `<div style="font-weight:600; color:var(--text-primary); font-size:12px;">${s.title || '未命名'}</div>`;
+                if (s.summary) html += `<div style="margin-top:3px; color:var(--text-secondary); font-size:11px;">${s.summary}</div>`;
+                if (s.keyEvents?.length) html += `<div style="margin-top:3px; font-size:11px; color:var(--text-muted);">📌 ${s.keyEvents.join('、')}</div>`;
+                if (s.openHooks?.length) html += `<div style="margin-top:3px; font-size:11px; color:var(--accent);">🪝 ${s.openHooks.join('、')}</div>`;
+                html += `</div>`;
+            });
+            sumEl.innerHTML = html;
+        } else {
+            sumEl.textContent = '暂无章节摘要，保存章节后自动生成';
+        }
+    } catch (err) {
+        dnaEl.textContent = '加载失败: ' + (err.message || '未知错误');
+        sumEl.textContent = '';
     }
 }
 
