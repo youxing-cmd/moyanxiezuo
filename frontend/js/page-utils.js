@@ -99,18 +99,25 @@ function switchWritingView(view) {
     }
 }
 
-// 左栏tab切换
+// 树节点折叠/展开
+function toggleTreeNode(nodeId) {
+    const body = document.getElementById('treeBody-' + nodeId);
+    const toggle = document.getElementById('treeToggle-' + nodeId);
+    if (!body || !toggle) return;
+    const isExpanded = body.style.display !== 'none';
+    body.style.display = isExpanded ? 'none' : 'block';
+    toggle.textContent = isExpanded ? '▶' : '▼';
+}
+
+// 左栏tab切换（兼容旧代码：展开对应树节点并滚动）
 function switchLeftTab(tab) {
-    document.querySelectorAll('.left-tab').forEach(t => {
-        const isActive = t.dataset.tab === tab;
-        t.style.color = isActive ? 'var(--text-primary)' : 'var(--text-muted)';
-        t.style.borderBottom = isActive ? '2px solid var(--accent)' : '2px solid transparent';
-        t.style.fontWeight = isActive ? '600' : '400';
-    });
-    ['info', 'body', 'analysis'].forEach(id => {
-        const el = document.getElementById('left-' + id);
-        if (el) el.style.display = id === tab ? 'block' : 'none';
-    });
+    const body = document.getElementById('treeBody-' + tab);
+    const toggle = document.getElementById('treeToggle-' + tab);
+    if (body && toggle) {
+        body.style.display = 'block';
+        toggle.textContent = '▼';
+        body.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
 }
 
 // ========== Tab 切换（带过滤） ==========

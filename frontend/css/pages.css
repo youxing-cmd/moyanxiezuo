@@ -231,3 +231,38 @@
     background: var(--bg-hover) !important;
 }
 
+/* ===== 工作树 ===== */
+.tree-section {
+    margin-bottom: 2px;
+}
+
+.tree-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    user-select: none;
+    transition: background-color var(--transition);
+}
+
+.tree-header:hover {
+    background: var(--bg-hover);
+}
+
+.tree-toggle {
+    font-size: 10px;
+    color: var(--text-muted);
+    width: 12px;
+    text-align: center;
+    transition: transform var(--transition);
+}
+
+.tree-body {
+    padding-left: 4px;
+}
+

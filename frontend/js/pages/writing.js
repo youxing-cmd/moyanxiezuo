@@ -138,76 +138,86 @@ const writingViews = {
             <div style="display:flex; flex:1; overflow:hidden;">
                 <!-- 左栏 -->
                 <div id="writeColLeft" style="width:220px; flex-shrink:0; display:flex; flex-direction:column; background:var(--bg-secondary); border-right:1px solid var(--border);">
-                    <!-- 左栏tab -->
-                    <div style="display:flex; border-bottom:1px solid var(--border);">
-                        <button class="left-tab" data-tab="info" onclick="switchLeftTab('info')" style="flex:1; padding:10px 0; font-size:13px; color:var(--text-muted); background:transparent; border:none; cursor:pointer; border-bottom:2px solid transparent;">作品信息</button>
-                        <button class="left-tab active" data-tab="body" onclick="switchLeftTab('body')" style="flex:1; padding:10px 0; font-size:13px; color:var(--text-primary); background:transparent; border:none; cursor:pointer; border-bottom:2px solid var(--accent); font-weight:600;">正文</button>
-                        <button class="left-tab" data-tab="analysis" onclick="switchLeftTab('analysis')" style="flex:1; padding:10px 0; font-size:13px; color:var(--text-muted); background:transparent; border:none; cursor:pointer; border-bottom:2px solid transparent;">AI分析</button>
-                    </div>
-
-                    <!-- 左栏内容区 -->
-                    <div id="leftPanel" style="flex:1; overflow-y:auto; padding:12px;">
-                        <!-- 正文tab内容 -->
-                        <div id="left-body" style="display:block;">
-                            <!-- 灵感区域（作品灵感） -->
-                            <div style="margin-bottom:12px;">
-                                <div style="font-size:12px; font-weight:600; color:var(--text-primary); margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
-                                    <span>💡 灵感</span>
+                    <!-- 左栏内容区：工作树 -->
+                    <div id="leftPanel" style="flex:1; overflow-y:auto; padding:8px;">
+                        <!-- 作品信息节点 -->
+                        <div class="tree-header" onclick="toggleTreeNode('info')">
+                            <span class="tree-toggle" id="treeToggle-info">▼</span>
+                            <span>📚 作品信息</span>
+                        </div>
+                        <div class="tree-body" id="treeBody-info">
+                            <div id="left-info">
+                                <!-- 作品详情 -->
+                                <div id="workDetailSection" style="margin-bottom:12px;">
+                                    <div style="font-size:12px; font-weight:600; color:var(--text-primary); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                                        <span>📋 作品详情</span>
+                                        <button class="btn btn-ghost btn-sm" style="padding:2px 6px; font-size:11px;" onclick="enterWorkDetail('edit', currentWorkId)">编辑</button>
+                                    </div>
+                                    <div id="workDetailInfo" style="font-size:12px; color:var(--text-secondary); line-height:1.6;">
+                                        <div style="padding:6px 8px; color:var(--text-muted);">加载中...</div>
+                                    </div>
                                 </div>
-                                <!-- 作品灵感（可拖动展开） -->
-                                <div id="workInspirationPanel" style="border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden;">
-                                    <div style="padding:6px 10px; background:var(--bg-tertiary); display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleWorkInspiration()">
-                                        <span style="font-size:11px; color:var(--text-muted);">📌 作品灵感</span>
-                                        <div style="display:flex; align-items:center; gap:6px;">
-                                            <button style="font-size:11px; padding:2px 6px; border:none; background:transparent; color:var(--accent); cursor:pointer; border-radius:4px;" onclick="event.stopPropagation(); quoteWorkInspirationToChat()" title="引用到对话">💬 引用</button>
-                                            <span id="workInspirationToggle" style="font-size:11px; color:var(--text-muted);">▶</span>
+
+                                <!-- 总纲 -->
+                                <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
+                                    <div style="font-size:12px; font-weight:600; color:var(--text-primary); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                                        <span>📖 总纲</span>
+                                        <button class="btn btn-ghost btn-sm" style="padding:2px 6px; font-size:11px;" onclick="showOutlineForm()">+</button>
+                                    </div>
+                                    <div id="workOutlinesContainer">
+                                        <div style="padding:6px 8px; border-radius:var(--radius-sm); font-size:12px; color:var(--text-secondary); cursor:pointer;" onclick="showOutlineForm()">暂无总纲，点击新增</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 正文节点 -->
+                        <div class="tree-header" onclick="toggleTreeNode('body')">
+                            <span class="tree-toggle" id="treeToggle-body">▼</span>
+                            <span>📑 正文</span>
+                        </div>
+                        <div class="tree-body" id="treeBody-body">
+                            <div id="left-body">
+                                <!-- 灵感区域（作品灵感） -->
+                                <div style="margin-bottom:12px;">
+                                    <div style="font-size:12px; font-weight:600; color:var(--text-primary); margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+                                        <span>💡 灵感</span>
+                                    </div>
+                                    <!-- 作品灵感（可拖动展开） -->
+                                    <div id="workInspirationPanel" style="border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden;">
+                                        <div style="padding:6px 10px; background:var(--bg-tertiary); display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleWorkInspiration()">
+                                            <span style="font-size:11px; color:var(--text-muted);">📌 作品灵感</span>
+                                            <div style="display:flex; align-items:center; gap:6px;">
+                                                <button style="font-size:11px; padding:2px 6px; border:none; background:transparent; color:var(--accent); cursor:pointer; border-radius:4px;" onclick="event.stopPropagation(); quoteWorkInspirationToChat()" title="引用到对话">💬 引用</button>
+                                                <span id="workInspirationToggle" style="font-size:11px; color:var(--text-muted);">▶</span>
+                                            </div>
+                                        </div>
+                                        <div id="workInspirationContent" style="padding:8px 10px; font-size:12px; color:var(--text-secondary); line-height:1.6; max-height:60px; overflow:hidden; text-overflow:ellipsis; display:none; word-break:break-all;"></div>
+                                    </div>
+                                </div>
+
+                                <div style="border-top:1px solid var(--border); padding-top:12px; margin-bottom:16px;">
+                                    <div style="font-size:12px; font-weight:600; color:var(--text-primary); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                                        <span>📑 章节</span>
+                                        <div style="display:flex; gap:4px; align-items:center;">
+                                            <button class="btn btn-ghost btn-sm" id="btnChapterSort" style="padding:2px 6px; font-size:11px;" onclick="toggleChapterSort()" title="切换排序">↓</button>
+                                            <button class="btn btn-ghost btn-sm" style="padding:2px 6px; font-size:11px;" onclick="showCreateChapterModal()">+</button>
                                         </div>
                                     </div>
-                                    <div id="workInspirationContent" style="padding:8px 10px; font-size:12px; color:var(--text-secondary); line-height:1.6; max-height:60px; overflow:hidden; text-overflow:ellipsis; display:none; word-break:break-all;"></div>
-                                </div>
-                            </div>
-
-                            <div style="border-top:1px solid var(--border); padding-top:12px; margin-bottom:16px;">
-                                <div style="font-size:12px; font-weight:600; color:var(--text-primary); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-                                    <span>📑 章节</span>
-                                    <div style="display:flex; gap:4px; align-items:center;">
-                                        <button class="btn btn-ghost btn-sm" id="btnChapterSort" style="padding:2px 6px; font-size:11px;" onclick="toggleChapterSort()" title="切换排序">↓</button>
-                                        <button class="btn btn-ghost btn-sm" style="padding:2px 6px; font-size:11px;" onclick="showCreateChapterModal()">+</button>
+                                    <div id="chapterList">
+                                        <div style="padding:8px; text-align:center; color:var(--text-muted); font-size:12px;">加载中...</div>
                                     </div>
                                 </div>
-                                <div id="chapterList">
-                                    <div style="padding:8px; text-align:center; color:var(--text-muted); font-size:12px;">加载中...</div>
-                                </div>
                             </div>
                         </div>
 
-                        <!-- 作品信息tab内容 -->
-                        <div id="left-info" style="display:none;">
-                            <!-- 作品详情 -->
-                            <div id="workDetailSection" style="margin-bottom:12px;">
-                                <div style="font-size:12px; font-weight:600; color:var(--text-primary); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-                                    <span>📋 作品详情</span>
-                                    <button class="btn btn-ghost btn-sm" style="padding:2px 6px; font-size:11px;" onclick="enterWorkDetail('edit', currentWorkId)">编辑</button>
-                                </div>
-                                <div id="workDetailInfo" style="font-size:12px; color:var(--text-secondary); line-height:1.6;">
-                                    <div style="padding:6px 8px; color:var(--text-muted);">加载中...</div>
-                                </div>
-                            </div>
-
-                            <!-- 总纲 -->
-                            <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
-                                <div style="font-size:12px; font-weight:600; color:var(--text-primary); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-                                    <span>📖 总纲</span>
-                                    <button class="btn btn-ghost btn-sm" style="padding:2px 6px; font-size:11px;" onclick="showOutlineForm()">+</button>
-                                </div>
-                                <div id="workOutlinesContainer">
-                                    <div style="padding:6px 8px; border-radius:var(--radius-sm); font-size:12px; color:var(--text-secondary); cursor:pointer;" onclick="showOutlineForm()">暂无总纲，点击新增</div>
-                                </div>
-                            </div>
+                        <!-- AI分析节点 -->
+                        <div class="tree-header" onclick="toggleTreeNode('analysis')">
+                            <span class="tree-toggle" id="treeToggle-analysis">▼</span>
+                            <span>🤖 AI分析</span>
                         </div>
-
-                        <!-- AI分析tab内容 -->
-                        <div id="left-analysis" style="display:none;">
+                        <div class="tree-body" id="treeBody-analysis">
+                            <div id="left-analysis">
                             <div style="font-size:12px; font-weight:600; color:var(--text-primary); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
                                 <span>🤖 AI 智能分析</span>
                                 <div style="display:flex; gap:4px;">
