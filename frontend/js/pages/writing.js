@@ -254,6 +254,7 @@ const writingViews = {
                         </div>
                     </div>
                 </div>
+            </div>
 
                 <!-- 左-中 拖拽手柄 -->
                 <div class="resize-handle" data-resize="left" style="width:4px; cursor:col-resize; background:transparent; flex-shrink:0; z-index:10; position:relative;">
