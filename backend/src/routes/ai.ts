@@ -1676,5 +1676,27 @@ aiRouter.post('/corrections', async (c) => {
   return c.json({ success: true });
 });
 
+// POST /api/ai/debug/preview-context — dry-run ContextBuilder（仅开发环境，不调用 LLM、不扣积分）
+const previewContextSchema = z.object({
+  workId: z.number(),
+  chapterId: z.number().optional(),
+  taskType: z.enum(['chat', 'continue', 'polish', 'outline', 'chapter_review', 'character_check']),
+  currentText: z.string().optional(),
+  selectedText: z.string().optional(),
+});
+
+aiRouter.post('/debug/preview-context', async (c) => {
+  if (process.env.NODE_ENV === 'production') {
+    return c.json({ error: '生产环境不可用' }, 403);
+  }
+  const body = await c.req.json();
+  const parsed = previewContextSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: '参数错误' }, 400);
+
+  const userId = c.get('userId');
+  const ctx = await buildContext({ userId, ...parsed.data });
+  return c.json(ctx);
+});
+
 export { TOOL_PROMPTS, DEFAULT_TOOL_PROMPTS, STYLE_PROMPTS };
 export default aiRouter;

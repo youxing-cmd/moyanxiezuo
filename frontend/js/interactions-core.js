@@ -425,6 +425,9 @@ async function initPageInteractions(page) {
         // 初始化 Agent 模式 UI
         updateAgentModeUI();
 
+        // 初始化调试面板（仅 ?debug=1）
+        setupDebugPanel();
+
         // 恢复字体和字号设置
         let editorArea = document.getElementById('editorArea');
         const savedFont = localStorage.getItem('jz_editor_font');
@@ -2266,5 +2269,48 @@ function updateAgentModeUI() {
     if (hint) hint.textContent = isAuto ? '由 AI 自动选择模型和工具' : '手动选择模型和工具';
     if (modelPicker) modelPicker.style.display = isAuto ? 'none' : '';
     if (toolPicker) toolPicker.style.display = isAuto ? 'none' : '';
+}
+
+// 调试面板（仅 ?debug=1 时显示，生产环境不可见）
+function setupDebugPanel() {
+    if (new URLSearchParams(location.search).get('debug') !== '1') return;
+
+    const workspace = document.querySelector('.writing-workspace');
+    if (!workspace) return;
+
+    // 避免重复添加
+    if (workspace.querySelector('.debug-panel-btn')) return;
+
+    const btn = document.createElement('button');
+    btn.className = 'debug-panel-btn';
+    btn.textContent = '🔍 调试';
+    btn.style.cssText = 'position:absolute; top:8px; right:8px; padding:4px 10px; font-size:11px; border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); border-radius:4px; cursor:pointer; z-index:999;';
+    btn.onclick = async () => {
+        if (!currentWorkId) { showToast('请先选择作品', 'warning'); return; }
+        try {
+            const res = await api('/ai/debug/preview-context', {
+                method: 'POST',
+                body: {
+                    workId: Number(currentWorkId),
+                    chapterId: currentChapterId || undefined,
+                    taskType: 'continue',
+                    currentText: document.getElementById('editorArea')?.textContent?.slice(-500) || '',
+                }
+            });
+            showModal('ContextBuilder 预览', `
+                <div style="max-height:60vh; overflow-y:auto; font-size:12px; line-height:1.6;">
+                    <div style="color:var(--accent); font-weight:600; margin-bottom:8px;">systemContext (${res.systemContext?.length || 0} 字)</div>
+                    <pre style="white-space:pre-wrap; background:var(--bg-tertiary); padding:8px; border-radius:4px; margin-bottom:12px;">${escapeHtml(res.systemContext || '')}</pre>
+                    <div style="color:var(--accent); font-weight:600; margin-bottom:8px;">userContext (${res.userContext?.length || 0} 字)</div>
+                    <pre style="white-space:pre-wrap; background:var(--bg-tertiary); padding:8px; border-radius:4px; margin-bottom:12px;">${escapeHtml(res.userContext || '')}</pre>
+                    <div style="color:var(--text-muted); font-size:11px;">usedTables: ${(res.usedTables || []).join(', ')}</div>
+                </div>
+            `);
+        } catch (err) {
+            showToast('调试请求失败: ' + (err.message || '未知错误'), 'danger');
+        }
+    };
+    workspace.style.position = 'relative';
+    workspace.appendChild(btn);
 }
 
