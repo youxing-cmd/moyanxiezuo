@@ -275,6 +275,10 @@ const writingViews = {
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                 去AI味
                             </button>
+                            <button class="ai-tool-btn" id="btnWorkMemory" onclick="switchToolTab('memory');" style="padding:6px 14px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--text-secondary); font-size:12px; cursor:pointer; display:flex; align-items:center; gap:4px;">
+                                <span>🧠</span>
+                                记忆
+                            </button>
                         </div>
                         <div style="display:flex; gap:16px; align-items:center;">
                             <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted); cursor:pointer;">
