@@ -1,137 +1,111 @@
     pages.writing = () => `
         <div class="writing-workspace" style="display:flex; flex-direction:column; height:calc(100vh - 72px); margin:-24px -24px 0;">
-            <!-- 顶部信息栏 -->
+            <!-- 顶部栏 -->
             <div class="writing-topbar">
                 <div class="writing-topbar-left">
+                    <span class="writing-topbar-logo">九章</span>
                     <span id="writingWorkTitle" class="writing-topbar-title">加载中...</span>
+                    <div class="writing-topbar-sep"></div>
                     <span id="writingWorkMeta" class="writing-topbar-meta">...</span>
                     <span id="writingWordCount" class="writing-topbar-meta">...</span>
                 </div>
                 <div class="writing-topbar-right">
-                    <button class="btn btn-ghost btn-sm" id="btnSaveChapter" onclick="saveCurrentChapter()">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                        保存
-                    </button>
-                    <button class="btn btn-ghost btn-sm" onclick="exportChapter(currentWorkId, currentChapterId)">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        导出
-                    </button>
+                    <button class="topbar-btn" id="btnSaveChapter" onclick="saveCurrentChapter()">保存</button>
+                    <button class="topbar-btn" onclick="exportChapter(currentWorkId, currentChapterId)">导出本章</button>
                 </div>
             </div>
 
             <!-- 三栏主体 -->
-            <div style="display:flex; flex:1; overflow:hidden;">
-                <!-- 左栏 -->
+            <div class="editor-three-col">
+                <!-- 左栏：章节树 -->
                 <div id="writeColLeft" class="col-left">
-                    <div id="leftPanel" style="flex:1; overflow-y:auto; padding:8px;">
-                        <!-- 作品信息 -->
-                        <div class="tree-header" onclick="toggleTreeNode('info')">
-                            <span class="tree-toggle" id="treeToggle-info">▶</span>
-                            <span>作品信息</span>
+                    <div class="chapter-tree">
+                        <div class="chapter-tree-header">
+                            <span>章节</span>
+                            <button onclick="showCreateChapterModal()" title="新建章节">+</button>
                         </div>
-                        <div class="tree-body" id="treeBody-info">
-                            <div id="left-info">
-                                <div id="workDetailSection" style="margin-bottom:12px; padding:4px 8px;">
-                                    <div style="font-size:12px; font-weight:600; color:var(--text-primary); margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
-                                        <span>作品详情</span>
-                                        <button class="btn btn-ghost btn-sm" style="padding:2px 6px; font-size:11px;" onclick="enterWorkDetail('edit', currentWorkId)">编辑</button>
-                                    </div>
-                                    <div id="workDetailInfo" style="font-size:12px; color:var(--text-secondary); line-height:1.6;">
-                                        <div style="color:var(--text-muted);">加载中...</div>
-                                    </div>
+                        <div class="chapter-tree-body" id="leftPanel">
+                            <!-- 章节列表 -->
+                            <div id="chapterList">
+                                <div style="padding:8px 12px; text-align:center; color:var(--text-muted); font-size:12px;">加载中...</div>
+                            </div>
+
+                            <!-- 作品灵感 -->
+                            <div class="tree-section-header" onclick="toggleWorkInspiration()">
+                                <span class="vol-arrow" id="workInspirationToggle">▶</span>
+                                <span class="tree-dot" style="background:var(--warning)"></span>
+                                <span style="flex:1">作品灵感</span>
+                                <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); quoteWorkInspirationToChat()">引用</button>
+                            </div>
+                            <div id="workInspirationContent" style="display:none; padding:3px 12px 3px 24px; font-size:11px; color:var(--text-secondary); line-height:1.5; max-height:50px; overflow:hidden; word-break:break-all;"></div>
+
+                            <!-- 作品详情 -->
+                            <div class="tree-section-header" onclick="toggleTreeNode('info')">
+                                <span class="vol-arrow" id="treeToggle-info">▶</span>
+                                <span class="tree-dot" style="background:var(--accent-light)"></span>
+                                <span style="flex:1">作品信息</span>
+                                <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); enterWorkDetail('edit', currentWorkId)">编辑</button>
+                            </div>
+                            <div class="tree-section-body" id="treeBody-info" style="display:none;">
+                                <div id="workDetailInfo" style="padding:3px 12px 3px 24px; font-size:11px; color:var(--text-secondary); line-height:1.6;">
+                                    <div style="color:var(--text-muted);">加载中...</div>
                                 </div>
-                                <div style="border-top:1px solid var(--border); padding-top:10px; margin-top:8px;">
-                                    <div style="font-size:12px; font-weight:600; color:var(--text-primary); margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; padding:0 8px;">
+                                <!-- 总纲 -->
+                                <div style="padding:3px 12px 3px 24px; margin-top:4px;">
+                                    <div style="font-size:11px; font-weight:600; color:var(--text-muted); margin-bottom:4px; display:flex; justify-content:space-between; align-items:center;">
                                         <span>总纲</span>
-                                        <button class="btn btn-ghost btn-sm" style="padding:2px 6px; font-size:11px;" onclick="showOutlineForm()">+</button>
+                                        <button class="btn btn-ghost btn-sm" style="padding:0 4px; font-size:10px;" onclick="showOutlineForm()">+</button>
                                     </div>
                                     <div id="workOutlinesContainer">
-                                        <div style="padding:4px 8px; font-size:12px; color:var(--text-muted); cursor:pointer;" onclick="showOutlineForm()">暂无总纲</div>
+                                        <div style="font-size:11px; color:var(--text-muted); cursor:pointer;" onclick="showOutlineForm()">暂无总纲</div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- 正文 -->
-                        <div class="tree-header" onclick="toggleTreeNode('body')">
-                            <span class="tree-toggle" id="treeToggle-body">▶</span>
-                            <span>正文</span>
-                        </div>
-                        <div class="tree-body" id="treeBody-body">
-                            <div id="left-body">
-                                <!-- 作品灵感 -->
-                                <div style="margin-bottom:8px; padding:0 4px;">
-                                    <div id="workInspirationPanel" style="border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden;">
-                                        <div style="padding:5px 8px; background:var(--bg-tertiary); display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleWorkInspiration()">
-                                            <span style="font-size:11px; color:var(--text-muted);">作品灵感</span>
-                                            <div style="display:flex; align-items:center; gap:4px;">
-                                                <button style="font-size:10px; padding:1px 4px; border:none; background:transparent; color:var(--accent); cursor:pointer;" onclick="event.stopPropagation(); quoteWorkInspirationToChat()">引用</button>
-                                                <span id="workInspirationToggle" style="font-size:10px; color:var(--text-muted);">▶</span>
-                                            </div>
-                                        </div>
-                                        <div id="workInspirationContent" style="padding:6px 8px; font-size:11px; color:var(--text-secondary); line-height:1.5; max-height:50px; overflow:hidden; display:none; word-break:break-all;"></div>
-                                    </div>
-                                </div>
-
-                                <!-- 章节列表 -->
-                                <div style="padding:4px;">
-                                    <div style="font-size:12px; font-weight:600; color:var(--text-primary); margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; padding:2px 4px;">
-                                        <span>章节</span>
-                                        <div style="display:flex; gap:4px;">
-                                            <button class="btn btn-ghost btn-sm" id="btnChapterSort" style="padding:1px 4px; font-size:11px;" onclick="toggleChapterSort()">↓</button>
-                                            <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:11px;" onclick="showCreateChapterModal()">+</button>
-                                        </div>
-                                    </div>
-                                    <div id="chapterList">
-                                        <div style="padding:8px; text-align:center; color:var(--text-muted); font-size:12px;">加载中...</div>
-                                    </div>
-                                </div>
+                            <!-- AI 文件 -->
+                            <div class="tree-section-header" onclick="toggleTreeNode('artifacts')">
+                                <span class="vol-arrow" id="treeToggle-artifacts">▶</span>
+                                <span class="tree-dot" style="background:var(--warning)"></span>
+                                <span style="flex:1">AI 文件</span>
                             </div>
-                        </div>
-
-                        <!-- AI 文件 -->
-                        <div class="tree-header" onclick="toggleTreeNode('artifacts')">
-                            <span class="tree-toggle" id="treeToggle-artifacts">▶</span>
-                            <span>AI 文件</span>
-                        </div>
-                        <div class="tree-body" id="treeBody-artifacts">
-                            <div id="left-artifacts" style="padding:0 4px;">
+                            <div class="tree-section-body" id="treeBody-artifacts" style="display:none;">
                                 <div id="artifactsList">
-                                    <div style="padding:4px 6px; font-size:11px; color:var(--text-muted);">对话中生成的内容会显示在这里</div>
+                                    <div style="padding:3px 12px 3px 24px; font-size:11px; color:var(--text-muted);">对话中生成的内容会显示在这里</div>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- AI 分析 -->
-                        <div class="tree-header" onclick="toggleTreeNode('analysis')">
-                            <span class="tree-toggle" id="treeToggle-analysis">▶</span>
-                            <span>AI 分析</span>
-                        </div>
-                        <div class="tree-body" id="treeBody-analysis">
-                            <div id="left-analysis" style="padding:0 4px;">
-                                <div style="display:flex; gap:4px; margin-bottom:8px; justify-content:flex-end;">
-                                    <button class="btn btn-ghost btn-sm" id="btnReAnalysis" style="padding:2px 6px; font-size:11px; display:none;" onclick="generateAIAnalysis()">重新拆书</button>
-                                    <button class="btn btn-primary btn-sm" id="btnAIAnalysis" style="padding:2px 6px; font-size:11px;" onclick="generateAIAnalysis()">AI拆书</button>
-                                </div>
-                                <div id="analysisTabs" style="display:none; margin-bottom:8px; border-bottom:1px solid var(--border);">
-                                    <div style="display:flex; gap:2px; overflow-x:auto; padding-bottom:1px;">
-                                        <button class="analysis-tab active" data-tab="all" onclick="switchAnalysisTab('all')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--accent); border-bottom:2px solid var(--accent); cursor:pointer; white-space:nowrap; font-weight:600;">全文</button>
-                                        <button class="analysis-tab" data-tab="coreConflict" onclick="switchAnalysisTab('coreConflict')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">核心矛盾</button>
-                                        <button class="analysis-tab" data-tab="coreEmotion" onclick="switchAnalysisTab('coreEmotion')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">核心情绪</button>
-                                        <button class="analysis-tab" data-tab="characterSetting" onclick="switchAnalysisTab('characterSetting')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">人物设定</button>
-                                        <button class="analysis-tab" data-tab="plotTrend" onclick="switchAnalysisTab('plotTrend')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">剧情走向</button>
-                                        <button class="analysis-tab" data-tab="cliffhanger" onclick="switchAnalysisTab('cliffhanger')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">卡点剧情</button>
+                            <!-- AI 分析 -->
+                            <div class="tree-section-header" onclick="toggleTreeNode('analysis')">
+                                <span class="vol-arrow" id="treeToggle-analysis">▶</span>
+                                <span class="tree-dot" style="background:var(--info, #3b82f6)"></span>
+                                <span style="flex:1">AI 分析</span>
+                                <button class="btn btn-ghost btn-sm" id="btnAIAnalysis" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); generateAIAnalysis()">拆书</button>
+                            </div>
+                            <div class="tree-section-body" id="treeBody-analysis" style="display:none;">
+                                <div style="padding:4px 8px;">
+                                    <div style="display:flex; gap:4px; margin-bottom:6px; justify-content:flex-end;">
+                                        <button class="btn btn-ghost btn-sm" id="btnReAnalysis" style="padding:1px 6px; font-size:10px; display:none;" onclick="generateAIAnalysis()">重新拆书</button>
                                     </div>
-                                </div>
-                                <div id="analysisActions" style="margin-bottom:6px; display:flex; gap:4px; justify-content:flex-end;">
-                                    <button class="btn btn-ghost btn-sm" style="padding:1px 6px; font-size:10px;" onclick="quoteAIAnalysisToChat()">引用</button>
-                                    <button class="btn btn-ghost btn-sm" style="padding:1px 6px; font-size:10px;" onclick="copyAIAnalysis()">复制</button>
-                                    <button class="btn btn-primary btn-sm" style="padding:1px 6px; font-size:10px;" onclick="saveAIAnalysisToInspiration()">收藏</button>
-                                </div>
-                                <div id="aiAnalysisContent" style="font-size:11px; color:var(--text-secondary); line-height:1.6;">
-                                    <div style="padding:8px; text-align:center; color:var(--text-muted); font-size:11px;">
-                                        <div>暂无分析数据</div>
-                                        <div style="font-size:10px; margin-top:2px;">点击「AI拆书」生成</div>
+                                    <div id="analysisTabs" style="display:none; margin-bottom:6px; border-bottom:1px solid var(--border);">
+                                        <div style="display:flex; gap:2px; overflow-x:auto; padding-bottom:1px;">
+                                            <button class="analysis-tab active" data-tab="all" onclick="switchAnalysisTab('all')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--accent); border-bottom:2px solid var(--accent); cursor:pointer; white-space:nowrap; font-weight:600;">全文</button>
+                                            <button class="analysis-tab" data-tab="coreConflict" onclick="switchAnalysisTab('coreConflict')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">核心矛盾</button>
+                                            <button class="analysis-tab" data-tab="coreEmotion" onclick="switchAnalysisTab('coreEmotion')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">核心情绪</button>
+                                            <button class="analysis-tab" data-tab="characterSetting" onclick="switchAnalysisTab('characterSetting')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">人物设定</button>
+                                            <button class="analysis-tab" data-tab="plotTrend" onclick="switchAnalysisTab('plotTrend')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">剧情走向</button>
+                                            <button class="analysis-tab" data-tab="cliffhanger" onclick="switchAnalysisTab('cliffhanger')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">卡点剧情</button>
+                                        </div>
+                                    </div>
+                                    <div id="analysisActions" style="margin-bottom:6px; display:flex; gap:4px; justify-content:flex-end;">
+                                        <button class="btn btn-ghost btn-sm" style="padding:1px 6px; font-size:10px;" onclick="quoteAIAnalysisToChat()">引用</button>
+                                        <button class="btn btn-ghost btn-sm" style="padding:1px 6px; font-size:10px;" onclick="copyAIAnalysis()">复制</button>
+                                        <button class="btn btn-primary btn-sm" style="padding:1px 6px; font-size:10px;" onclick="saveAIAnalysisToInspiration()">收藏</button>
+                                    </div>
+                                    <div id="aiAnalysisContent" style="font-size:11px; color:var(--text-secondary); line-height:1.6;">
+                                        <div style="padding:8px; text-align:center; color:var(--text-muted); font-size:11px;">
+                                            <div>暂无分析数据</div>
+                                            <div style="font-size:10px; margin-top:2px;">点击「拆书」生成</div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -144,83 +118,68 @@
 
                 <!-- 中栏：编辑器 -->
                 <div class="col-center">
-                    <!-- AI 工具栏 -->
-                    <div class="editor-ai-bar">
-                        <div class="ai-bar-left">
-                            <button class="ai-tool-btn active" data-action="continue">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                                续写正文
-                            </button>
-                            <button class="ai-tool-btn" data-action="continue-plot">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h20"/><path d="M2 12l5-5"/><path d="M2 12l5 5"/></svg>
-                                续写情节
-                            </button>
-                            <button class="ai-tool-btn" data-action="replace">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
-                                替换
-                            </button>
-                            <button class="ai-tool-btn" data-action="detect">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                                纠错
-                            </button>
-                            <button class="ai-tool-btn" data-action="de-ai">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                去AI味
-                            </button>
-                            <button class="ai-tool-btn" id="btnWorkMemory" onclick="switchToolTab('memory');">记忆</button>
+                    <div class="editor-panel">
+                        <!-- AI 工具栏 -->
+                        <div class="editor-ai-bar">
+                            <div class="ai-bar-left">
+                                <button class="ai-tool-btn active" data-action="continue">续写正文</button>
+                                <button class="ai-tool-btn" data-action="continue-plot">续写情节</button>
+                                <button class="ai-tool-btn" data-action="replace">替换</button>
+                                <button class="ai-tool-btn" data-action="detect">纠错</button>
+                                <button class="ai-tool-btn" data-action="de-ai">去AI味</button>
+                                <button class="ai-tool-btn" id="btnWorkMemory" onclick="switchToolTab('memory');">记忆</button>
+                            </div>
+                            <div class="ai-bar-right">
+                                <label class="toggle-row">
+                                    <span>跨章滚动</span>
+                                    <input type="checkbox" id="crossChapterScroll" style="accent-color:var(--accent);" onchange="toggleCrossChapterScroll(this.checked)">
+                                </label>
+                                <label class="toggle-row">
+                                    <span>智能补全</span>
+                                    <input type="checkbox" id="smartComplete" style="accent-color:var(--accent);">
+                                </label>
+                            </div>
                         </div>
-                        <div class="ai-bar-right">
-                            <label class="toggle-row">
-                                <span>跨章滚动</span>
-                                <input type="checkbox" id="crossChapterScroll" style="accent-color:var(--accent);" onchange="toggleCrossChapterScroll(this.checked)">
-                            </label>
-                            <label class="toggle-row">
-                                <span>智能补全</span>
-                                <input type="checkbox" id="smartComplete" style="accent-color:var(--accent);">
-                            </label>
+
+                        <!-- 格式工具栏 -->
+                        <div class="editor-format-bar">
+                            <button class="tb-btn" title="撤销" onclick="document.execCommand('undo')">↩</button>
+                            <button class="tb-btn" title="重做" onclick="document.execCommand('redo')">↪</button>
+                            <div class="tb-sep"></div>
+                            <button class="tb-btn" style="font-weight:600;" title="粗体" onclick="document.execCommand('bold')">B</button>
+                            <button class="tb-btn" style="font-style:italic;" title="斜体" onclick="document.execCommand('italic')">I</button>
+                            <button class="tb-btn" style="text-decoration:underline;" title="下划线" onclick="document.execCommand('underline')">U</button>
+                            <div class="tb-sep"></div>
+                            <button class="tb-btn" title="引用" onclick="document.execCommand('formatBlock','','blockquote')">❝</button>
+                            <button class="tb-btn" title="列表" onclick="document.execCommand('insertUnorderedList')">☰</button>
+                            <div class="tb-sep"></div>
+                            <button class="tb-btn" id="btnOpenFindReplace" title="查找替换" onclick="openFindReplaceDialog()">🔍</button>
+                            <button class="tb-btn" id="btnClearFormat" title="清除格式" onclick="document.execCommand('removeFormat')">✂</button>
+                            <div class="tb-spacer"></div>
+                            <button class="tb-btn" id="btnChapterVersions" onclick="if(!currentChapterId){showToast('请先选择一个章节','warning');return;}showChapterVersions(currentChapterId);">历史</button>
+                            <select id="editorFontSelect" class="format-select">
+                                <option value="default">默认字体</option>
+                                <option value="Noto Serif SC, Georgia, serif">宋体</option>
+                                <option value="Noto Sans SC, system-ui, sans-serif">黑体</option>
+                                <option value="SimSun, STSong, serif">仿宋</option>
+                                <option value="KaiTi, STKaiti, serif">楷体</option>
+                            </select>
+                            <select id="editorSizeSelect" class="format-select">
+                                <option value="14px">小</option>
+                                <option value="15px" selected>标准</option>
+                                <option value="17px">大</option>
+                                <option value="19px">超大</option>
+                            </select>
                         </div>
-                    </div>
 
-                    <!-- 编辑器工具栏 -->
-                    <div class="editor-format-bar">
-                        <button class="editor-tool-btn" title="撤销" onclick="document.execCommand('undo')">↩</button>
-                        <button class="editor-tool-btn" title="重做" onclick="document.execCommand('redo')">↪</button>
-                        <div class="format-sep"></div>
-                        <button class="editor-tool-btn" title="标题" onclick="document.execCommand('formatBlock','','h1')" style="font-size:12px; font-weight:600;">H1</button>
-                        <button class="editor-tool-btn" title="粗体" onclick="document.execCommand('bold')" style="font-weight:bold;">B</button>
-                        <button class="editor-tool-btn" title="斜体" onclick="document.execCommand('italic')" style="font-style:italic;">I</button>
-                        <button class="editor-tool-btn" title="下划线" onclick="document.execCommand('underline')" style="text-decoration:underline;">U</button>
-                        <button class="editor-tool-btn" title="删除线" onclick="document.execCommand('strikeThrough')" style="text-decoration:line-through;">S</button>
-                        <div class="format-sep"></div>
-                        <button class="editor-tool-btn" title="引用" onclick="document.execCommand('formatBlock','','blockquote')">❝</button>
-                        <button class="editor-tool-btn" title="列表" onclick="document.execCommand('insertUnorderedList')">☰</button>
-                        <div class="format-sep"></div>
-                        <button class="editor-tool-btn" id="btnOpenFindReplace" title="查找替换" onclick="openFindReplaceDialog()">🔍</button>
-                        <button class="editor-tool-btn" id="btnClearFormat" title="清除格式" onclick="document.execCommand('removeFormat')">✂</button>
-                        <div style="flex:1;"></div>
-                        <button class="editor-tool-btn" id="btnChapterVersions" title="历史版本" onclick="if(!currentChapterId){showToast('请先选择一个章节','warning');return;}showChapterVersions(currentChapterId);" style="padding:4px 10px; font-size:12px; gap:4px;">
-                            历史
-                        </button>
-                        <select id="editorFontSelect" class="format-select">
-                            <option value="default">默认字体</option>
-                            <option value="Noto Serif SC, Georgia, serif">宋体</option>
-                            <option value="Noto Sans SC, system-ui, sans-serif">黑体</option>
-                            <option value="SimSun, STSong, serif">仿宋</option>
-                            <option value="KaiTi, STKaiti, serif">楷体</option>
-                        </select>
-                        <select id="editorSizeSelect" class="format-select">
-                            <option value="14px">小</option>
-                            <option value="15px" selected>标准</option>
-                            <option value="17px">大</option>
-                            <option value="19px">超大</option>
-                        </select>
-                    </div>
-
-                    <!-- 编辑器内容区 -->
-                    <div id="editorScrollContainer" class="editor-content-area">
-                        <div id="editorArea" contenteditable="true" class="editor-body-text">
-                            <h1 id="editorTitle" class="editor-title">选择一个章节开始写作</h1>
-                            <p id="editorPlaceholder" style="color:var(--text-muted);">在左侧章节列表中选择一个章节，或创建新章节</p>
+                        <!-- 编辑区 -->
+                        <div id="editorScrollContainer" class="editor-content">
+                            <div class="editor-inner">
+                                <div id="editorArea" contenteditable="true">
+                                    <div class="chapter-title" id="editorTitle">选择一个章节开始写作</div>
+                                    <p id="editorPlaceholder" style="color:var(--text-muted); text-indent:0;">在左侧章节列表中选择一个章节，或创建新章节</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -229,79 +188,80 @@
                 <div class="col-resizer" data-resize="right"></div>
 
                 <!-- 右栏：AI 对话 -->
-                <div id="writeColRight" class="col-right" style="position:relative; z-index:100;">
-                    <!-- Tab -->
-                    <div style="display:flex; border-bottom:1px solid var(--border);">
-                        <button class="right-tab">灵感卡片</button>
-                        <button class="right-tab active">AI 对话</button>
-                    </div>
+                <div id="writeColRight" class="col-right">
+                    <div class="chat-panel">
+                        <!-- 顶部 -->
+                        <div class="chat-topbar">
+                            <div class="chat-tabs">
+                                <button class="chat-tab active">Chat</button>
+                                <button class="chat-tab">Continue</button>
+                                <button class="chat-tab">Polish</button>
+                            </div>
+                            <div class="chat-topbar-right">
+                                <button class="topbar-btn" onclick="showToast('工具库','info')">工具</button>
+                            </div>
+                        </div>
 
-                    <!-- AI 对话内容 -->
-                    <div id="aiChatDialogBody" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
-                        <!-- 消息列表 -->
-                        <div id="aiChatMessages" class="chat-dialog-resizable" style="flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:12px; min-height:80px;"></div>
+                        <!-- 对话区 -->
+                        <div id="aiChatDialogBody" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+                            <div id="aiChatMessages" class="chat-messages"></div>
 
-                        <!-- 输入区 -->
-                        <div class="ai-chat-input-area">
-                            <div style="display:flex; gap:8px; margin-bottom:8px;">
-                                <button class="ai-input-tool" onclick="showToast('上传功能开发中','info')">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                                    上传文件
-                                </button>
-                                <button class="ai-input-tool" id="chatRefBtn">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                                    @引用
-                                </button>
-                            </div>
-                            <!-- 输入框拖拽条 -->
-                            <div id="chatInputResizeHandle" style="height:6px; cursor:ns-resize; display:flex; align-items:center; justify-content:center; margin:0 -12px;" title="拖动调整高度">
-                                <div style="width:40px; height:3px; background:var(--border); border-radius:2px;"></div>
-                            </div>
-                            <textarea id="aiChatInput" class="ai-input-box" placeholder="输入「/」唤起工具..." style="width:100%; min-height:60px; resize:none;"></textarea>
-                            <!-- AI 模式 -->
-                            <div id="agentModeBar" class="ai-input-bottom">
-                                <div style="display:flex; align-items:center; gap:6px;">
-                                    <span style="font-size:11px; color:var(--text-muted);">AI 模式</span>
-                                    <button id="agentModeBtn" onclick="toggleAgentMode()" style="padding:2px 10px; border-radius:10px; border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); font-size:11px; cursor:pointer;">手动</button>
-                                </div>
-                                <span id="agentModeHint" style="font-size:11px; color:var(--text-muted);">手动选择模型和工具</span>
-                            </div>
-                            <!-- 模型 + 工具 + 发送 -->
-                            <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
-                                <div id="chatModelPicker" style="position:relative; flex:1;">
-                                    <button id="chatModelTrigger" style="padding:4px 10px; border-radius:16px; border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); font-size:11px; cursor:pointer; width:100%; display:inline-flex; align-items:center; justify-content:center; gap:5px;">
-                                        <span id="chatModelTriggerName">默认模型</span><span id="chatModelArrow" style="font-size:10px;">▼</span>
-                                    </button>
-                                    <div id="chatModelDropdown" style="position:absolute; left:0; bottom:calc(100% + 6px); min-width:180px; max-height:260px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:10px; display:none; flex-direction:column; box-shadow:0 8px 24px rgba(0,0,0,0.15); z-index:9999; overflow:hidden;">
-                                        <div id="chatModelDropdownList" style="padding:8px 0; overflow-y:auto; max-height:260px;"></div>
-                                        <div style="padding:8px 12px; border-top:1px solid var(--border);">
-                                            <button class="btn btn-ghost btn-sm" style="width:100%; font-size:11px;" onclick="switchPage('modelConfigs')">选择模型</button>
-                                        </div>
+                            <!-- 输入区 -->
+                            <div class="chat-input-area">
+                                <div class="chat-input-box">
+                                    <div class="chat-input-row">
+                                        <textarea id="aiChatInput" class="chat-input" rows="1" placeholder="输入指令，用 @ 引用文件..."></textarea>
+                                        <button class="chat-send-btn" id="aiChatSend">↑</button>
+                                    </div>
+                                    <div class="chat-attach-bar">
+                                        <button class="attach-btn" onclick="showToast('上传功能开发中','info')">File</button>
+                                        <button class="attach-btn" id="chatRefBtn">@引用</button>
                                     </div>
                                 </div>
-                                <select id="chatToolSelect" style="display:none;">
-                                    <option value="default">九章默认工具</option>
-                                </select>
-                                <div id="chatToolPicker" style="position:relative; flex:1;">
-                                    <button id="chatToolTrigger" style="padding:4px 10px; border-radius:16px; border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); font-size:11px; cursor:pointer; width:100%; display:inline-flex; align-items:center; justify-content:center; gap:5px;">
-                                        <span id="chatToolTriggerName">默认工具</span><span id="chatToolArrow" style="font-size:10px;">▼</span>
-                                    </button>
-                                    <div id="chatToolDropdown" style="position:absolute; left:50%; transform:translateX(-50%); bottom:calc(100% + 6px); width:380px; max-height:320px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:10px; display:none; flex-direction:column; box-shadow:0 8px 24px rgba(0,0,0,0.15); z-index:9999; overflow:hidden;">
-                                        <div style="padding:10px 12px; overflow-y:auto;">
-                                            <div style="display:flex; gap:12px;">
-                                                <div style="flex:1; min-width:0;">
-                                                    <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px; font-weight:600;">我的收藏</div>
-                                                    <div id="chatToolDropdownCustom" style="display:grid; grid-template-columns:1fr; gap:5px;"></div>
-                                                </div>
-                                                <div style="flex:1.8; min-width:0;">
-                                                    <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px; font-weight:600;">官方推荐</div>
-                                                    <div id="chatToolDropdownOfficial" style="display:grid; grid-template-columns:1fr; gap:5px;"></div>
+                                <div class="chat-hint">Enter 发送 · Shift+Enter 换行 · @ 引用文件</div>
+
+                                <!-- AI 模式 + 模型 + 工具 -->
+                                <div id="agentModeBar" style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+                                    <span style="font-size:11px; color:var(--text-muted);">模式</span>
+                                    <button id="agentModeBtn" onclick="toggleAgentMode()" style="padding:2px 10px; border-radius:10px; border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); font-size:11px; cursor:pointer;">手动</button>
+                                    <span id="agentModeHint" style="font-size:11px; color:var(--text-muted); flex:1;">手动选择模型和工具</span>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+                                    <div id="chatModelPicker" style="position:relative; flex:1;">
+                                        <button id="chatModelTrigger" style="padding:3px 8px; border-radius:12px; border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); font-size:11px; cursor:pointer; width:100%; display:inline-flex; align-items:center; justify-content:center; gap:4px;">
+                                            <span id="chatModelTriggerName">默认模型</span><span id="chatModelArrow" style="font-size:9px;">▼</span>
+                                        </button>
+                                        <div id="chatModelDropdown" style="position:absolute; left:0; bottom:calc(100% + 6px); min-width:180px; max-height:260px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:10px; display:none; flex-direction:column; box-shadow:0 8px 24px rgba(0,0,0,0.15); z-index:9999; overflow:hidden;">
+                                            <div id="chatModelDropdownList" style="padding:8px 0; overflow-y:auto; max-height:260px;"></div>
+                                            <div style="padding:8px 12px; border-top:1px solid var(--border);">
+                                                <button class="btn btn-ghost btn-sm" style="width:100%; font-size:11px;" onclick="switchPage('modelConfigs')">选择模型</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <select id="chatToolSelect" style="display:none;">
+                                        <option value="default">九章默认工具</option>
+                                    </select>
+                                    <div id="chatToolPicker" style="position:relative; flex:1;">
+                                        <button id="chatToolTrigger" style="padding:3px 8px; border-radius:12px; border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); font-size:11px; cursor:pointer; width:100%; display:inline-flex; align-items:center; justify-content:center; gap:4px;">
+                                            <span id="chatToolTriggerName">默认工具</span><span id="chatToolArrow" style="font-size:9px;">▼</span>
+                                        </button>
+                                        <div id="chatToolDropdown" style="position:absolute; left:50%; transform:translateX(-50%); bottom:calc(100% + 6px); width:380px; max-height:320px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:10px; display:none; flex-direction:column; box-shadow:0 8px 24px rgba(0,0,0,0.15); z-index:9999; overflow:hidden;">
+                                            <div style="padding:10px 12px; overflow-y:auto;">
+                                                <div style="display:flex; gap:12px;">
+                                                    <div style="flex:1; min-width:0;">
+                                                        <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px; font-weight:600;">我的收藏</div>
+                                                        <div id="chatToolDropdownCustom" style="display:grid; grid-template-columns:1fr; gap:5px;"></div>
+                                                    </div>
+                                                    <div style="flex:1.8; min-width:0;">
+                                                        <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px; font-weight:600;">官方推荐</div>
+                                                        <div id="chatToolDropdownOfficial" style="display:grid; grid-template-columns:1fr; gap:5px;"></div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                                <button class="btn btn-primary btn-sm" id="aiChatSend" style="padding:6px 16px; flex-shrink:0;">发送</button>
+                                <div id="chatInputResizeHandle" style="display:none;"></div>
                             </div>
                         </div>
                     </div>
