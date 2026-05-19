@@ -1352,7 +1352,49 @@ async function initPageInteractions(page) {
             }
         }
 
-        // 在 AI 气泡上方/下方插入工具调用 trace（独立兄弟节点，不被流式 textContent 覆盖）
+        // ===== Cursor 风格工具调用卡片 =====
+
+        // 工具分类
+        const READ_TOOLS = new Set(['get_full_text', 'get_selection', 'get_chapter_list', 'get_characters', 'get_outline', 'get_artifacts', 'read_artifact']);
+        const WRITE_TOOLS_TRACE = new Set(['replace_selection', 'insert_at_cursor', 'append_paragraph', 'find_and_replace']);
+        const CREATE_TOOLS = new Set(['create_artifact', 'update_artifact']);
+
+        function getToolCategory(name) {
+            if (READ_TOOLS.has(name)) return 'read';
+            if (WRITE_TOOLS_TRACE.has(name)) return 'write';
+            if (CREATE_TOOLS.has(name)) return 'create';
+            return 'other';
+        }
+
+        const TOOL_DISPLAY_NAMES = {
+            get_full_text: '读取正文',
+            get_selection: '读取选中内容',
+            get_chapter_list: '读取章节目录',
+            get_characters: '读取角色设定',
+            get_outline: '读取总纲',
+            get_artifacts: '读取AI文件列表',
+            read_artifact: '读取AI文件',
+            replace_selection: '修改选中段落',
+            insert_at_cursor: '插入内容',
+            append_paragraph: '追加段落',
+            find_and_replace: '查找替换',
+            create_artifact: '创建AI文件',
+            update_artifact: '更新AI文件',
+        };
+
+        function getToolDisplayName(name) {
+            return TOOL_DISPLAY_NAMES[name] || name;
+        }
+
+        function getToolIcon(name) {
+            const cat = getToolCategory(name);
+            if (cat === 'read') return '📖';
+            if (cat === 'write') return '✏️';
+            if (cat === 'create') return '📄';
+            return '🔧';
+        }
+
+        // 在 AI 气泡中插入工具调用卡片
         function ensureToolTraceContainer(aiBubble) {
             if (!aiBubble) return null;
             let trace = aiBubble.querySelector('.ai-tool-trace');
@@ -1368,6 +1410,69 @@ async function initPageInteractions(page) {
             }
             return trace;
         }
+
+        // 创建一轮工具调用的卡片
+        function createToolCallsCard(toolCalls) {
+            if (!toolCalls || toolCalls.length === 0) return null;
+
+            const reads = toolCalls.filter(t => t.category === 'read');
+            const writes = toolCalls.filter(t => t.category === 'write');
+            const creates = toolCalls.filter(t => t.category === 'create');
+
+            const parts = [];
+            if (reads.length > 0) parts.push(`读取 ${reads.length} 个文件`);
+            if (writes.length > 0) parts.push(`修改 ${writes.length} 处`);
+            if (creates.length > 0) parts.push(`创建 ${creates.length} 个文件`);
+            const summary = parts.join('，') || `${toolCalls.length} 次调用`;
+
+            const card = document.createElement('div');
+            card.className = 'tool-call-card';
+
+            let detailsHtml = '';
+            for (const tc of toolCalls) {
+                const icon = getToolIcon(tc.name);
+                const displayName = getToolDisplayName(tc.name);
+                const resultPreview = tc.resultPreview || '';
+                const escapedPreview = resultPreview
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+
+                detailsHtml += `
+                    <div class="tool-call-item">
+                        <div class="tool-item-header">
+                            <span class="tool-item-icon">${icon}</span>
+                            <span class="tool-item-name">${displayName}</span>
+                            <span class="tool-item-status">${tc.error ? '✗ 失败' : '✓ 完成'}</span>
+                        </div>
+                        ${resultPreview ? `<div class="tool-item-preview"><pre>${escapedPreview}</pre></div>` : ''}
+                    </div>`;
+            }
+
+            card.innerHTML = `
+                <div class="tool-call-header">
+                    <span class="tool-call-icon">⚡</span>
+                    <span class="tool-call-summary">${summary}</span>
+                    <span class="tool-call-count">${toolCalls.length} results</span>
+                    <span class="tool-call-toggle">▶</span>
+                </div>
+                <div class="tool-call-details" style="display:none;">
+                    ${detailsHtml}
+                </div>`;
+
+            card.querySelector('.tool-call-header').addEventListener('click', () => {
+                const details = card.querySelector('.tool-call-details');
+                const toggle = card.querySelector('.tool-call-toggle');
+                const isHidden = details.style.display === 'none';
+                details.style.display = isHidden ? 'block' : 'none';
+                toggle.textContent = isHidden ? '▼' : '▶';
+                card.classList.toggle('expanded', isHidden);
+            });
+
+            return card;
+        }
+
+        // 兼容旧接口：逐行追加（过渡期间保留，只在非卡片模式下调用）
         function appendToolTraceLine(aiBubble, text) {
             const trace = ensureToolTraceContainer(aiBubble);
             if (!trace) return;
@@ -1436,16 +1541,22 @@ async function initPageInteractions(page) {
                     tool_calls: sseResult.toolCalls,
                 });
 
+                // 收集本轮工具调用，最后渲染为一个卡片
+                const roundToolCalls = [];
+
                 for (const tc of sseResult.toolCalls) {
-                    const argsPreview = (tc.function.arguments || '').slice(0, 80);
-                    appendToolTraceLine(aiBubble, `🔧 调用 ${tc.function.name}(${argsPreview})`);
                     let parsedArgs = {};
                     try { parsedArgs = JSON.parse(tc.function.arguments || '{}'); } catch {}
 
                     // 写入类工具：用户确认（自动批准列表里的直接放行）
                     const confirmResult = await maybeConfirmToolCall(tc.function.name, parsedArgs);
                     if (!confirmResult.approved) {
-                        appendToolTraceLine(aiBubble, `↳ ⛔ 用户拒绝执行`);
+                        roundToolCalls.push({
+                            name: tc.function.name,
+                            category: getToolCategory(tc.function.name),
+                            resultPreview: '⛔ 用户拒绝执行',
+                            error: true,
+                        });
                         messages.push({
                             role: 'tool',
                             tool_call_id: tc.id,
@@ -1458,13 +1569,26 @@ async function initPageInteractions(page) {
                     }
 
                     const result = await executeToolCall(tc.function.name, parsedArgs);
-                    const resultPreview = (result || '').slice(0, 80);
-                    appendToolTraceLine(aiBubble, `↳ 结果: ${resultPreview}${result.length > 80 ? '…' : ''}`);
+                    roundToolCalls.push({
+                        name: tc.function.name,
+                        category: getToolCategory(tc.function.name),
+                        resultPreview: (result || '').slice(0, 200),
+                        error: false,
+                    });
                     messages.push({
                         role: 'tool',
                         tool_call_id: tc.id,
                         content: result,
                     });
+                }
+
+                // 渲染本轮工具调用卡片
+                if (roundToolCalls.length > 0) {
+                    const trace = ensureToolTraceContainer(aiBubble);
+                    if (trace) {
+                        const card = createToolCallsCard(roundToolCalls);
+                        if (card) trace.appendChild(card);
+                    }
                 }
             }
 
@@ -1680,6 +1804,7 @@ async function initPageInteractions(page) {
                     'get_full_text', 'get_selection', 'get_chapter_list',
                     'replace_selection', 'insert_at_cursor', 'append_paragraph',
                     'find_and_replace', 'get_characters', 'get_outline',
+                    'create_artifact', 'update_artifact', 'get_artifacts', 'read_artifact',
                 ];
 
                 const result = await runChatWithTools(
@@ -1741,6 +1866,7 @@ async function initPageInteractions(page) {
                     'get_full_text', 'get_selection', 'get_chapter_list',
                     'replace_selection', 'insert_at_cursor', 'append_paragraph',
                     'find_and_replace', 'get_characters', 'get_outline',
+                    'create_artifact', 'update_artifact', 'get_artifacts', 'read_artifact',
                 ];
 
                 const aiBubble = contentEl?.closest('.ai-msg-bubble') || null;

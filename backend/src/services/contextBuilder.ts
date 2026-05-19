@@ -3,7 +3,7 @@
 // 不处理：模型选择、积分扣减、流式响应、上下文截断（由调用方按模型预算执行）
 
 import { db } from '../db/index.js';
-import { works, chapters, outlines, characters, chapterSummaries, workStyleDNA } from '../db/schema.js';
+import { works, chapters, outlines, characters, chapterSummaries, workStyleDNA, aiArtifacts } from '../db/schema.js';
 import { eq, and, desc, lt } from 'drizzle-orm';
 import { formatStyleDNAPrompt } from './styleDNA.js';
 
@@ -56,16 +56,14 @@ async function buildBaseContext(workId: number, userId: number): Promise<string>
   }
 
   if (outline?.content) {
-    const outlineText = outline.content.length > 800 ? outline.content.slice(0, 800) + '...' : outline.content;
-    prompt += `\n【总纲概要】\n${outlineText}\n`;
+    prompt += `\n【总纲】\n${outline.content}\n`;
   }
 
   if (chars.length > 0) {
     prompt += `\n【角色设定】\n`;
-    for (const c of chars.slice(0, 8)) {
+    for (const c of chars) {
       const roleLabel = c.role === 'protagonist' ? '主角' : c.role === 'antagonist' ? '反派' : '角色';
-      const contentPreview = c.content.length > 100 ? c.content.slice(0, 100) + '...' : c.content;
-      prompt += `- ${roleLabel}「${c.name}」：${contentPreview}\n`;
+      prompt += `- ${roleLabel}「${c.name}」：${c.content}\n`;
     }
   }
 
@@ -95,6 +93,22 @@ async function buildBaseContext(workId: number, userId: number): Promise<string>
       pacingPattern: dna.pacingPattern ?? [],
       sampleSize: dna.sampleSize,
     });
+  }
+
+  // 注入已采纳的 AI 生成文件（artifacts）
+  const acceptedArtifacts = await db.select().from(aiArtifacts)
+    .where(and(eq(aiArtifacts.workId, workId), eq(aiArtifacts.status, 'accepted')))
+    .orderBy(desc(aiArtifacts.createdAt));
+
+  if (acceptedArtifacts.length > 0) {
+    prompt += `\n【AI 生成文件（已采纳）】\n`;
+    const typeLabelMap: Record<string, string> = {
+      outline: '大纲', character: '人物', setting: '设定', note: '笔记', analysis: '分析',
+    };
+    for (const a of acceptedArtifacts) {
+      const label = typeLabelMap[a.type] || a.type;
+      prompt += `\n--- ${label}：${a.title} ---\n${a.content}\n`;
+    }
   }
 
   return prompt;

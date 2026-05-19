@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { db } from '../db/index.js';
-import { aiConversations, works, chapters, users, pointTransactions, toolPrompts, aiCorrections, chapterSummaries, workStyleDNA } from '../db/schema.js';
-import { eq, and, desc, lt } from 'drizzle-orm';
+import { aiConversations, works, chapters, users, pointTransactions, toolPrompts, aiCorrections, chapterSummaries, workStyleDNA, aiArtifacts, characters, outlines, settings } from '../db/schema.js';
+import { eq, and, desc, lt, asc } from 'drizzle-orm';
 import { callLLM, resolveModelConfig, type ChatMessage, type ModelConfig } from '../services/llm.js';
 import { getEnabledTools, getTool } from '../config/tools.js';
 import { REVIEW_AGENT_PROMPTS } from '../config/reviewAgents.js';
@@ -20,7 +20,7 @@ aiRouter.use('*', async (c, next) => {
   const path = c.req.path;
 
   // 不扣积分的路径白名单
-  const skipPaths = ['/api/ai/conversations'];
+  const skipPaths = ['/api/ai/conversations', '/api/ai/artifacts'];
   if (skipPaths.includes(path)) return await next();
 
   // 不扣积分的路径前缀（GET/PUT 类操作）
@@ -757,6 +757,165 @@ aiRouter.post('/conversations', async (c) => {
       .returning();
     return c.json({ id: result.id, created: true });
   }
+});
+
+// ===== AI Artifacts CRUD =====
+
+// GET /api/ai/artifacts?workId=xxx&type=xxx&status=xxx — 获取作品的 artifacts 列表
+aiRouter.get('/artifacts', async (c) => {
+  const userId = c.get('userId');
+  const workId = c.req.query('workId');
+  const type = c.req.query('type');
+  const status = c.req.query('status');
+
+  const conditions = [eq(aiArtifacts.userId, userId)];
+  if (workId) conditions.push(eq(aiArtifacts.workId, parseInt(workId)));
+  if (type) conditions.push(eq(aiArtifacts.type, type));
+  if (status) conditions.push(eq(aiArtifacts.status, status));
+
+  const list = await db.select({
+    id: aiArtifacts.id,
+    workId: aiArtifacts.workId,
+    type: aiArtifacts.type,
+    title: aiArtifacts.title,
+    content: aiArtifacts.content,
+    sourceTool: aiArtifacts.sourceTool,
+    sourceModelId: aiArtifacts.sourceModelId,
+    status: aiArtifacts.status,
+    linkedEntityType: aiArtifacts.linkedEntityType,
+    linkedEntityId: aiArtifacts.linkedEntityId,
+    createdAt: aiArtifacts.createdAt,
+    updatedAt: aiArtifacts.updatedAt,
+  }).from(aiArtifacts)
+    .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+    .orderBy(desc(aiArtifacts.createdAt));
+
+  return c.json(list);
+});
+
+// GET /api/ai/artifacts/:id — 获取单个 artifact 详情
+aiRouter.get('/artifacts/:id', async (c) => {
+  const userId = c.get('userId');
+  const id = parseInt(c.req.param('id'));
+  const [artifact] = await db.select().from(aiArtifacts)
+    .where(and(eq(aiArtifacts.id, id), eq(aiArtifacts.userId, userId)))
+    .limit(1);
+  if (!artifact) return c.json({ error: '不存在' }, 404);
+  return c.json(artifact);
+});
+
+// POST /api/ai/artifacts — 创建 artifact
+aiRouter.post('/artifacts', async (c) => {
+  const userId = c.get('userId');
+  const body = await c.req.json();
+
+  if (!body.workId || !body.title || !body.content) {
+    return c.json({ error: 'workId, title, content 为必填' }, 400);
+  }
+
+  const [result] = await db.insert(aiArtifacts).values({
+    workId: body.workId,
+    userId,
+    conversationId: body.conversationId || '',
+    type: body.type || 'note',
+    title: body.title,
+    content: body.content,
+    sourceTool: body.sourceTool || '',
+    sourceModelId: body.sourceModelId || '',
+    status: 'pending',
+  }).returning();
+
+  return c.json(result, 201);
+});
+
+// PUT /api/ai/artifacts/:id — 更新 artifact（含 accept/reject）
+aiRouter.put('/artifacts/:id', async (c) => {
+  const userId = c.get('userId');
+  const id = parseInt(c.req.param('id'));
+  const body = await c.req.json();
+
+  const [existing] = await db.select().from(aiArtifacts)
+    .where(and(eq(aiArtifacts.id, id), eq(aiArtifacts.userId, userId)))
+    .limit(1);
+  if (!existing) return c.json({ error: '不存在' }, 404);
+
+  const updateData: Record<string, unknown> = { updatedAt: new Date() };
+  if (body.title !== undefined) updateData.title = body.title;
+  if (body.content !== undefined) updateData.content = body.content;
+  if (body.status !== undefined) updateData.status = body.status;
+  if (body.type !== undefined) updateData.type = body.type;
+
+  // accept 时同步到正式表
+  if (body.status === 'accepted' && existing.status !== 'accepted') {
+    if (existing.type === 'outline') {
+      const [outline] = await db.insert(outlines).values({
+        workId: existing.workId,
+        title: existing.title,
+        content: existing.content,
+      }).returning();
+      updateData.linkedEntityType = 'outlines';
+      updateData.linkedEntityId = outline.id;
+    } else if (existing.type === 'character') {
+      const [char] = await db.insert(characters).values({
+        workId: existing.workId,
+        name: existing.title,
+        content: existing.content,
+        role: 'supporting',
+      }).returning();
+      updateData.linkedEntityType = 'characters';
+      updateData.linkedEntityId = char.id;
+    } else if (existing.type === 'setting') {
+      const [setting] = await db.insert(settings).values({
+        workId: existing.workId,
+        type: 'background',
+        name: existing.title,
+        content: existing.content,
+      }).returning();
+      updateData.linkedEntityType = 'settings';
+      updateData.linkedEntityId = setting.id;
+    }
+  }
+
+  // reject 时如果已有同步记录，删除之
+  if (body.status === 'rejected' && existing.linkedEntityType && existing.linkedEntityId) {
+    const tableMap: Record<string, any> = { characters, outlines, settings };
+    const tbl = tableMap[existing.linkedEntityType];
+    if (tbl) {
+      await db.delete(tbl).where(eq(tbl.id, existing.linkedEntityId));
+    }
+    updateData.linkedEntityType = '';
+    updateData.linkedEntityId = null;
+  }
+
+  const [updated] = await db.update(aiArtifacts)
+    .set(updateData)
+    .where(eq(aiArtifacts.id, id))
+    .returning();
+
+  return c.json(updated);
+});
+
+// DELETE /api/ai/artifacts/:id — 删除 artifact
+aiRouter.delete('/artifacts/:id', async (c) => {
+  const userId = c.get('userId');
+  const id = parseInt(c.req.param('id'));
+
+  const [existing] = await db.select().from(aiArtifacts)
+    .where(and(eq(aiArtifacts.id, id), eq(aiArtifacts.userId, userId)))
+    .limit(1);
+  if (!existing) return c.json({ error: '不存在' }, 404);
+
+  // 如果已同步到正式表，也删除正式记录
+  if (existing.linkedEntityType && existing.linkedEntityId) {
+    const tableMap: Record<string, any> = { characters, outlines, settings };
+    const tbl = tableMap[existing.linkedEntityType];
+    if (tbl) {
+      await db.delete(tbl).where(eq(tbl.id, existing.linkedEntityId));
+    }
+  }
+
+  await db.delete(aiArtifacts).where(eq(aiArtifacts.id, id));
+  return c.json({ ok: true });
 });
 
 // POST /api/ai/continue — AI续写

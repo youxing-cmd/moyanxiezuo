@@ -2222,4 +2222,110 @@ async function loadWorkMemory() {
     }
 }
 
+// ===== AI Artifacts 管理 =====
+
+async function loadArtifacts() {
+    if (!currentWorkId) return;
+    const container = document.getElementById('artifactsList');
+    const countEl = document.getElementById('artifactsCount');
+    if (!container) return;
+
+    try {
+        const list = await api(`/ai/artifacts?workId=${currentWorkId}`);
+        if (!list || list.length === 0) {
+            container.innerHTML = '<div style="padding:6px 8px; border-radius:var(--radius-sm); font-size:12px; color:var(--text-muted);">AI 对话中生成的内容会显示在这里</div>';
+            if (countEl) countEl.style.display = 'none';
+            return;
+        }
+
+        if (countEl) {
+            countEl.textContent = `${list.length} 个`;
+            countEl.style.display = 'inline';
+        }
+
+        const typeIcons = { outline: '📋', character: '👤', setting: '🌍', note: '📝', analysis: '🔍' };
+        const statusLabels = { pending: '⏳ 待确认', accepted: '✓ 已采纳', rejected: '✗ 已拒绝' };
+        const statusColors = { pending: 'var(--warning)', accepted: 'var(--success)', rejected: 'var(--text-muted)' };
+
+        let html = '';
+        for (const a of list) {
+            const icon = typeIcons[a.type] || '📄';
+            const statusLabel = statusLabels[a.status] || a.status;
+            const statusColor = statusColors[a.status] || 'var(--text-muted)';
+            const preview = (a.content || '').slice(0, 80).replace(/</g, '&lt;');
+
+            html += `
+                <div class="artifact-item" style="padding:8px; border:1px solid var(--border); border-radius:var(--radius-sm); margin-bottom:6px; cursor:pointer;" onclick="toggleArtifactDetail(${a.id})">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <span style="font-size:12px; font-weight:600; color:var(--text-primary); display:flex; align-items:center; gap:4px;">
+                            ${icon} ${escapeHtml(a.title)}
+                        </span>
+                        <span style="font-size:10px; color:${statusColor};">${statusLabel}</span>
+                    </div>
+                    <div style="font-size:11px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${preview}</div>
+                    <div id="artifactDetail-${a.id}" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid var(--border);">
+                        <div style="font-size:12px; color:var(--text-secondary); line-height:1.6; max-height:200px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;">${escapeHtml(a.content)}</div>
+                        <div style="display:flex; gap:6px; margin-top:8px;">
+                            ${a.status === 'pending' ? `
+                                <button class="btn btn-primary btn-sm" style="padding:3px 8px; font-size:11px;" onclick="event.stopPropagation(); acceptArtifact(${a.id})">✓ 采纳</button>
+                                <button class="btn btn-ghost btn-sm" style="padding:3px 8px; font-size:11px;" onclick="event.stopPropagation(); rejectArtifact(${a.id})">✗ 拒绝</button>
+                            ` : ''}
+                            <button class="btn btn-ghost btn-sm" style="padding:3px 8px; font-size:11px; color:var(--danger);" onclick="event.stopPropagation(); deleteArtifact(${a.id})">删除</button>
+                        </div>
+                    </div>
+                </div>`;
+        }
+        container.innerHTML = html;
+    } catch (err) {
+        container.innerHTML = `<div style="padding:6px 8px; font-size:12px; color:var(--danger);">加载失败: ${err.message}</div>`;
+    }
+}
+
+function toggleArtifactDetail(id) {
+    const el = document.getElementById(`artifactDetail-${id}`);
+    if (el) {
+        el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+async function acceptArtifact(id) {
+    try {
+        const result = await api(`/ai/artifacts/${id}`, { method: 'PUT', body: { status: 'accepted' } });
+        showToast('已采纳，已同步到对应区域', 'success');
+        loadArtifacts();
+        // 刷新左栏对应区域
+        if (result.linkedEntityType === 'outlines') {
+            const outlineList = await api(`/works/${currentWorkId}/outlines`);
+            renderWorkOutlines(outlineList || []);
+        } else if (result.linkedEntityType === 'characters') {
+            if (typeof loadWorkMetadata === 'function' && currentWorkData) {
+                loadWorkMetadata(currentWorkData);
+            }
+        }
+    } catch (err) {
+        showToast('采纳失败: ' + err.message, 'danger');
+    }
+}
+
+async function rejectArtifact(id) {
+    try {
+        await api(`/ai/artifacts/${id}`, { method: 'PUT', body: { status: 'rejected' } });
+        showToast('已拒绝', 'info');
+        loadArtifacts();
+    } catch (err) {
+        showToast('操作失败: ' + err.message, 'danger');
+    }
+}
+
+async function deleteArtifact(id) {
+    if (!confirm('确定删除此 AI 文件？')) return;
+    try {
+        await api(`/ai/artifacts/${id}`, { method: 'DELETE' });
+        showToast('已删除', 'success');
+        loadArtifacts();
+    } catch (err) {
+        showToast('删除失败: ' + err.message, 'danger');
+    }
+}
+
 // 离开页面前检查未保存内容

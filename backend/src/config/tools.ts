@@ -1,7 +1,7 @@
 import type { ChatTool } from '../services/llm.js';
 import { db } from '../db/index.js';
-import { characters, outlines } from '../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { characters, outlines, aiArtifacts } from '../db/schema.js';
+import { eq, and, desc } from 'drizzle-orm';
 
 // 工具执行位置：frontend = 前端调 jzEditor 执行；backend = 后端调 handler 执行
 export type ToolExecution = 'frontend' | 'backend';
@@ -167,6 +167,110 @@ const REGISTRY: Record<string, ToolDef> = {
       const [outline] = await db.select().from(outlines).where(eq(outlines.workId, ctx.workId)).limit(1);
       if (!outline || !outline.content) return '该作品目前没有总纲。';
       return outline.content;
+    },
+  },
+
+  // ===== Artifact 工具 =====
+  create_artifact: {
+    name: 'create_artifact',
+    description:
+      '创建一个 AI 生成的文件（artifact）。当需要生成大纲、人物设定、世界观设定、剧情分析等内容时调用。内容会先存为 artifact，用户确认后才会同步到正式表。type 可选：outline/character/setting/note/analysis。',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: '文件标题，如"第三卷大纲"、"反派人物设定"' },
+        content: { type: 'string', description: '文件完整内容' },
+        type: { type: 'string', enum: ['outline', 'character', 'setting', 'note', 'analysis'], description: '文件类型' },
+      },
+      required: ['title', 'content'],
+    },
+    execution: 'backend',
+    handler: async (args, ctx) => {
+      if (!ctx.workId) return JSON.stringify({ error: '没有提供作品 ID' });
+      const [result] = await db.insert(aiArtifacts).values({
+        workId: ctx.workId,
+        userId: ctx.userId,
+        type: (args.type as string) || 'note',
+        title: (args.title as string) || '未命名',
+        content: (args.content as string) || '',
+        status: 'pending',
+      }).returning();
+      return JSON.stringify({ ok: true, id: result.id, title: result.title, type: result.type });
+    },
+  },
+  update_artifact: {
+    name: 'update_artifact',
+    description:
+      '更新一个已有的 artifact 文件。需要提供 artifact ID 和要更新的字段。',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'artifact ID' },
+        title: { type: 'string', description: '新标题（可选）' },
+        content: { type: 'string', description: '新内容（可选）' },
+      },
+      required: ['id'],
+    },
+    execution: 'backend',
+    handler: async (args, ctx) => {
+      if (!ctx.workId) return JSON.stringify({ error: '没有提供作品 ID' });
+      const updateData: Record<string, unknown> = { updatedAt: new Date() };
+      if (args.title !== undefined) updateData.title = args.title;
+      if (args.content !== undefined) updateData.content = args.content;
+      const [updated] = await db.update(aiArtifacts)
+        .set(updateData)
+        .where(and(eq(aiArtifacts.id, args.id as number), eq(aiArtifacts.userId, ctx.userId)))
+        .returning();
+      if (!updated) return JSON.stringify({ error: 'artifact 不存在' });
+      return JSON.stringify({ ok: true, id: updated.id, title: updated.title });
+    },
+  },
+  get_artifacts: {
+    name: 'get_artifacts',
+    description:
+      '获取当前作品的所有 AI 生成文件（artifacts）。可用于查看之前生成过哪些内容，避免重复生成。',
+    parameters: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', description: '按类型筛选（可选）：outline/character/setting/note/analysis' },
+      },
+      required: [],
+    },
+    execution: 'backend',
+    handler: async (args, ctx) => {
+      if (!ctx.workId) return JSON.stringify({ error: '没有提供作品 ID' });
+      const conditions = [eq(aiArtifacts.workId, ctx.workId)];
+      if (args.type) conditions.push(eq(aiArtifacts.type, args.type as string));
+      const rows = await db.select().from(aiArtifacts)
+        .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+        .orderBy(desc(aiArtifacts.createdAt));
+      if (!rows.length) return '该作品目前没有 AI 生成文件。';
+      return rows.map((a) => {
+        const statusLabel = a.status === 'accepted' ? '✓已采纳' : a.status === 'rejected' ? '✗已拒绝' : '⏳待确认';
+        const preview = a.content.length > 100 ? a.content.slice(0, 100) + '...' : a.content;
+        return `#${a.id} [${a.type}] ${a.title} (${statusLabel})\n${preview}`;
+      }).join('\n\n');
+    },
+  },
+  read_artifact: {
+    name: 'read_artifact',
+    description:
+      '读取单个 artifact 的完整内容。需要提供 artifact ID。',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'artifact ID' },
+      },
+      required: ['id'],
+    },
+    execution: 'backend',
+    handler: async (args, ctx) => {
+      if (!ctx.workId) return JSON.stringify({ error: '没有提供作品 ID' });
+      const [artifact] = await db.select().from(aiArtifacts)
+        .where(and(eq(aiArtifacts.id, args.id as number), eq(aiArtifacts.userId, ctx.userId)))
+        .limit(1);
+      if (!artifact) return JSON.stringify({ error: 'artifact 不存在' });
+      return JSON.stringify({ id: artifact.id, title: artifact.title, type: artifact.type, content: artifact.content, status: artifact.status });
     },
   },
 };

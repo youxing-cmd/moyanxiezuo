@@ -168,6 +168,7 @@ export const settings = pgTable('settings', {
 export const inspirations = pgTable('inspirations', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').notNull(),
+  workId: integer('work_id'),
   title: text('title').notNull().default('未命名灵感'),
   source: text('source').notNull().default('custom'),
   tags: jsonb('tags').$type<string[]>().notNull().default([]),
@@ -288,4 +289,21 @@ export const agentRoutes = pgTable('agent_routes', {
   correctedTools: jsonb('corrected_tools').$type<string[]>(),
   latencyMs: integer('latency_ms'),
   createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
+});
+
+export const aiArtifacts = pgTable('ai_artifacts', {
+  id: serial('id').primaryKey(),
+  workId: integer('work_id').notNull(),
+  userId: integer('user_id').notNull(),
+  conversationId: text('conversation_id').default(''),
+  type: text('type').notNull().default('note'),
+  title: text('title').notNull().default('未命名'),
+  content: text('content').notNull().default(''),
+  sourceTool: text('source_tool').default(''),
+  sourceModelId: text('source_model_id').default(''),
+  status: text('status').notNull().default('pending'),
+  linkedEntityType: text('linked_entity_type').default(''),
+  linkedEntityId: integer('linked_entity_id'),
+  createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).$defaultFn(() => new Date()),
 });

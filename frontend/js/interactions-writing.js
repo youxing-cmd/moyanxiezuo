@@ -71,6 +71,9 @@ async function loadWorkMetadata(work) {
 
     // 加载AI分析
     renderAIAnalysis(work.analysis || '');
+
+    // 加载AI文件（artifacts）
+    loadArtifacts();
 }
 
 // 所有标签定义

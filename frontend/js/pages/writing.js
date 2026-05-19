@@ -211,6 +211,23 @@ const writingViews = {
                             </div>
                         </div>
 
+                        <!-- AI 文件节点 -->
+                        <div class="tree-header" onclick="toggleTreeNode('artifacts')">
+                            <span class="tree-toggle" id="treeToggle-artifacts">▼</span>
+                            <span>✨ AI 文件</span>
+                        </div>
+                        <div class="tree-body" id="treeBody-artifacts">
+                            <div id="left-artifacts">
+                                <div style="font-size:12px; font-weight:600; color:var(--text-primary); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                                    <span>✨ AI 生成文件</span>
+                                    <span id="artifactsCount" style="font-size:11px; color:var(--text-muted); display:none;"></span>
+                                </div>
+                                <div id="artifactsList">
+                                    <div style="padding:6px 8px; border-radius:var(--radius-sm); font-size:12px; color:var(--text-muted);">AI 对话中生成的内容会显示在这里</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- AI分析节点 -->
                         <div class="tree-header" onclick="toggleTreeNode('analysis')">
                             <span class="tree-toggle" id="treeToggle-analysis">▼</span>
