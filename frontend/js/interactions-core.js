@@ -947,7 +947,17 @@ async function initPageInteractions(page) {
                     chatMessages.appendChild(createUserBubble(msg.content));
                 } else if (msg.role === 'assistant' && msg.content) {
                     // 跳过只有 tool_calls 没有 content 的 assistant 消息
-                    chatMessages.appendChild(createAiBubble(msg.content, index));
+                    // 解析旧格式工具调用文本（🔧 调用 / ↳ 结果），转为卡片
+                    const parsed = parseToolTracesFromContent(msg.content);
+                    const bubble = createAiBubble(parsed.text || msg.content, index);
+                    if (parsed.toolCalls.length > 0) {
+                        const trace = ensureToolTraceContainer(bubble);
+                        if (trace) {
+                            const card = createToolCallsCard(parsed.toolCalls);
+                            if (card) trace.appendChild(card);
+                        }
+                    }
+                    chatMessages.appendChild(bubble);
                 }
                 // role === 'tool' 的消息不渲染，仅作为上下文保留
             });
@@ -1392,6 +1402,35 @@ async function initPageInteractions(page) {
             if (cat === 'write') return '✏️';
             if (cat === 'create') return '📄';
             return '🔧';
+        }
+
+        // 解析旧格式工具调用文本（🔧 调用 / ↳ 结果），转为卡片数据
+        function parseToolTracesFromContent(content) {
+            if (!content || !content.includes('🔧')) return { text: content, toolCalls: [] };
+            const lines = content.split('\n');
+            const textLines = [];
+            const toolCalls = [];
+            const toolCallRe = /🔧\s*调用\s+(\w+)\((.+)\)\s*(?:✓|✗)?\s*$/;
+            const resultRe = /^↳\s*(?:结果[:：]\s*)?(.+)/;
+            for (const line of lines) {
+                const toolMatch = line.match(toolCallRe);
+                if (toolMatch) {
+                    toolCalls.push({
+                        name: toolMatch[1],
+                        category: getToolCategory(toolMatch[1]),
+                        resultPreview: '',
+                        error: false,
+                    });
+                    continue;
+                }
+                const resultMatch = line.match(resultRe);
+                if (resultMatch && toolCalls.length > 0) {
+                    toolCalls[toolCalls.length - 1].resultPreview = resultMatch[1].trim().slice(0, 200);
+                    continue;
+                }
+                textLines.push(line);
+            }
+            return { text: textLines.join('\n').trim(), toolCalls };
         }
 
         // 在 AI 气泡中插入工具调用卡片
