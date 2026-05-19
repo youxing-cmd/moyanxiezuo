@@ -872,33 +872,62 @@
     padding-left: 4px;
 }
 
-/* ====== 输入区 ====== */
+/* ====== 空态 ====== */
+.chat-welcome {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+}
+
+.chat-welcome-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.2);
+}
+
+.chat-welcome-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.chat-welcome-desc {
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text-muted);
+}
+
+/* ====== 输入区（新版 Composer） ====== */
 .chat-input-area {
-    padding: 8px 14px 12px;
+    padding: 10px 14px 12px;
     border-top: 1px solid var(--border);
     flex-shrink: 0;
 }
 
-.chat-input-box {
+.chat-composer {
+    position: relative;
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 8px 10px;
-    transition: border-color 0.15s;
+    padding: 10px 12px;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.chat-input-box:focus-within {
+.chat-composer:focus-within {
     border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.15);
 }
 
-.chat-input-row {
-    display: flex;
-    align-items: flex-end;
-    gap: 6px;
-}
-
-.chat-input {
-    flex: 1;
+.chat-composer-input {
+    width: 100%;
     background: transparent;
     border: none;
     outline: none;
@@ -906,63 +935,114 @@
     font-size: 13px;
     font-family: var(--font-sans);
     resize: none;
-    min-height: 20px;
-    max-height: 100px;
-    line-height: 1.5;
+    min-height: 44px;
+    max-height: 120px;
+    line-height: 1.6;
+    padding-right: 36px;
+    box-sizing: border-box;
 }
 
-.chat-input::placeholder {
+.chat-composer-input::placeholder {
     color: var(--text-muted);
 }
 
-.chat-send-btn {
-    width: 28px;
-    height: 28px;
-    border-radius: var(--radius-sm);
+.chat-composer-send {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
     background: var(--accent);
     color: #fff;
     border: none;
     cursor: pointer;
-    font-size: 14px;
-    font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: filter 0.15s;
+    transition: all 0.15s;
+    padding: 0;
 }
 
-.chat-send-btn:hover {
+.chat-composer-send:hover {
     filter: brightness(1.15);
+    transform: scale(1.05);
 }
 
-.chat-attach-bar {
+.chat-composer-send:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* 底部工具栏 */
+.chat-composer-toolbar {
     display: flex;
-    gap: 2px;
-    margin-top: 6px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-top: 8px;
 }
 
-.attach-btn {
-    padding: 2px 8px;
-    border: none;
-    background: none;
-    color: var(--text-muted);
+.chat-composer-left,
+.chat-composer-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.chat-composer-right {
+    position: relative;
+}
+
+.composer-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
     font-size: 11px;
     cursor: pointer;
-    border-radius: var(--radius-sm);
     transition: all 0.1s;
     font-family: var(--font-sans);
+    white-space: nowrap;
 }
 
-.attach-btn:hover {
-    color: var(--text-secondary);
+.composer-pill:hover {
     background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--border);
 }
 
-.chat-hint {
+.composer-pill svg {
+    opacity: 0.6;
+}
+
+.composer-pill-mode {
+    color: var(--accent-light);
+    border-color: rgba(99, 102, 241, 0.25);
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.composer-pill-mode:hover {
+    background: rgba(99, 102, 241, 0.12);
+}
+
+/* Hint */
+.chat-composer-hint {
     font-size: 10px;
     color: var(--text-muted);
-    margin-top: 5px;
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.chat-composer-hint span:first-child {
+    color: var(--text-secondary);
 }
 
 /* 收起按钮 */

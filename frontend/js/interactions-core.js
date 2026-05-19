@@ -925,15 +925,14 @@ async function initPageInteractions(page) {
             if (aiChatHistory.length === 0) {
                 // 无历史时显示欢迎提示
                 chatMessages.innerHTML = `
-                    <div style="text-align:center; padding:40px 20px; color:var(--text-muted);"
-                         id="aiChatWelcome">
-                        <div style="width:48px; height:48px; border-radius:50%; background:linear-gradient(135deg, var(--accent), var(--accent-dark)); display:flex; align-items:center; justify-content:center; margin:0 auto 12px; overflow:hidden;">
+                    <div class="chat-welcome" id="aiChatWelcome">
+                        <div class="chat-welcome-avatar">
                             <svg width="28" height="28" viewBox="0 0 40 40" style="display:block;">
                                 <text x="20" y="28" font-size="22" font-family="'Noto Serif SC', serif" fill="white" text-anchor="middle" font-weight="700">九</text>
                             </svg>
                         </div>
-                        <div style="font-size:14px; margin-bottom:8px;">我是九章，你的写作助手</div>
-                        <div style="font-size:12px; line-height:1.6;">
+                        <div class="chat-welcome-title">我是九章，你的写作助手</div>
+                        <div class="chat-welcome-desc">
                             可以帮你续写、润色、构思剧情<br>
                             也可以聊聊你的创作想法
                         </div>

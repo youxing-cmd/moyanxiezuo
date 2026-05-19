@@ -208,58 +208,66 @@
 
                             <!-- 输入区 -->
                             <div class="chat-input-area">
-                                <div class="chat-input-box">
-                                    <div class="chat-input-row">
-                                        <textarea id="aiChatInput" class="chat-input" rows="1" placeholder="输入指令，用 @ 引用文件..."></textarea>
-                                        <button class="chat-send-btn" id="aiChatSend">↑</button>
-                                    </div>
-                                    <div class="chat-attach-bar">
-                                        <button class="attach-btn" onclick="showToast('上传功能开发中','info')">File</button>
-                                        <button class="attach-btn" id="chatRefBtn">@引用</button>
-                                    </div>
+                                <div class="chat-composer">
+                                    <textarea id="aiChatInput" class="chat-composer-input" rows="3" placeholder="输入指令，用 @ 引用文件..."></textarea>
+                                    <button class="chat-composer-send" id="aiChatSend">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                                    </button>
                                 </div>
-                                <div class="chat-hint">Enter 发送 · Shift+Enter 换行 · @ 引用文件</div>
-
-                                <!-- AI 模式 + 模型 + 工具 -->
-                                <div id="agentModeBar" style="display:flex; align-items:center; gap:8px; margin-top:8px;">
-                                    <span style="font-size:11px; color:var(--text-muted);">模式</span>
-                                    <button id="agentModeBtn" onclick="toggleAgentMode()" style="padding:2px 10px; border-radius:10px; border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); font-size:11px; cursor:pointer;">手动</button>
-                                    <span id="agentModeHint" style="font-size:11px; color:var(--text-muted); flex:1;">手动选择模型和工具</span>
-                                </div>
-                                <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
-                                    <div id="chatModelPicker" style="position:relative; flex:1;">
-                                        <button id="chatModelTrigger" style="padding:3px 8px; border-radius:12px; border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); font-size:11px; cursor:pointer; width:100%; display:inline-flex; align-items:center; justify-content:center; gap:4px;">
-                                            <span id="chatModelTriggerName">默认模型</span><span id="chatModelArrow" style="font-size:9px;">▼</span>
+                                <div class="chat-composer-toolbar">
+                                    <div class="chat-composer-left">
+                                        <button class="composer-pill" onclick="showToast('上传功能开发中','info')">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                                            上传
                                         </button>
-                                        <div id="chatModelDropdown" style="position:absolute; left:0; bottom:calc(100% + 6px); min-width:180px; max-height:260px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:10px; display:none; flex-direction:column; box-shadow:0 8px 24px rgba(0,0,0,0.15); z-index:9999; overflow:hidden;">
-                                            <div id="chatModelDropdownList" style="padding:8px 0; overflow-y:auto; max-height:260px;"></div>
-                                            <div style="padding:8px 12px; border-top:1px solid var(--border);">
-                                                <button class="btn btn-ghost btn-sm" style="width:100%; font-size:11px;" onclick="switchPage('modelConfigs')">选择模型</button>
+                                        <button class="composer-pill" id="chatRefBtn">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                                            @引用
+                                        </button>
+                                    </div>
+                                    <div class="chat-composer-right">
+                                        <span id="chatModelPicker" style="position:relative; display:inline-block;">
+                                            <button class="composer-pill" id="chatModelTrigger">
+                                                <span id="chatModelTriggerName">默认模型</span>
+                                                <span id="chatModelArrow" style="font-size:9px; opacity:0.6;">▼</span>
+                                            </button>
+                                            <div id="chatModelDropdown" style="position:absolute; left:0; bottom:calc(100% + 6px); min-width:180px; max-height:260px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:10px; display:none; flex-direction:column; box-shadow:0 8px 24px rgba(0,0,0,0.15); z-index:9999; overflow:hidden;">
+                                                <div id="chatModelDropdownList" style="padding:8px 0; overflow-y:auto; max-height:260px;"></div>
+                                                <div style="padding:8px 12px; border-top:1px solid var(--border);">
+                                                    <button class="btn btn-ghost btn-sm" style="width:100%; font-size:11px;" onclick="switchPage('modelConfigs')">选择模型</button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                    <select id="chatToolSelect" style="display:none;">
-                                        <option value="default">九章默认工具</option>
-                                    </select>
-                                    <div id="chatToolPicker" style="position:relative; flex:1;">
-                                        <button id="chatToolTrigger" style="padding:3px 8px; border-radius:12px; border:1px solid var(--border); background:var(--bg-tertiary); color:var(--text-secondary); font-size:11px; cursor:pointer; width:100%; display:inline-flex; align-items:center; justify-content:center; gap:4px;">
-                                            <span id="chatToolTriggerName">默认工具</span><span id="chatToolArrow" style="font-size:9px;">▼</span>
-                                        </button>
-                                        <div id="chatToolDropdown" style="position:absolute; left:50%; transform:translateX(-50%); bottom:calc(100% + 6px); width:380px; max-height:320px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:10px; display:none; flex-direction:column; box-shadow:0 8px 24px rgba(0,0,0,0.15); z-index:9999; overflow:hidden;">
-                                            <div style="padding:10px 12px; overflow-y:auto;">
-                                                <div style="display:flex; gap:12px;">
-                                                    <div style="flex:1; min-width:0;">
-                                                        <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px; font-weight:600;">我的收藏</div>
-                                                        <div id="chatToolDropdownCustom" style="display:grid; grid-template-columns:1fr; gap:5px;"></div>
-                                                    </div>
-                                                    <div style="flex:1.8; min-width:0;">
-                                                        <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px; font-weight:600;">官方推荐</div>
-                                                        <div id="chatToolDropdownOfficial" style="display:grid; grid-template-columns:1fr; gap:5px;"></div>
+                                        </span>
+                                        <select id="chatToolSelect" style="display:none;">
+                                            <option value="default">九章默认工具</option>
+                                        </select>
+                                        <span id="chatToolPicker" style="position:relative; display:inline-block;">
+                                            <button class="composer-pill" id="chatToolTrigger">
+                                                <span id="chatToolTriggerName">默认工具</span>
+                                                <span id="chatToolArrow" style="font-size:9px; opacity:0.6;">▼</span>
+                                            </button>
+                                            <div id="chatToolDropdown" style="position:absolute; right:0; bottom:calc(100% + 6px); width:380px; max-height:320px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:10px; display:none; flex-direction:column; box-shadow:0 8px 24px rgba(0,0,0,0.15); z-index:9999; overflow:hidden;">
+                                                <div style="padding:10px 12px; overflow-y:auto;">
+                                                    <div style="display:flex; gap:12px;">
+                                                        <div style="flex:1; min-width:0;">
+                                                            <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px; font-weight:600;">我的收藏</div>
+                                                            <div id="chatToolDropdownCustom" style="display:grid; grid-template-columns:1fr; gap:5px;"></div>
+                                                        </div>
+                                                        <div style="flex:1.8; min-width:0;">
+                                                            <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px; font-weight:600;">官方推荐</div>
+                                                            <div id="chatToolDropdownOfficial" style="display:grid; grid-template-columns:1fr; gap:5px;"></div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
+                                        </span>
+                                        <button class="composer-pill composer-pill-mode" id="agentModeBtn" onclick="toggleAgentMode()">手动</button>
                                     </div>
+                                </div>
+                                <div class="chat-composer-hint">
+                                    <span id="agentModeHint">手动选择模型和工具</span>
+                                    <span>·</span>
+                                    <span>Enter 发送 · Shift+Enter 换行</span>
                                 </div>
                                 <div id="chatInputResizeHandle" style="display:none;"></div>
                             </div>
