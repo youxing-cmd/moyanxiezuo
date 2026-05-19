@@ -58,47 +58,80 @@
     flex-direction: column;
     overflow: hidden;
     background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
 }
 
 .col-left {
     width: 240px;
     flex-shrink: 0;
+    border-right: 1px solid var(--border);
 }
 
 .col-center {
     flex: 1;
     min-width: 300px;
+    background: var(--bg-primary);
 }
 
 .col-right {
     width: 320px;
     flex-shrink: 0;
+    border-left: 1px solid var(--border);
+}
+
+/* 写作页顶部栏 */
+.writing-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.writing-topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.writing-topbar-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.writing-topbar-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.writing-topbar-right {
+    display: flex;
+    gap: 8px;
+    align-items: center;
 }
 
 /* 拖动条 */
 .col-resizer {
-    width: 6px;
+    width: 1px;
     cursor: col-resize;
     position: relative;
     flex-shrink: 0;
+    background: var(--border);
+    transition: background 0.15s;
 }
 
 .col-resizer::after {
     content: '';
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 2px;
-    height: 32px;
-    border-radius: 1px;
-    background: var(--border);
-    transition: background 0.2s;
+    top: 0;
+    left: -3px;
+    right: -3px;
+    bottom: 0;
 }
 
-.col-resizer:hover::after {
+.col-resizer:hover {
     background: var(--accent);
 }
 
@@ -267,21 +300,28 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 5px 12px;
-    border-radius: var(--radius-sm);
+    padding: 6px 14px;
+    border-radius: 20px;
     font-size: 12px;
     font-weight: 500;
     color: var(--text-secondary);
-    background: var(--bg-tertiary);
+    background: transparent;
     border: 1px solid var(--border);
     cursor: pointer;
     transition: all var(--transition);
     font-family: var(--font-sans);
+    white-space: nowrap;
 }
 
 .ai-tool-btn:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
+    border-color: var(--accent);
+}
+
+.ai-tool-btn.active {
+    background: var(--accent);
+    color: white;
     border-color: var(--accent);
 }
 
@@ -740,5 +780,218 @@
     background: var(--bg-hover);
     color: var(--text-primary);
     border-color: var(--accent);
+}
+
+/* ====== 左栏树形结构 ====== */
+.tree-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.1s;
+    border-radius: var(--radius-sm);
+}
+
+.tree-header:hover {
+    background: var(--bg-hover);
+}
+
+.tree-toggle {
+    font-size: 9px;
+    color: var(--text-muted);
+    width: 12px;
+    text-align: center;
+    transition: transform 0.15s;
+    flex-shrink: 0;
+}
+
+.tree-toggle.open {
+    transform: rotate(90deg);
+}
+
+.tree-body {
+    padding-left: 4px;
+}
+
+.tree-body.collapsed {
+    display: none;
+}
+
+/* 章节项（覆写简化版） */
+.chapter-item-simple {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px 4px 16px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all 0.1s;
+}
+
+.chapter-item-simple:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.chapter-item-simple.active {
+    background: var(--accent-dim);
+    color: var(--accent-light);
+}
+
+.chapter-item-simple .ch-idx {
+    font-size: 10px;
+    color: var(--text-muted);
+    width: 20px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.chapter-item-simple .ch-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chapter-item-simple .ch-wc {
+    font-size: 10px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+/* 右栏 tab */
+.right-tab {
+    flex: 1;
+    padding: 10px 0;
+    font-size: 13px;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    font-family: var(--font-sans);
+}
+
+.right-tab:hover {
+    color: var(--text-secondary);
+}
+
+.right-tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+}
+
+/* AI 文件列表项 */
+.ai-file-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.1s;
+}
+
+.ai-file-item:hover {
+    background: var(--bg-hover);
+}
+
+.ai-file-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.ai-file-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 编辑器工具按钮（文本格式化） */
+.editor-tool-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.1s;
+}
+
+.editor-tool-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+}
+
+/* AI 对话消息气泡 */
+.msg-user {
+    align-self: flex-end;
+    max-width: 95%;
+}
+
+.msg-user-bubble {
+    background: var(--accent);
+    padding: 10px 12px;
+    border-radius: 12px 12px 4px 12px;
+}
+
+.msg-user-label {
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.msg-user-text {
+    font-size: 13px;
+    color: white;
+    line-height: 1.6;
+}
+
+.msg-ai {
+    align-self: flex-start;
+    max-width: 95%;
+}
+
+.msg-ai-bubble {
+    background: var(--bg-tertiary);
+    padding: 10px 12px;
+    border-radius: 12px 12px 12px 4px;
+    border: 1px solid var(--border);
+}
+
+.msg-ai-label {
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.msg-ai-text {
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+.msg-feedback {
+    margin-top: 6px;
+    padding-left: 4px;
 }
 

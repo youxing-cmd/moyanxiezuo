@@ -146,6 +146,59 @@
     .col-right {
         width: 240px;
     }
+    .writing-topbar {
+        padding: 8px 12px;
+    }
+    .writing-topbar-title {
+        font-size: 14px;
+    }
+    .editor-ai-bar {
+        padding: 6px 12px;
+        flex-wrap: wrap;
+    }
+    .editor-format-bar {
+        padding: 4px 12px;
+        overflow-x: auto;
+    }
+    .editor-content-area {
+        padding: 16px 20px;
+    }
+    #editorArea {
+        padding: 20px 24px;
+    }
+    .ai-chat-input-area {
+        padding: 10px;
+    }
+}
+
+@media (max-width: 720px) {
+    .col-left {
+        display: none;
+    }
+    .col-right {
+        display: none;
+    }
+    .col-resizer {
+        display: none;
+    }
+    .col-center {
+        width: 100%;
+    }
+    .writing-topbar {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .writing-topbar-right {
+        width: 100%;
+        justify-content: flex-end;
+    }
+    .editor-ai-bar {
+        overflow-x: auto;
+    }
+    .ai-tool-btn {
+        padding: 5px 10px;
+        font-size: 11px;
+    }
 }
 
 /* ========== 作品卡片操作菜单 ========== */

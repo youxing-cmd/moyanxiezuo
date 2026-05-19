@@ -966,29 +966,28 @@ async function initPageInteractions(page) {
 
         function createUserBubble(text) {
             const el = document.createElement('div');
-            el.style.cssText = 'align-self:flex-end; max-width:95%;';
+            el.className = 'msg-user';
             const contentHtml = formatAiParagraphs(text);
             el.innerHTML = `
-                <div style="background:var(--accent); padding:10px 12px; border-radius:12px 12px 4px 12px;">
-                    <div style="font-size:12px; color:rgba(255,255,255,0.7); font-weight:600; margin-bottom:4px;">你</div>
-                    <div style="font-size:13px; color:white; line-height:1.6;">${contentHtml}</div>
+                <div class="msg-user-bubble">
+                    <div class="msg-user-label">你</div>
+                    <div class="msg-user-text">${contentHtml}</div>
                 </div>`;
             return el;
         }
 
         function createAiBubble(text, msgIndex) {
             const el = document.createElement('div');
-            el.className = 'ai-msg-bubble';
-            el.style.cssText = 'align-self:flex-start; max-width:95%;';
+            el.className = 'ai-msg-bubble msg-ai';
             if (msgIndex !== undefined) el.dataset.msgIndex = msgIndex;
             // 历史消息直接格式化为段落；空消息（流式占位）用 textContent 占位
             const contentHtml = text ? formatAiParagraphs(text) : '<span style="color:var(--text-muted);"></span>';
             el.innerHTML = `
-                <div style="background:var(--bg-tertiary); padding:10px 12px; border-radius:12px 12px 12px 4px; border:1px solid var(--border);">
-                    <div style="font-size:12px; color:var(--accent); font-weight:600; margin-bottom:4px;">九章</div>
-                    <div class="ai-msg-content" style="font-size:13px; color:var(--text-primary); line-height:1.6;">${contentHtml}</div>
+                <div class="msg-ai-bubble">
+                    <div class="msg-ai-label">九章</div>
+                    <div class="ai-msg-content msg-ai-text">${contentHtml}</div>
                 </div>
-                <div class="msg-feedback" style="margin-top:6px; padding-left:4px;"></div>`;
+                <div class="msg-feedback"></div>`;
             // 使用统一结果操作栏
             const feedbackEl = el.querySelector('.msg-feedback');
             if (feedbackEl) {
