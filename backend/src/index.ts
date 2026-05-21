@@ -20,6 +20,8 @@ import { pointsRouter } from './routes/points.js';
 import modelConfigRoutes from './routes/model-configs.js';
 import presetModelsRoutes from './routes/preset-models.js';
 import { initScheduler } from './jobs/scheduler.js';
+import { initAgentWorker } from './jobs/agentWorker.js';
+import agentJobsRouter from './routes/agent-jobs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '3000');
@@ -63,6 +65,7 @@ app.route('/api/works', worksRoutes);
 app.route('/api/works', metaRoutes);
 app.route('/api/ai', aiRoutes);
 app.route('/api/ai', agentChatRoutes);
+app.route('/api/ai', agentJobsRouter);
 app.route('/api/stats', statsRoutes);
 app.route('/api/inspirations', inspirationsRoutes);
 app.route('/api/trends', trendsRoutes);
@@ -106,6 +109,9 @@ if (process.env.NODE_ENV !== 'test') {
 // 初始化定时任务（仅在非测试环境）
 if (process.env.NODE_ENV !== 'test') {
   initScheduler();
+  initAgentWorker().catch((err) => {
+    console.error('[index] Agent Worker 初始化失败:', err);
+  });
 }
 
 // 未捕获异常上报 Sentry

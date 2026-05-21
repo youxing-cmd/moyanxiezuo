@@ -25,6 +25,7 @@
     "node-cron": "^4.2.1",
     "opentype.js": "^2.0.0",
     "pg": "^8.15.5",
+    "pg-boss": "^12.18.2",
     "playwright": "^1.59.1",
     "tesseract.js": "^7.0.0",
     "ws": "^8.20.0",
