@@ -2,6 +2,8 @@ import { db } from '../db/index.js';
 import { agentJobs, agentPlanSteps, agentStepEvents, aiArtifacts } from '../db/schema.js';
 import { eq, asc } from 'drizzle-orm';
 import { buildWorkContextPrompt } from './contextBuilder.js';
+import { callLLM } from './llm.js';
+import { TOOL_PROMPTS } from '../routes/ai.js';
 
 interface LoadedJob {
   id: number;
@@ -122,6 +124,34 @@ async function updateJobProgress(jobId: number, steps: LoadedStep[]) {
   await db.update(agentJobs).set({ progress, updatedAt: new Date() }).where(eq(agentJobs.id, jobId));
 }
 
+// ===== 上下文收集 =====
+
+function collectContextFromDeps(step: LoadedStep, allSteps: LoadedStep[]): string {
+  let context = '';
+  for (const depId of step.dependsOn) {
+    const dep = allSteps.find((s) => String(s.id) === depId);
+    if (dep && dep.output) {
+      const out = dep.output as Record<string, unknown>;
+      if (out.content) {
+        context += `【${dep.title}】\n${out.content}\n\n`;
+      }
+      if (out.ideas && Array.isArray(out.ideas)) {
+        context += `【${dep.title}】\n${out.ideas.map((i: unknown, idx: number) => `${idx + 1}. ${i}`).join('\n')}\n\n`;
+      }
+    }
+  }
+  return context;
+}
+
+async function callAgentLLM(system: string, user: string): Promise<string> {
+  const res = await callLLM([
+    { role: 'system', content: system },
+    { role: 'user', content: user },
+  ], false);
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
 // ===== Step 执行器 =====
 
 async function runReadContext(step: LoadedStep, job: LoadedJob) {
@@ -160,6 +190,33 @@ async function runCreateArtifact(step: LoadedStep, job: LoadedJob) {
   step.artifactId = artifact.id;
 }
 
+async function runGenerateIdeas(step: LoadedStep, job: LoadedJob, allSteps: LoadedStep[]) {
+  const context = collectContextFromDeps(step, allSteps);
+  const system = '你是网文创意生成专家。根据用户指令和已有上下文，生成 3 个差异化、有爆款潜质的题材方向。每个方向包含：标题、核心梗、爽点设计、目标读者。用中文输出。';
+  const user = `${context ? '【上下文】\n' + context + '\n' : ''}【用户指令】\n${job.query}\n\n请生成 3 个题材方向。`;
+
+  const content = await callAgentLLM(system, user);
+  step.output = { content, type: 'ideas' };
+}
+
+async function runDraftOutline(step: LoadedStep, job: LoadedJob, allSteps: LoadedStep[]) {
+  const context = collectContextFromDeps(step, allSteps);
+  const system = TOOL_PROMPTS.outline || '你是专业网文大纲设计师。根据题材和用户需求，设计结构清晰、节奏紧凑的小说总纲。';
+  const user = `${context ? '【上下文】\n' + context + '\n' : ''}【用户指令】\n${job.query}\n\n请生成小说总纲。`;
+
+  const content = await callAgentLLM(system, user);
+  step.output = { content, type: 'outline' };
+}
+
+async function runWriteChunk(step: LoadedStep, job: LoadedJob, allSteps: LoadedStep[]) {
+  const context = collectContextFromDeps(step, allSteps);
+  const system = TOOL_PROMPTS.continue || '你是专业中文网文作者。根据上下文续写小说正文，保持文风一致，推进冲突，每段留钩子。';
+  const user = `${context ? '【上下文】\n' + context + '\n' : ''}【用户指令】\n${job.query}\n\n请续写一段小说正文，约 800-1500 字。`;
+
+  const content = await callAgentLLM(system, user);
+  step.output = { content, type: 'chunk' };
+}
+
 // ===== 主执行器 =====
 
 export async function executeJob(jobId: number): Promise<void> {
@@ -193,12 +250,12 @@ export async function executeJob(jobId: number): Promise<void> {
       break;
     }
 
-    await executeStep(step, job);
+    await executeStep(step, job, steps);
     await updateJobProgress(jobId, steps);
   }
 }
 
-async function executeStep(step: LoadedStep, job: LoadedJob) {
+async function executeStep(step: LoadedStep, job: LoadedJob, steps: LoadedStep[]) {
   console.log(`[agent-executor] 执行 step ${step.id}: ${step.taskType} — ${step.title}`);
 
   await updateStepStatus(step.id, 'running');
@@ -212,6 +269,15 @@ async function executeStep(step: LoadedStep, job: LoadedJob) {
         break;
       case 'create_artifact':
         await runCreateArtifact(step, job);
+        break;
+      case 'generate_ideas':
+        await runGenerateIdeas(step, job, steps);
+        break;
+      case 'draft_outline':
+        await runDraftOutline(step, job, steps);
+        break;
+      case 'write_chunk':
+        await runWriteChunk(step, job, steps);
         break;
       default:
         // 其他类型暂不支持，标记为 skipped
