@@ -5,6 +5,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { db } from '../db/index.js';
 import { agentJobs, agentPlanSteps, agentStepEvents } from '../db/schema.js';
 import { sendAgentJob } from '../jobs/agentWorker.js';
+import { planJob, savePlanToSteps } from '../services/planner.js';
 
 const agentJobsRouter = new Hono();
 
@@ -36,7 +37,38 @@ agentJobsRouter.post('/agent-jobs', async (c) => {
     })
     .returning();
 
-  return c.json({ id: job.id, status: job.status, query: job.query }, 201);
+  // 立即调用 Planner 生成 task DAG
+  try {
+    const plan = await planJob(query, { userId, workId: workId ?? null });
+    await savePlanToSteps(job.id, plan);
+
+    // 规划成功，更新 job 状态为 planning（已有 plan）
+    await db
+      .update(agentJobs)
+      .set({
+        status: 'planning',
+        updatedAt: new Date(),
+        errorMsg: '',
+      })
+      .where(eq(agentJobs.id, job.id));
+
+    return c.json({ id: job.id, status: job.status, query: job.query, planTitle: plan.title }, 201);
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[agent-jobs] Planner 失败 jobId=${job.id}:`, err);
+
+    await db
+      .update(agentJobs)
+      .set({
+        status: 'failed',
+        errorMsg,
+        updatedAt: new Date(),
+        finishedAt: new Date(),
+      })
+      .where(eq(agentJobs.id, job.id));
+
+    return c.json({ id: job.id, status: 'failed', query: job.query, error: errorMsg }, 201);
+  }
 });
 
 // GET /api/ai/agent-jobs/:id — 获取整体状态（含 steps + events）
