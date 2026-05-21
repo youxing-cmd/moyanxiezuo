@@ -1174,18 +1174,45 @@ async function initPageInteractions(page) {
         };
 
         // SSE 流消费器：按行缓冲跨 chunk 安全，同时累积 content / tool_calls delta
-        // callbacks: { onContent(deltaText, fullContent), onToolCallDelta(index, toolCall), onFinish(reason) }
+        // callbacks: {
+        //   onContent(deltaText, fullContent), onToolCallDelta(index, toolCall), onFinish(reason),
+        //   onPlanUpdate(data), onStepUpdate(data), onArtifactCreated(data)
+        // }
         // 返回: { content, toolCalls }
         async function consumeSSEStream(reader, callbacks = {}) {
             const decoder = new TextDecoder();
             let buffer = '';
             const acc = { content: '', toolCallsByIndex: {} };
+            let currentEvent = null;
 
             const flushLine = (line) => {
                 const t = line.trim();
-                if (!t || !t.startsWith('data:')) return;
+                if (!t) { currentEvent = null; return; }
+                if (t.startsWith('event:')) {
+                    currentEvent = t.slice(6).trim();
+                    return;
+                }
+                if (!t.startsWith('data:')) return;
                 const data = t.slice(5).trim();
                 if (data === '[DONE]') return;
+
+                // 自定义事件分发
+                if (currentEvent) {
+                    try {
+                        const payload = JSON.parse(data);
+                        if (currentEvent === 'plan_update') callbacks.onPlanUpdate?.(payload);
+                        if (currentEvent === 'step_start' || currentEvent === 'step_done') callbacks.onStepUpdate?.(payload);
+                        if (currentEvent === 'artifact_created') callbacks.onArtifactCreated?.(payload);
+                    } catch {
+                        // 非 JSON 的自定义事件 payload，直接透传字符串
+                        if (currentEvent === 'plan_update') callbacks.onPlanUpdate?.(data);
+                        if (currentEvent === 'step_start' || currentEvent === 'step_done') callbacks.onStepUpdate?.(data);
+                        if (currentEvent === 'artifact_created') callbacks.onArtifactCreated?.(data);
+                    }
+                    return;
+                }
+
+                // 标准 LLM SSE 事件
                 let parsed;
                 try { parsed = JSON.parse(data); } catch { return; }
                 const delta = parsed.choices?.[0]?.delta;
