@@ -307,3 +307,56 @@ export const aiArtifacts = pgTable('ai_artifacts', {
   createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
   updatedAt: timestamp('updated_at', { mode: 'date' }).$defaultFn(() => new Date()),
 });
+
+export const agentJobs = pgTable('agent_jobs', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull(),
+  workId: integer('work_id'),
+  query: text('query').notNull(),
+  status: text('status').notNull().default('planning'),
+  planId: integer('plan_id'),
+  progress: integer('progress').notNull().default(0),
+  errorMsg: text('error_msg').notNull().default(''),
+  createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).$defaultFn(() => new Date()),
+  finishedAt: timestamp('finished_at', { mode: 'date' }),
+});
+
+export const agentPlanSteps = pgTable('agent_plan_steps', {
+  id: serial('id').primaryKey(),
+  jobId: integer('job_id').notNull(),
+  parentId: integer('parent_id'),
+  idx: integer('idx').notNull().default(0),
+  taskType: text('task_type').notNull(),
+  title: text('title').notNull().default(''),
+  description: text('description').notNull().default(''),
+  status: text('status').notNull().default('pending'),
+  dependsOn: jsonb('depends_on').$type<string[]>().notNull().default([]),
+  input: jsonb('input').$type<Record<string, unknown>>().notNull().default({}),
+  output: jsonb('output').$type<Record<string, unknown>>().notNull().default({}),
+  artifactId: integer('artifact_id'),
+  reflectionResult: jsonb('reflection_result').$type<Record<string, unknown>>().notNull().default({}),
+  retryCount: integer('retry_count').notNull().default(0),
+  startedAt: timestamp('started_at', { mode: 'date' }),
+  finishedAt: timestamp('finished_at', { mode: 'date' }),
+});
+
+export const agentStepEvents = pgTable('agent_step_events', {
+  id: serial('id').primaryKey(),
+  jobId: integer('job_id').notNull(),
+  stepId: integer('step_id').notNull(),
+  type: text('type').notNull(),
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
+});
+
+export const agentPlanTemplates = pgTable('agent_plan_templates', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  query: text('query').notNull().default(''),
+  plan: jsonb('plan').$type<Record<string, unknown>>().notNull().default({}),
+  useCount: integer('use_count').notNull().default(0),
+  createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
+});
