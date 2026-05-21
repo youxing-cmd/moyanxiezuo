@@ -1513,6 +1513,144 @@ async function initPageInteractions(page) {
             trace.appendChild(line);
         }
 
+        // ===== Agent Composer Step UI =====
+        // 每一轮 round 创建一个 step-card，按 step 追加：thinking / tool / 结束
+        function createStepCard(aiBubble, roundIndex) {
+            const trace = ensureToolTraceContainer(aiBubble);
+            if (!trace) return null;
+            const card = document.createElement('div');
+            card.className = 'step-card open';
+            card.dataset.round = String(roundIndex);
+            card.innerHTML = `
+                <div class="step-card-header">
+                    <span class="step-card-arrow">▶</span>
+                    <span class="step-card-count">0</span>
+                    <span class="step-card-summary">正在思考...</span>
+                </div>
+                <div class="step-card-body"></div>
+            `;
+            // 点击 header 切换折叠
+            card.querySelector('.step-card-header').addEventListener('click', () => {
+                card.classList.toggle('open');
+            });
+            trace.appendChild(card);
+            return card;
+        }
+
+        function updateStepCardSummary(card, summary) {
+            if (!card) return;
+            const sumEl = card.querySelector('.step-card-summary');
+            if (sumEl && summary) sumEl.textContent = summary;
+            const body = card.querySelector('.step-card-body');
+            const countEl = card.querySelector('.step-card-count');
+            if (body && countEl) countEl.textContent = String(body.children.length);
+        }
+
+        function appendThinkingStep(card, text) {
+            if (!card) return null;
+            const body = card.querySelector('.step-card-body');
+            if (!body) return null;
+            // 同一轮已有 thinking 项就更新它
+            let item = body.querySelector('.step-item[data-kind="thinking"]');
+            if (!item) {
+                item = document.createElement('div');
+                item.className = 'step-item';
+                item.dataset.kind = 'thinking';
+                item.innerHTML = `
+                    <span class="step-item-state running"></span>
+                    <span class="step-item-icon">💭</span>
+                    <span class="step-item-thinking"></span>
+                `;
+                body.appendChild(item);
+            }
+            const thinkEl = item.querySelector('.step-item-thinking');
+            const trimmed = (text || '').replace(/\s+/g, ' ').slice(0, 80);
+            if (thinkEl) thinkEl.textContent = trimmed + (text && text.length > 80 ? '...' : '');
+            updateStepCardSummary(card, '思考中...');
+            return item;
+        }
+
+        function finalizeThinkingStep(card) {
+            if (!card) return;
+            const item = card.querySelector('.step-item[data-kind="thinking"]');
+            if (!item) return;
+            const state = item.querySelector('.step-item-state');
+            if (state) {
+                state.classList.remove('running', 'pending', 'error');
+                state.classList.add('done');
+            }
+        }
+
+        function appendToolStep(card, toolName, args) {
+            if (!card) return null;
+            const body = card.querySelector('.step-card-body');
+            if (!body) return null;
+            const icon = getToolIcon(toolName);
+            const displayName = getToolDisplayName(toolName);
+            const target = buildToolStepTarget(toolName, args);
+
+            const item = document.createElement('div');
+            item.className = 'step-item';
+            item.dataset.kind = 'tool';
+            item.dataset.tool = toolName;
+            item.innerHTML = `
+                <span class="step-item-state running"></span>
+                <span class="step-item-icon">${icon}</span>
+                <span class="step-item-name">${escapeHtml(displayName)}</span>
+                ${target ? `<span class="step-item-target">${escapeHtml(target)}</span>` : ''}
+            `;
+            body.appendChild(item);
+            updateStepCardSummary(card, `执行 ${displayName}...`);
+            return item;
+        }
+
+        function updateToolStep(item, state, errorMsg) {
+            if (!item) return;
+            const stateEl = item.querySelector('.step-item-state');
+            if (!stateEl) return;
+            stateEl.classList.remove('pending', 'running', 'done', 'error');
+            stateEl.classList.add(state);
+            if (errorMsg) {
+                const targetEl = item.querySelector('.step-item-target');
+                if (targetEl) {
+                    targetEl.textContent = errorMsg.slice(0, 80);
+                    targetEl.style.color = 'var(--danger)';
+                }
+            }
+        }
+
+        // 从 args 中提炼出"目标对象"展示文本
+        function buildToolStepTarget(toolName, args) {
+            if (!args || typeof args !== 'object') return '';
+            // 常见参数：text/title/name/path/chapterId/keyword
+            if (args.title) return String(args.title).slice(0, 60);
+            if (args.name) return String(args.name).slice(0, 60);
+            if (args.path) return String(args.path).slice(0, 60);
+            if (args.chapterId) return `章节 ${args.chapterId}`;
+            if (args.keyword) return `"${String(args.keyword).slice(0, 40)}"`;
+            if (typeof args.text === 'string' && args.text.length) {
+                return args.text.slice(0, 40) + (args.text.length > 40 ? '...' : '');
+            }
+            return '';
+        }
+
+        function finalizeStepCard(card, toolCalls) {
+            if (!card) return;
+            const body = card.querySelector('.step-card-body');
+            const countEl = card.querySelector('.step-card-count');
+            if (body && countEl) countEl.textContent = String(body.children.length);
+            // 摘要：用第一个工具的名称
+            const firstTool = (toolCalls || []).find(t => t && t.name);
+            if (firstTool) {
+                const summary = `${getToolDisplayName(firstTool.name)}${toolCalls.length > 1 ? ` 等 ${toolCalls.length} 步` : ''}`;
+                updateStepCardSummary(card, summary);
+            } else {
+                updateStepCardSummary(card, '思考完成');
+            }
+            // 默认收起
+            card.classList.remove('open');
+        }
+
         // 多轮工具调用循环：发起 /chat → 接 SSE → 若有 tool_calls 则执行后再轮一次，最多 maxRounds 轮
         // 返回最终 AI 文本回复；过程中实时更新 aiContentEl 和 aiBubble.tool-trace
         // 灰度：URL 加 ?agent=1 可切换到 /api/ai/agent-chat（L3 路由层，自动选择模型和工具）
