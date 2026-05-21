@@ -3,6 +3,7 @@ import type { Job } from 'pg-boss';
 import { db } from '../db/index.js';
 import { agentJobs } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
+import { executeJob } from '../services/agentExecutor.js';
 
 let boss: PgBoss | null = null;
 
@@ -38,14 +39,8 @@ export async function initAgentWorker() {
         .set({ status: 'running', updatedAt: new Date() })
         .where(eq(agentJobs.id, jobId));
 
-      // TODO(P3): 接入 Executor 主循环，按 DAG 推进
-      console.log(`[agent-worker] jobId=${jobId} 状态已更新为 running，Executor 待接入`);
-
-      // 模拟完成（P3 前占位）
-      await db
-        .update(agentJobs)
-        .set({ status: 'done', progress: 100, updatedAt: new Date(), finishedAt: new Date() })
-        .where(eq(agentJobs.id, jobId));
+      // 接入 Executor 主循环
+      await executeJob(jobId);
 
       console.log(`[agent-worker] jobId=${jobId} 执行完成`);
     } catch (err) {
