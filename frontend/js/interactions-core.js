@@ -987,12 +987,12 @@ async function initPageInteractions(page) {
                     <div class="ai-msg-content msg-ai-text">${contentHtml}</div>
                 </div>
                 <div class="msg-feedback"></div>`;
-            // 使用统一结果操作栏
+            // 使用统一结果操作栏（Cursor 风格）
             const feedbackEl = el.querySelector('.msg-feedback');
             if (feedbackEl) {
                 createResultActionBar(feedbackEl, {
                     text: text || '',
-                    actions: ['copy', 'insert', 'replace', 'retry', 'like', 'dislike'],
+                    actions: ['accept', 'copy', 'retry', 'like', 'dislike'],
                     onCopy: () => {
                         const contentEl = el.querySelector('.ai-msg-content');
                         const txt = contentEl?.textContent || '';
@@ -1003,17 +1003,11 @@ async function initPageInteractions(page) {
                             fallbackCopy(txt);
                         }
                     },
-                    onInsert: () => {
-                        const contentEl = el.querySelector('.ai-msg-content');
-                        const txt = contentEl?.textContent || '';
-                        if (!txt) { showToast('内容为空', 'warning'); return; }
-                        insertIntoEditor(txt);
-                    },
                     onReplace: () => {
                         const contentEl = el.querySelector('.ai-msg-content');
                         const txt = contentEl?.textContent || '';
                         if (!txt) { showToast('内容为空', 'warning'); return; }
-                        replaceRefText(txt);
+                        insertIntoEditor(txt);
                     },
                     onRetry: () => {
                         if (aiChatStreaming) {
@@ -2529,5 +2523,65 @@ function setupDebugPanel() {
     };
     workspace.style.position = 'relative';
     workspace.appendChild(btn);
+}
+
+// ========== Cursor 风格写作页全局函数 ==========
+
+function switchChatTab(tab) {
+    document.querySelectorAll('.chat-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === tab);
+    });
+    const input = document.getElementById('aiChatInput');
+    if (!input) return;
+    const placeholders = {
+        chat: '输入指令，用 @ 引用文件...',
+        continue: '输入续写方向或留空自动续写...',
+        polish: '输入需要润色的内容或要求...',
+        check: '输入要检查的内容或留空检查全文...'
+    };
+    input.placeholder = placeholders[tab] || placeholders.chat;
+}
+
+let diffPreviewActive = false;
+function toggleDiffPreview() {
+    const btn = document.getElementById('btnToggleDiff');
+    if (!btn) return;
+    diffPreviewActive = !diffPreviewActive;
+    if (diffPreviewActive) {
+        btn.classList.add('active');
+        btn.textContent = '✕ 关闭Diff';
+        showToast('Diff 预览已开启', 'info');
+    } else {
+        btn.classList.remove('active');
+        btn.textContent = '⚡ Diff预览';
+        showToast('Diff 预览已关闭', 'info');
+        // 移除所有 diff 预览
+        document.querySelectorAll('.diff-preview').forEach(el => el.remove());
+    }
+}
+
+// 顶栏模型选择器切换（兼容新旧两个位置）
+function toggleChatModelDropdown() {
+    const dropdown = document.getElementById('chatModelDropdown');
+    const arrowOld = document.getElementById('chatModelArrow');
+    const arrowNew = document.querySelector('#chatTopbarModelSelect .arrow');
+    if (!dropdown) return;
+    const isOpen = dropdown.style.display === 'flex';
+    dropdown.style.display = isOpen ? 'none' : 'flex';
+    const rot = isOpen ? '' : 'rotate(180deg)';
+    if (arrowOld) arrowOld.style.transform = rot;
+    if (arrowNew) arrowNew.style.transform = rot;
+    if (!isOpen) {
+        loadModelSelector();
+    }
+}
+
+function closeChatModelDropdown() {
+    const dropdown = document.getElementById('chatModelDropdown');
+    const arrowOld = document.getElementById('chatModelArrow');
+    const arrowNew = document.querySelector('#chatTopbarModelSelect .arrow');
+    if (dropdown) dropdown.style.display = 'none';
+    if (arrowOld) arrowOld.style.transform = '';
+    if (arrowNew) arrowNew.style.transform = '';
 }
 

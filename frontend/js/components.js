@@ -121,6 +121,7 @@ function createResultActionBar(container, options = {}) {
         copy: { label: '📋 复制', cls: 'jz-action-btn' },
         insert: { label: '✓ 插入正文', cls: 'jz-action-btn primary' },
         replace: { label: '✓ 替换原文', cls: 'jz-action-btn primary' },
+        accept: { label: '✓ 采纳建议', cls: 'jz-action-btn primary' },
         diff: { label: '📊 差异对比', cls: 'jz-action-btn' },
         retry: { label: '🔄 重新生成', cls: 'jz-action-btn' },
         regenerate: { label: '🔄 重新生成', cls: 'jz-action-btn' },
@@ -220,6 +221,23 @@ function createResultActionBar(container, options = {}) {
                             }
                         } else {
                             showToast('请先在编辑器中选中要替换的文本', 'warning');
+                        }
+                    }
+                    break;
+                case 'accept':
+                    if (onReplace) onReplace(resultText, resultHtml);
+                    else {
+                        const editorArea = document.getElementById('editorArea');
+                        if (editorArea) {
+                            const html = resultHtml || ('<p>' + (typeof escapeHtml === 'function' ? escapeHtml(resultText) : resultText).replace(/\n/g, '</p><p>') + '</p>');
+                            const fragment = document.createRange().createContextualFragment(html);
+                            editorArea.appendChild(fragment);
+                            showToast('已采纳到正文', 'success');
+                            if (typeof currentWorkId !== 'undefined' && currentWorkId && typeof currentChapterId !== 'undefined' && currentChapterId && typeof saveCurrentChapter === 'function') {
+                                saveCurrentChapter(false);
+                            }
+                        } else {
+                            showToast('暂无可采纳的编辑器', 'warning');
                         }
                     }
                     break;

@@ -6,12 +6,18 @@
                     <span class="writing-topbar-logo">九章</span>
                     <span id="writingWorkTitle" class="writing-topbar-title">加载中...</span>
                     <div class="writing-topbar-sep"></div>
-                    <span id="writingWorkMeta" class="writing-topbar-meta">...</span>
-                    <span id="writingWordCount" class="writing-topbar-meta">...</span>
+                    <button class="topbar-btn" onclick="showToast('本章分析功能开发中','info')">本章分析</button>
+                    <button class="topbar-btn" onclick="showToast('人物面板功能开发中','info')">人物</button>
+                    <button class="topbar-btn" onclick="showToast('大纲面板功能开发中','info')">大纲</button>
+                    <button class="topbar-btn" onclick="showToast('设定面板功能开发中','info')">设定</button>
+                    <div class="writing-topbar-sep"></div>
+                    <button class="topbar-btn" onclick="showToast('字体设置功能开发中','info')">Aa</button>
+                    <button class="topbar-btn" onclick="showToast('缩放功能开发中','info')">100%</button>
                 </div>
                 <div class="writing-topbar-right">
-                    <button class="topbar-btn" id="btnSaveChapter" onclick="saveCurrentChapter()">保存</button>
-                    <button class="topbar-btn" onclick="exportChapter(currentWorkId, currentChapterId)">导出本章</button>
+                    <button class="topbar-btn" id="btnToggleDiff" onclick="toggleDiffPreview()">⚡ Diff预览</button>
+                    <button class="topbar-btn" onclick="showToast('预览模式功能开发中','info')">预览</button>
+                    <button class="topbar-btn-save" id="btnSaveChapter" onclick="saveCurrentChapter()">保存</button>
                 </div>
             </div>
 
@@ -119,15 +125,12 @@
                 <!-- 中栏：编辑器 -->
                 <div class="col-center">
                     <div class="editor-panel">
-                        <!-- AI 工具栏 -->
+                        <!-- AI 工具栏（Cursor 风格：单一入口） -->
                         <div class="editor-ai-bar">
                             <div class="ai-bar-left">
-                                <button class="ai-tool-btn active" data-action="continue">续写正文</button>
-                                <button class="ai-tool-btn" data-action="continue-plot">续写情节</button>
-                                <button class="ai-tool-btn" data-action="replace">替换</button>
-                                <button class="ai-tool-btn" data-action="detect">纠错</button>
-                                <button class="ai-tool-btn" data-action="de-ai">去AI味</button>
-                                <button class="ai-tool-btn" id="btnWorkMemory" onclick="switchToolTab('memory');">记忆</button>
+                                <button class="ai-tool-btn" id="btnAiContinue" onclick="handleContinueText()">
+                                    <span style="margin-right:4px;">✦</span>AI续写
+                                </button>
                             </div>
                             <div class="ai-bar-right">
                                 <label class="toggle-row">
@@ -192,13 +195,15 @@
                     <div class="chat-panel">
                         <!-- 顶部 -->
                         <div class="chat-topbar">
-                            <div class="chat-tabs">
-                                <button class="chat-tab active">Chat</button>
-                                <button class="chat-tab">Continue</button>
-                                <button class="chat-tab">Polish</button>
+                            <div class="model-select" id="chatTopbarModelSelect" onclick="toggleChatModelDropdown()">
+                                <span id="chatTopbarModelName">默认模型</span>
+                                <span class="arrow">▼</span>
                             </div>
-                            <div class="chat-topbar-right">
-                                <button class="topbar-btn" onclick="showToast('工具库','info')">工具</button>
+                            <div class="chat-tabs">
+                                <button class="chat-tab active" data-tab="chat" onclick="switchChatTab('chat')">Chat</button>
+                                <button class="chat-tab" data-tab="continue" onclick="switchChatTab('continue')">Continue</button>
+                                <button class="chat-tab" data-tab="polish" onclick="switchChatTab('polish')">Polish</button>
+                                <button class="chat-tab" data-tab="check" onclick="switchChatTab('check')">Check</button>
                             </div>
                         </div>
 
@@ -226,41 +231,6 @@
                                         </button>
                                     </div>
                                     <div class="chat-composer-right">
-                                        <span id="chatModelPicker" style="position:relative; display:inline-block;">
-                                            <button class="composer-pill" id="chatModelTrigger">
-                                                <span id="chatModelTriggerName">默认模型</span>
-                                                <span id="chatModelArrow" style="font-size:9px; opacity:0.6;">▼</span>
-                                            </button>
-                                            <div id="chatModelDropdown" style="position:absolute; left:0; bottom:calc(100% + 6px); min-width:180px; max-height:260px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:10px; display:none; flex-direction:column; box-shadow:0 8px 24px rgba(0,0,0,0.15); z-index:9999; overflow:hidden;">
-                                                <div id="chatModelDropdownList" style="padding:8px 0; overflow-y:auto; max-height:260px;"></div>
-                                                <div style="padding:8px 12px; border-top:1px solid var(--border);">
-                                                    <button class="btn btn-ghost btn-sm" style="width:100%; font-size:11px;" onclick="switchPage('modelConfigs')">选择模型</button>
-                                                </div>
-                                            </div>
-                                        </span>
-                                        <select id="chatToolSelect" style="display:none;">
-                                            <option value="default">九章默认工具</option>
-                                        </select>
-                                        <span id="chatToolPicker" style="position:relative; display:inline-block;">
-                                            <button class="composer-pill" id="chatToolTrigger">
-                                                <span id="chatToolTriggerName">默认工具</span>
-                                                <span id="chatToolArrow" style="font-size:9px; opacity:0.6;">▼</span>
-                                            </button>
-                                            <div id="chatToolDropdown" style="position:absolute; right:0; bottom:calc(100% + 6px); width:380px; max-height:320px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:10px; display:none; flex-direction:column; box-shadow:0 8px 24px rgba(0,0,0,0.15); z-index:9999; overflow:hidden;">
-                                                <div style="padding:10px 12px; overflow-y:auto;">
-                                                    <div style="display:flex; gap:12px;">
-                                                        <div style="flex:1; min-width:0;">
-                                                            <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px; font-weight:600;">我的收藏</div>
-                                                            <div id="chatToolDropdownCustom" style="display:grid; grid-template-columns:1fr; gap:5px;"></div>
-                                                        </div>
-                                                        <div style="flex:1.8; min-width:0;">
-                                                            <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px; font-weight:600;">官方推荐</div>
-                                                            <div id="chatToolDropdownOfficial" style="display:grid; grid-template-columns:1fr; gap:5px;"></div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </span>
                                         <button class="composer-pill composer-pill-mode" id="agentModeBtn" onclick="toggleAgentMode()">手动</button>
                                     </div>
                                 </div>
