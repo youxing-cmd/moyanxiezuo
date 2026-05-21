@@ -2097,20 +2097,25 @@ async function loadModelSelector() {
 let chatModelDropdownOpen = false;
 function toggleChatModelDropdown() {
     const dropdown = document.getElementById('chatModelDropdown');
-    const arrow = document.getElementById('chatModelArrow');
+    const arrowOld = document.getElementById('chatModelArrow');
+    const arrowNew = document.querySelector('#chatTopbarModelSelect .arrow');
     if (!dropdown) return;
     chatModelDropdownOpen = !chatModelDropdownOpen;
     dropdown.style.display = chatModelDropdownOpen ? 'flex' : 'none';
-    if (arrow) arrow.style.transform = chatModelDropdownOpen ? 'rotate(180deg)' : '';
+    const rot = chatModelDropdownOpen ? 'rotate(180deg)' : '';
+    if (arrowOld) arrowOld.style.transform = rot;
+    if (arrowNew) arrowNew.style.transform = rot;
     if (chatModelDropdownOpen) {
         loadModelSelector();
     }
 }
 function closeChatModelDropdown() {
     const dropdown = document.getElementById('chatModelDropdown');
-    const arrow = document.getElementById('chatModelArrow');
+    const arrowOld = document.getElementById('chatModelArrow');
+    const arrowNew = document.querySelector('#chatTopbarModelSelect .arrow');
     if (dropdown) dropdown.style.display = 'none';
-    if (arrow) arrow.style.transform = '';
+    if (arrowOld) arrowOld.style.transform = '';
+    if (arrowNew) arrowNew.style.transform = '';
     chatModelDropdownOpen = false;
 }
 

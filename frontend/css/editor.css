@@ -1349,3 +1349,134 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+/* ====== Diff 预览 ====== */
+.diff-preview {
+    margin: 24px auto;
+    max-width: 680px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    font-size: 12px;
+    background: var(--bg-secondary);
+}
+
+.diff-header {
+    padding: 6px 12px;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono);
+}
+
+.diff-stat-add {
+    color: var(--success);
+}
+
+.diff-stat-del {
+    color: var(--danger);
+}
+
+.diff-row {
+    display: flex;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.diff-row .ln {
+    width: 36px;
+    text-align: right;
+    padding: 0 6px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    user-select: none;
+    border-right: 1px solid var(--border);
+}
+
+.diff-row .ln-add {
+    background: rgba(78, 201, 134, 0.06);
+}
+
+.diff-row .ln-del {
+    background: rgba(244, 103, 103, 0.06);
+}
+
+.diff-row .gutter {
+    width: 16px;
+    flex-shrink: 0;
+    text-align: center;
+    font-weight: 700;
+    user-select: none;
+}
+
+.diff-row .gutter-add {
+    color: var(--success);
+    background: rgba(78, 201, 134, 0.06);
+}
+
+.diff-row .gutter-del {
+    color: var(--danger);
+    background: rgba(244, 103, 103, 0.06);
+}
+
+.diff-row .code {
+    flex: 1;
+    padding: 0 8px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.diff-row.add .code {
+    background: rgba(78, 201, 134, 0.05);
+    color: #b8e0c8;
+}
+
+.diff-row.del .code {
+    background: rgba(244, 103, 103, 0.05);
+    color: #e8a8a8;
+}
+
+.diff-row.ctx .code {
+    color: var(--text-secondary);
+}
+
+.diff-actions {
+    padding: 6px 12px;
+    background: var(--bg-tertiary);
+    display: flex;
+    gap: 6px;
+    border-top: 1px solid var(--border);
+}
+
+.diff-actions button {
+    padding: 3px 10px;
+    border-radius: var(--radius-sm);
+    border: none;
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: 500;
+    font-family: var(--font-sans);
+}
+
+.diff-accept {
+    background: var(--accent);
+    color: #1a1a2e;
+}
+
+.diff-accept:hover {
+    filter: brightness(1.1);
+}
+
+.diff-reject {
+    background: var(--bg-active);
+    color: var(--text-secondary);
+}
+
+.diff-reject:hover {
+    background: var(--bg-hover);
+}

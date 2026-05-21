@@ -2560,28 +2560,96 @@ function toggleDiffPreview() {
     }
 }
 
-// 顶栏模型选择器切换（兼容新旧两个位置）
-function toggleChatModelDropdown() {
-    const dropdown = document.getElementById('chatModelDropdown');
-    const arrowOld = document.getElementById('chatModelArrow');
-    const arrowNew = document.querySelector('#chatTopbarModelSelect .arrow');
-    if (!dropdown) return;
-    const isOpen = dropdown.style.display === 'flex';
-    dropdown.style.display = isOpen ? 'none' : 'flex';
-    const rot = isOpen ? '' : 'rotate(180deg)';
-    if (arrowOld) arrowOld.style.transform = rot;
-    if (arrowNew) arrowNew.style.transform = rot;
-    if (!isOpen) {
-        loadModelSelector();
+// 模型选择器切换见 interactions-ai.js:toggleChatModelDropdown
+
+// ========== Diff 预览 ==========
+
+let currentDiffData = null;
+
+function computeLineDiff(oldText, newText) {
+    const oldLines = oldText.split('\n');
+    const newLines = newText.split('\n');
+    const result = [];
+    let i = 0, j = 0;
+    while (i < oldLines.length || j < newLines.length) {
+        if (i < oldLines.length && j < newLines.length && oldLines[i] === newLines[j]) {
+            result.push({ type: 'ctx', lnOld: i + 1, lnNew: j + 1, text: oldLines[i] });
+            i++; j++;
+        } else if (j < newLines.length && (i >= oldLines.length || !oldLines.slice(i).includes(newLines[j]))) {
+            result.push({ type: 'add', lnNew: j + 1, text: newLines[j] });
+            j++;
+        } else if (i < oldLines.length) {
+            result.push({ type: 'del', lnOld: i + 1, text: oldLines[i] });
+            i++;
+        } else {
+            result.push({ type: 'add', lnNew: j + 1, text: newLines[j] });
+            j++;
+        }
     }
+    return result;
 }
 
-function closeChatModelDropdown() {
-    const dropdown = document.getElementById('chatModelDropdown');
-    const arrowOld = document.getElementById('chatModelArrow');
-    const arrowNew = document.querySelector('#chatTopbarModelSelect .arrow');
-    if (dropdown) dropdown.style.display = 'none';
-    if (arrowOld) arrowOld.style.transform = '';
-    if (arrowNew) arrowNew.style.transform = '';
+function showDiffPreview(originalText, suggestedText) {
+    const editorScroll = document.getElementById('editorScrollContainer');
+    if (!editorScroll) return;
+    let panel = editorScroll.querySelector('.diff-preview');
+    if (!panel) {
+        panel = document.createElement('div');
+        panel.className = 'diff-preview';
+        editorScroll.appendChild(panel);
+    }
+    const diffRows = computeLineDiff(originalText, suggestedText);
+    const addCount = diffRows.filter(r => r.type === 'add').length;
+    const delCount = diffRows.filter(r => r.type === 'del').length;
+    currentDiffData = { originalText, suggestedText, diffRows };
+
+    const rowsHtml = diffRows.map(r => {
+        const lnOld = r.type !== 'add' ? `<div class="ln${r.type === 'del' ? ' ln-del' : ''}">${r.lnOld}</div>` : '<div class="ln"></div>';
+        const lnNew = r.type !== 'del' ? `<div class="ln${r.type === 'add' ? ' ln-add' : ''}">${r.lnNew}</div>` : '<div class="ln"></div>';
+        const gutter = `<div class="gutter${r.type === 'add' ? ' gutter-add' : r.type === 'del' ? ' gutter-del' : ''}">${r.type === 'add' ? '+' : r.type === 'del' ? '-' : ' '}</div>`;
+        const code = `<div class="code">${escapeHtml(r.text)}</div>`;
+        return `<div class="diff-row ${r.type}">${lnOld}${lnNew}${gutter}${code}</div>`;
+    }).join('');
+
+    panel.innerHTML = `
+        <div class="diff-header">
+            <span>✦ AI 修改建议</span>
+            <span><span class="diff-stat-add">+${addCount} </span><span class="diff-stat-del">-${delCount}</span></span>
+        </div>
+        ${rowsHtml}
+        <div class="diff-actions">
+            <button class="diff-accept" onclick="acceptDiff()">接受修改</button>
+            <button class="diff-reject" onclick="rejectDiff()">拒绝</button>
+        </div>
+    `;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function acceptDiff() {
+    if (!currentDiffData) return;
+    const editorArea = document.getElementById('editorArea');
+    if (editorArea) {
+        const paragraphs = currentDiffData.suggestedText.split('\n').map(para => {
+            if (!para.trim()) return '';
+            return `<p>${escapeHtml(para)}</p>`;
+        }).filter(Boolean).join('');
+        editorArea.innerHTML = paragraphs;
+        editorArea.dispatchEvent(new Event('input', { bubbles: true }));
+        showToast('已接受修改', 'success');
+        if (typeof saveCurrentChapter === 'function') saveCurrentChapter(false);
+    }
+    rejectDiff();
+}
+
+function rejectDiff() {
+    const panel = document.querySelector('.diff-preview');
+    if (panel) panel.remove();
+    currentDiffData = null;
+    const btn = document.getElementById('btnToggleDiff');
+    if (btn) {
+        btn.classList.remove('active');
+        btn.textContent = '⚡ Diff预览';
+        diffPreviewActive = false;
+    }
 }
 
