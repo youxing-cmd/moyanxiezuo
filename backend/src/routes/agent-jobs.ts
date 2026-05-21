@@ -5,7 +5,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { db } from '../db/index.js';
 import { agentJobs, agentPlanSteps, agentStepEvents } from '../db/schema.js';
 import { sendAgentJob } from '../jobs/agentWorker.js';
-import { planJob, savePlanToSteps } from '../services/planner.js';
+import { planJob, savePlanToSteps, validatePlan } from '../services/planner.js';
 
 const agentJobsRouter = new Hono();
 
@@ -116,6 +116,51 @@ agentJobsRouter.get('/agent-jobs', async (c) => {
     .orderBy(desc(agentJobs.createdAt));
 
   return c.json({ jobs });
+});
+
+// PUT /api/ai/agent-jobs/:id/plan — 用户编辑 plan（删除旧 steps，重建新 steps）
+agentJobsRouter.put('/agent-jobs/:id/plan', async (c) => {
+  const userId = c.get('userId');
+  const jobId = parseInt(c.req.param('id'), 10);
+  if (Number.isNaN(jobId)) {
+    return c.json({ error: '无效的 job ID' }, 400);
+  }
+
+  const [job] = await db
+    .select()
+    .from(agentJobs)
+    .where(and(eq(agentJobs.id, jobId), eq(agentJobs.userId, userId)))
+    .limit(1);
+
+  if (!job) {
+    return c.json({ error: '任务不存在' }, 404);
+  }
+
+  if (job.status === 'running') {
+    return c.json({ error: '任务执行中，请先暂停再编辑 plan' }, 400);
+  }
+
+  const body = await c.req.json();
+
+  try {
+    const plan = validatePlan(body);
+
+    // 删除旧 steps
+    await db.delete(agentPlanSteps).where(eq(agentPlanSteps.jobId, jobId));
+
+    // 插入新 steps
+    await savePlanToSteps(jobId, plan);
+
+    await db
+      .update(agentJobs)
+      .set({ status: 'planning', errorMsg: '', updatedAt: new Date(), finishedAt: null })
+      .where(eq(agentJobs.id, jobId));
+
+    return c.json({ id: jobId, status: 'planning', planTitle: plan.title });
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: 'Plan 校验失败', details: errorMsg }, 400);
+  }
 });
 
 // POST /api/ai/agent-jobs/:id/start — 开始执行（提前放到 1.2，worker 需要被触发）

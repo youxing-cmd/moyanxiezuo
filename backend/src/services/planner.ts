@@ -132,8 +132,42 @@ function checkDAGNoCycle(steps: PlanStep[]): boolean {
   return visited === steps.length;
 }
 
-export async function planJob(query: string, ctx: PlanContext): Promise<PlanResult> {
-  const workContext = ctx.workId ? await buildWorkContextPrompt(ctx.workId, ctx.userId) : null;
+export function validatePlan(plan: unknown): PlanResult {
+  const validation = planSchema.safeParse(plan);
+  if (!validation.success) {
+    throw new Error(`Plan schema 校验失败: ${validation.error.message}`);
+  }
+
+  const data = validation.data;
+
+  for (const step of data.steps) {
+    if (!VALID_TASK_TYPES.has(step.type)) {
+      throw new Error(`未知 task type: ${step.type}`);
+    }
+  }
+
+  const stepIds = new Set(data.steps.map((s) => s.id));
+  for (const step of data.steps) {
+    for (const dep of step.dependsOn ?? []) {
+      if (!stepIds.has(dep)) {
+        throw new Error(`Step ${step.id} 的依赖 ${dep} 不存在`);
+      }
+    }
+  }
+
+  if (!checkDAGNoCycle(data.steps)) {
+    throw new Error('Plan 中存在循环依赖');
+  }
+
+  return {
+    title: data.title,
+    estimatedDuration: data.estimatedDuration,
+    estimatedCost: data.estimatedCost,
+    steps: data.steps,
+  };
+}
+
+async function callPlannerOnce(query: string, workContext: string | null): Promise<PlanResult> {
   const prompt = buildPlannerPrompt(query, workContext);
 
   const model = getPresetModelById(PLANNER_MODEL_ID);
@@ -156,7 +190,6 @@ export async function planJob(query: string, ctx: PlanContext): Promise<PlanResu
   const data = await res.json();
   const rawText = data.choices?.[0]?.message?.content || '';
 
-  // 提取 JSON（去掉可能的 markdown 代码块）
   const jsonMatch = rawText.match(/```json\s*([\s\S]*?)```/) || rawText.match(/```\s*([\s\S]*?)```/);
   const jsonText = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
 
@@ -167,42 +200,18 @@ export async function planJob(query: string, ctx: PlanContext): Promise<PlanResu
     throw new Error('Planner 输出不是合法 JSON');
   }
 
-  // Zod 校验
-  const validation = planSchema.safeParse(parsed);
-  if (!validation.success) {
-    throw new Error(`Plan schema 校验失败: ${validation.error.message}`);
+  return validatePlan(parsed);
+}
+
+export async function planJob(query: string, ctx: PlanContext): Promise<PlanResult> {
+  const workContext = ctx.workId ? await buildWorkContextPrompt(ctx.workId, ctx.userId) : null;
+
+  try {
+    return await callPlannerOnce(query, workContext);
+  } catch (err) {
+    console.warn('[planner] 第一次规划失败，自动重试一次:', err);
+    return await callPlannerOnce(query, workContext);
   }
-
-  const plan = validation.data;
-
-  // 校验 task type
-  for (const step of plan.steps) {
-    if (!VALID_TASK_TYPES.has(step.type)) {
-      throw new Error(`未知 task type: ${step.type}`);
-    }
-  }
-
-  // 校验 dependsOn 引用存在
-  const stepIds = new Set(plan.steps.map((s) => s.id));
-  for (const step of plan.steps) {
-    for (const dep of step.dependsOn ?? []) {
-      if (!stepIds.has(dep)) {
-        throw new Error(`Step ${step.id} 的依赖 ${dep} 不存在`);
-      }
-    }
-  }
-
-  // DAG 无环检查
-  if (!checkDAGNoCycle(plan.steps)) {
-    throw new Error('Plan 中存在循环依赖');
-  }
-
-  return {
-    title: plan.title,
-    estimatedDuration: plan.estimatedDuration,
-    estimatedCost: plan.estimatedCost,
-    steps: plan.steps,
-  };
 }
 
 export async function savePlanToSteps(jobId: number, plan: PlanResult): Promise<void> {
