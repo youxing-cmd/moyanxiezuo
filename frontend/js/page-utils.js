@@ -132,11 +132,15 @@ function focusTreeSection(nodeId) {
     body.style.display = 'block';
     if (toggle.classList) toggle.classList.add('open');
     body.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    // 高亮一下
+    // 高亮一下（去重 timer，避免连续点击闪烁）
     const header = toggle.closest('.tree-section-header');
     if (header) {
+        if (header._highlightTimer) clearTimeout(header._highlightTimer);
         header.style.background = 'var(--accent-soft, rgba(99,102,241,0.12))';
-        setTimeout(() => { header.style.background = ''; }, 1200);
+        header._highlightTimer = setTimeout(() => {
+            header.style.background = '';
+            header._highlightTimer = null;
+        }, 1200);
     }
 }
 
@@ -146,7 +150,7 @@ function switchLeftTab(tab) {
     const toggle = document.getElementById('treeToggle-' + tab);
     if (body && toggle) {
         body.style.display = 'block';
-        toggle.textContent = '▼';
+        if (toggle.classList) toggle.classList.add('open');
         body.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 }

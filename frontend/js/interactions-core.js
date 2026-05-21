@@ -1521,15 +1521,21 @@ async function initPageInteractions(page) {
             const card = document.createElement('div');
             card.className = 'step-card open';
             card.dataset.round = String(roundIndex);
+            // 预先创建 thinking 占位，保证顺序：thinking 永远在 body 第一项
             card.innerHTML = `
                 <div class="step-card-header">
                     <span class="step-card-arrow">▶</span>
                     <span class="step-card-count">0</span>
                     <span class="step-card-summary">正在思考...</span>
                 </div>
-                <div class="step-card-body"></div>
+                <div class="step-card-body">
+                    <div class="step-item" data-kind="thinking" style="display:none;">
+                        <span class="step-item-state running"></span>
+                        <span class="step-item-icon">💭</span>
+                        <span class="step-item-thinking"></span>
+                    </div>
+                </div>
             `;
-            // 点击 header 切换折叠
             card.querySelector('.step-card-header').addEventListener('click', () => {
                 card.classList.toggle('open');
             });
@@ -1550,7 +1556,7 @@ async function initPageInteractions(page) {
             if (!card) return null;
             const body = card.querySelector('.step-card-body');
             if (!body) return null;
-            // 同一轮已有 thinking 项就更新它
+            // thinking 项已经预创建，只需更新文本（如果不存在则补建在头部）
             let item = body.querySelector('.step-item[data-kind="thinking"]');
             if (!item) {
                 item = document.createElement('div');
@@ -1561,8 +1567,9 @@ async function initPageInteractions(page) {
                     <span class="step-item-icon">💭</span>
                     <span class="step-item-thinking"></span>
                 `;
-                body.appendChild(item);
+                body.insertBefore(item, body.firstChild);
             }
+            item.style.display = '';
             const thinkEl = item.querySelector('.step-item-thinking');
             const trimmed = (text || '').replace(/\s+/g, ' ').slice(0, 80);
             if (thinkEl) thinkEl.textContent = trimmed + (text && text.length > 80 ? '...' : '');
@@ -1659,6 +1666,8 @@ async function initPageInteractions(page) {
             let totalContent = '';
 
             const useAgent = getAgentMode() === 'auto';
+            // 仅当用户启用 Agent 且 aiBubble 容器存在时才显示 step UI；否则降级到批量卡片
+            const useStepUI = useAgent && !!aiBubble;
             const endpoint = useAgent ? `${API_BASE}/ai/agent-chat` : `${API_BASE}/ai/chat`;
             // agent 模式下后端路由决定模型和工具，前端透传 model/tools 无意义
             const filteredBody = useAgent
@@ -1686,7 +1695,7 @@ async function initPageInteractions(page) {
                 const baseShown = totalContent;
 
                 // Agent 模式：本轮创建 step card，启用 thinking 实时展示
-                const stepCard = useAgent ? createStepCard(aiBubble, round) : null;
+                const stepCard = useStepUI ? createStepCard(aiBubble, round) : null;
                 // 已展示 tool_call 的 step 项映射：idx → element
                 const toolStepMap = new Map();
 
@@ -1694,24 +1703,12 @@ async function initPageInteractions(page) {
                     onContent: (_d, full) => {
                         if (aiContentEl) aiContentEl.textContent = baseShown + full;
                         if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
-                        // Agent 模式：同步刷新 thinking 步骤
                         if (stepCard && full && full.trim()) {
                             appendThinkingStep(stepCard, full);
                         }
                     },
-                    onToolCallDelta: (idx, tc) => {
-                        if (!stepCard) return;
-                        // 函数名 + 参数完整后才创建（args 拼接到 } 结束时）
-                        if (!tc.function?.name) return;
-                        if (toolStepMap.has(idx)) return;
-                        // 等参数大致拼接完成（结尾为 }）再展示，避免半成品
-                        const argsStr = tc.function.arguments || '';
-                        if (!argsStr.endsWith('}')) return;
-                        let args = {};
-                        try { args = JSON.parse(argsStr); } catch { return; }
-                        const item = appendToolStep(stepCard, tc.function.name, args);
-                        if (item) toolStepMap.set(idx, item);
-                    },
+                    // 不在 delta 阶段渲染 tool step（参数完整性判断不可靠），
+                    // 改为 SSE 结束、parsedArgs 完整后再统一渲染（见下方循环）。
                 });
                 totalContent += sseResult.content || '';
 
@@ -1748,12 +1745,9 @@ async function initPageInteractions(page) {
                     let parsedArgs = {};
                     try { parsedArgs = JSON.parse(tc.function.arguments || '{}'); } catch {}
 
-                    // Agent 模式：如果之前 onToolCallDelta 未补齐参数，这里补一条 step
-                    let stepItem = toolStepMap.get(i);
-                    if (stepCard && !stepItem) {
-                        stepItem = appendToolStep(stepCard, tc.function.name, parsedArgs);
-                        if (stepItem) toolStepMap.set(i, stepItem);
-                    }
+                    // 参数完整后才创建 step（避免半成品 args 渲染）
+                    const stepItem = stepCard ? appendToolStep(stepCard, tc.function.name, parsedArgs) : null;
+                    if (stepItem) toolStepMap.set(i, stepItem);
 
                     // 写入类工具：用户确认（自动批准列表里的直接放行）
                     const confirmResult = await maybeConfirmToolCall(tc.function.name, parsedArgs);
@@ -1776,19 +1770,19 @@ async function initPageInteractions(page) {
                         addAutoApprove(tc.function.name);
                     }
 
-                    let result;
-                    try {
-                        result = await executeToolCall(tc.function.name, parsedArgs);
+                    // executeToolCall 内部已 try/catch，错误以 JSON 字符串返回，不会抛异常
+                    const result = await executeToolCall(tc.function.name, parsedArgs);
+                    const toolError = detectToolError(result);
+                    if (toolError) {
+                        updateToolStep(stepItem, 'error', toolError);
+                    } else {
                         updateToolStep(stepItem, 'done');
-                    } catch (err) {
-                        result = JSON.stringify({ ok: false, error: err && err.message ? err.message : String(err) });
-                        updateToolStep(stepItem, 'error', err && err.message ? err.message : String(err));
                     }
                     roundToolCalls.push({
                         name: tc.function.name,
                         category: getToolCategory(tc.function.name),
                         resultPreview: (result || '').slice(0, 200),
-                        error: false,
+                        error: !!toolError,
                     });
                     messages.push({
                         role: 'tool',
@@ -1815,6 +1809,18 @@ async function initPageInteractions(page) {
             appendToolTraceLine(aiBubble, '⚠️ 工具调用次数超过上限，已停止');
             maybeShowUndoButton(aiBubble);
             return { content: totalContent, messages };
+        }
+
+        // 从工具返回的字符串结果中检测错误（executeToolCall 不抛异常，错误以 JSON 字符串返回）
+        function detectToolError(resultStr) {
+            if (!resultStr || typeof resultStr !== 'string') return null;
+            try {
+                const parsed = JSON.parse(resultStr);
+                if (!parsed || typeof parsed !== 'object') return null;
+                if (parsed.error) return String(parsed.error).slice(0, 80);
+                if (parsed.ok === false) return String(parsed.error || '工具执行失败').slice(0, 80);
+            } catch {}
+            return null;
         }
 
         // 如果最近一次工具调用有写入快照，在 AI 气泡的 feedback 区追加一个撤销按钮

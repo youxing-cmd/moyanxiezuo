@@ -1,5 +1,10 @@
 // ========== 写作页加载 ==========
 async function loadWritingPage() {
+    const setText = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    };
+
     if (!currentWorkId) {
         // 没有选中作品，尝试加载第一个
         try {
@@ -7,13 +12,14 @@ async function loadWritingPage() {
             if (list && list.length > 0) {
                 currentWorkId = list[0].id;
             } else {
-                document.getElementById('writingWorkTitle').textContent = '无作品';
-                document.getElementById('writingWorkMeta').textContent = '请先在「我的作品」中创建作品';
-                document.getElementById('chapterList').innerHTML = '<div style="padding:8px; text-align:center; color:var(--text-muted); font-size:12px;">暂无章节</div>';
+                setText('writingWorkTitle', '无作品');
+                setText('writingWorkMeta', '请先在「我的作品」中创建作品');
+                const chapterList = document.getElementById('chapterList');
+                if (chapterList) chapterList.innerHTML = '<div style="padding:8px; text-align:center; color:var(--text-muted); font-size:12px;">暂无章节</div>';
                 return;
             }
         } catch (err) {
-            document.getElementById('writingWorkTitle').textContent = '加载失败';
+            setText('writingWorkTitle', '加载失败');
             return;
         }
     }
@@ -26,11 +32,11 @@ async function loadWritingPage() {
         }
         currentWorkData = work;
 
-        // 更新顶部信息
+        // 更新顶部信息（兼容新旧模板：新模板已移除 writingWorkMeta / writingWordCount）
         const statusMap = { unfinished: '连载中', finished: '已完结', reviewing: '审核中' };
-        document.getElementById('writingWorkTitle').textContent = work.title;
-        document.getElementById('writingWorkMeta').textContent = `${work.genre} · ${statusMap[work.status] || work.status}`;
-        document.getElementById('writingWordCount').textContent = `总字数 ${work.words || '0字'}`;
+        setText('writingWorkTitle', work.title);
+        setText('writingWorkMeta', `${work.genre} · ${statusMap[work.status] || work.status}`);
+        setText('writingWordCount', `总字数 ${work.words || '0字'}`);
 
         // 渲染章节列表
         renderChapterList(work.chapterList || []);
@@ -118,13 +124,22 @@ async function loadGlobalStyle() {
             `<div class="tree-file" style="cursor:default;"><span class="tf-name" style="font-size:11px;">${escapeHtml(t)}</span></div>`
         ).join('');
     } catch (err) {
-        container.innerHTML = '<div class="tree-empty">加载风格失败</div>';
+        const msg = err && err.message ? err.message : '';
+        if (msg.includes('404') || msg.includes('暂无')) {
+            container.innerHTML = '<div class="tree-empty">暂无风格分析（保存几章后自动生成）</div>';
+        } else {
+            container.innerHTML = '<div class="tree-empty">加载风格失败</div>';
+        }
     }
 }
 
 async function loadGlobalAnalysis() {
     const container = document.getElementById('globalAnalysisList');
     if (!container) return;
+    if (typeof authToken !== 'undefined' && !authToken) {
+        container.innerHTML = '<div class="tree-empty">请登录后查看素材</div>';
+        return;
+    }
     try {
         const all = await api('/inspirations');
         const list = (all || []).filter(i => !i.workId || i.workId === currentWorkId).slice(0, 20);
@@ -138,7 +153,12 @@ async function loadGlobalAnalysis() {
             </div>
         `).join('');
     } catch (err) {
-        container.innerHTML = '<div class="tree-empty">加载素材失败</div>';
+        const msg = err && err.message ? err.message : '';
+        if (msg.includes('401') || msg.includes('未登录')) {
+            container.innerHTML = '<div class="tree-empty">请登录后查看素材</div>';
+        } else {
+            container.innerHTML = '<div class="tree-empty">加载素材失败</div>';
+        }
     }
 }
 
