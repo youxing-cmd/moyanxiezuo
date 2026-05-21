@@ -66,6 +66,28 @@ async function loadWorkMetadata(work) {
         console.log('总纲加载失败:', err.message);
     }
 
+    // 加载角色
+    try {
+        const charList = await api(`/works/${currentWorkId}/characters`);
+        renderWorkCharacters(charList || []);
+    } catch (err) {
+        console.log('角色加载失败:', err.message);
+    }
+
+    // 加载设定（含 location/timeline/state 等所有子类型）
+    try {
+        const settingList = await api(`/works/${currentWorkId}/settings`);
+        renderWorkSettings(settingList || []);
+    } catch (err) {
+        console.log('设定加载失败:', err.message);
+    }
+
+    // 加载风格 DNA
+    loadGlobalStyle();
+
+    // 加载素材（按 workId 过滤的灵感）
+    loadGlobalAnalysis();
+
     // 加载作品灵感到正文页
     renderWorkInspiration(work.inspiration || '');
 
@@ -74,6 +96,50 @@ async function loadWorkMetadata(work) {
 
     // 加载AI文件（artifacts）
     loadArtifacts();
+}
+
+async function loadGlobalStyle() {
+    const container = document.getElementById('globalStyleList');
+    if (!container) return;
+    try {
+        const dna = await api(`/works/${currentWorkId}/style-dna`);
+        if (!dna || !dna.sampleSize) {
+            container.innerHTML = '<div class="tree-empty">暂无风格分析（保存几章后自动生成）</div>';
+            return;
+        }
+        const items = [];
+        if (dna.avgSentenceLength) items.push(`句子平均 ${Math.round(dna.avgSentenceLength)} 字`);
+        if (typeof dna.dialogueRatio === 'number') items.push(`对话占比 ${Math.round(dna.dialogueRatio * 100)}%`);
+        if (typeof dna.shortSentenceRatio === 'number') items.push(`短句 ${Math.round(dna.shortSentenceRatio * 100)}%`);
+        if (Array.isArray(dna.signatureWords) && dna.signatureWords.length) {
+            items.push(`常用词：${dna.signatureWords.slice(0, 5).join('、')}`);
+        }
+        container.innerHTML = items.map(t =>
+            `<div class="tree-file" style="cursor:default;"><span class="tf-name" style="font-size:11px;">${escapeHtml(t)}</span></div>`
+        ).join('');
+    } catch (err) {
+        container.innerHTML = '<div class="tree-empty">加载风格失败</div>';
+    }
+}
+
+async function loadGlobalAnalysis() {
+    const container = document.getElementById('globalAnalysisList');
+    if (!container) return;
+    try {
+        const all = await api('/inspirations');
+        const list = (all || []).filter(i => !i.workId || i.workId === currentWorkId).slice(0, 20);
+        if (list.length === 0) {
+            container.innerHTML = '<div class="tree-empty">暂无素材</div>';
+            return;
+        }
+        container.innerHTML = list.map(i => `
+            <div class="tree-file" onclick="quoteInspirationToChat(${i.id})">
+                <span class="tf-name">${escapeHtml(i.title || '未命名')}</span>
+            </div>
+        `).join('');
+    } catch (err) {
+        container.innerHTML = '<div class="tree-empty">加载素材失败</div>';
+    }
 }
 
 // 所有标签定义
@@ -148,73 +214,58 @@ async function saveWorkTags() {
 }
 
 function renderWorkCharacters(list) {
-    const protagonists = list.filter(c => c.role === 'protagonist');
-    const supporting = list.filter(c => c.role === 'supporting');
-
-    const protContainer = document.getElementById('workProtagonists');
-    const suppContainer = document.getElementById('workSupporting');
-
-    if (protContainer) {
-        if (protagonists.length === 0) {
-            protContainer.innerHTML = '<div style="padding:6px 8px; font-size:12px; color:var(--text-muted);">暂无主要角色</div>';
-        } else {
-            protContainer.innerHTML = protagonists.map(c => `
-                <div style="padding:6px 8px; border-radius:var(--radius-sm); cursor:pointer; font-size:12px; color:var(--text-secondary); margin-bottom:2px; display:flex; justify-content:space-between;" onclick="showCharacterForm(${c.id})">
-                    <span>${c.name}</span>
-                    <span style="font-size:11px; color:var(--text-muted);">主要角色</span>
-                </div>
-            `).join('');
-        }
+    const container = document.getElementById('globalCharactersList');
+    if (!container) return;
+    if (!list || list.length === 0) {
+        container.innerHTML = '<div class="tree-empty">暂无角色</div>';
+        return;
     }
-
-    if (suppContainer) {
-        if (supporting.length === 0) {
-            suppContainer.innerHTML = '<div style="padding:6px 8px; font-size:12px; color:var(--text-muted);">暂无次要角色</div>';
-        } else {
-            suppContainer.innerHTML = supporting.map(c => `
-                <div style="padding:6px 8px; border-radius:var(--radius-sm); cursor:pointer; font-size:12px; color:var(--text-secondary); margin-bottom:2px; display:flex; justify-content:space-between;" onclick="showCharacterForm(${c.id})">
-                    <span>${c.name}</span>
-                    <span style="font-size:11px; color:var(--text-muted);">次要角色</span>
-                </div>
-            `).join('');
-        }
-    }
+    const roleMap = { protagonist: '主角', supporting: '配角', antagonist: '反派' };
+    container.innerHTML = list.map(c => `
+        <div class="tree-file" onclick="showCharacterForm(${c.id})">
+            <span class="tf-name">${escapeHtml(c.name || '未命名')}</span>
+            <span class="badge" style="background:rgba(99,102,241,0.10); color:var(--accent-light);">${roleMap[c.role] || ''}</span>
+        </div>
+    `).join('');
 }
 
 function renderWorkSettings(list) {
-    const typeMap = { background: '背景', faction: '势力', location: '地点', thing: '物品' };
-    const typeIds = ['background', 'faction', 'location', 'thing'];
-
-    typeIds.forEach(type => {
-        const container = document.getElementById(`workSettings${type.charAt(0).toUpperCase() + type.slice(1)}`);
+    const typeMap = { background: '背景', faction: '势力', location: '地点', thing: '物品', timeline: '时间线', state: '状态' };
+    const containerMap = {
+        location: 'globalLocationsList',
+        timeline: 'globalTimelineList',
+        state: 'globalStateList',
+    };
+    // Locations / Timeline / State 各自独立分区
+    Object.entries(containerMap).forEach(([type, containerId]) => {
+        const container = document.getElementById(containerId);
         if (!container) return;
-
-        const items = list.filter(s => s.type === type);
+        const items = (list || []).filter(s => s.type === type);
         if (items.length === 0) {
-            container.innerHTML = `<div style="padding:6px 8px; font-size:12px; color:var(--text-muted);">暂无${typeMap[type]}设定</div>`;
+            container.innerHTML = `<div class="tree-empty">暂无${typeMap[type]}</div>`;
         } else {
             container.innerHTML = items.map(s => `
-                <div style="padding:6px 8px; border-radius:var(--radius-sm); cursor:pointer; font-size:12px; color:var(--text-secondary); margin-bottom:2px; display:flex; justify-content:space-between;" onclick="showSettingForm(${s.id})">
-                    <span>${s.name}</span>
+                <div class="tree-file" onclick="showSettingForm(${s.id})">
+                    <span class="tf-name">${escapeHtml(s.name || '未命名')}</span>
                 </div>
             `).join('');
         }
     });
+    // background/faction/thing 等保留为"作品信息"区下方追加（如果将来要展示）
 }
 
 function renderWorkOutlines(list) {
-    const container = document.getElementById('workOutlinesContainer');
+    const container = document.getElementById('globalOutlineList');
     if (!container) return;
-
-    if (list.length === 0) {
-        container.innerHTML = '<div style="padding:6px 8px; border-radius:var(--radius-sm); font-size:12px; color:var(--text-secondary); cursor:pointer;" onclick="showToast(\'总纲编辑在Part3实现\', \'info\')">暂无总纲，点击新增</div>';
-    } else {
-        container.innerHTML = list.map(o => `
-            <div style="padding:6px 8px; border-radius:var(--radius-sm); cursor:pointer; font-size:12px; color:var(--text-secondary); margin-bottom:2px; display:flex; justify-content:space-between;" onclick="showOutlineForm(${o.id})">
-                <span>${o.title}</span>
-            </div>
-        `).join('');
+    if (!list || list.length === 0) {
+        container.innerHTML = '<div class="tree-empty">暂无大纲</div>';
+        return;
     }
+    container.innerHTML = list.map(o => `
+        <div class="tree-file" onclick="showOutlineForm(${o.id})">
+            <span class="tf-name">${escapeHtml(o.title || '未命名')}</span>
+        </div>
+    `).join('');
 }
 
 // ========== 展开/折叠状态管理 ==========
@@ -235,18 +286,9 @@ function toggleSection(sectionId) {
 }
 
 function restoreSectionState() {
+    // 已迁移到新工作树（Manuscript/Global/AI产物）。
+    // 默认 Manuscript 与 Global Information 展开，子项默认折叠。
     if (!currentWorkId) return;
-
-    ['roleSection', 'settingSection'].forEach(sectionId => {
-        const key = `jz_section_${currentWorkId}_${sectionId}`;
-        const state = localStorage.getItem(key);
-        if (state === 'collapsed') {
-            const section = document.getElementById(sectionId);
-            const toggle = document.getElementById(sectionId + 'Toggle');
-            if (section) section.style.display = 'none';
-            if (toggle) toggle.textContent = '›';
-        }
-    });
 }
 
 let chapterSortDesc = false;
@@ -1342,8 +1384,8 @@ async function handleDeleteCharacter(characterId) {
 }
 
 // ========== 设定表单 ==========
-async function showSettingForm(settingId) {
-    let s = { name: '', type: 'background', content: '' };
+async function showSettingForm(settingId, defaultType) {
+    let s = { name: '', type: defaultType || 'background', content: '' };
     if (settingId) {
         try {
             const list = await api(`/works/${currentWorkId}/settings`);
@@ -1367,6 +1409,8 @@ async function showSettingForm(settingId) {
                 <option value="faction" ${s.type === 'faction' ? 'selected' : ''}>势力</option>
                 <option value="location" ${s.type === 'location' ? 'selected' : ''}>地点</option>
                 <option value="thing" ${s.type === 'thing' ? 'selected' : ''}>物品</option>
+                <option value="timeline" ${s.type === 'timeline' ? 'selected' : ''}>时间线</option>
+                <option value="state" ${s.type === 'state' ? 'selected' : ''}>状态</option>
             </select>
         </div>
         <div class="form-group">
@@ -1543,6 +1587,24 @@ function quoteWorkInspirationToChat() {
     const pos = chatInput.value.length;
     chatInput.setSelectionRange(pos, pos);
     showToast('已引用到AI对话，请输入具体指令', 'success');
+}
+
+async function quoteInspirationToChat(inspirationId) {
+    try {
+        const insp = await api(`/inspirations/${inspirationId}`);
+        if (!insp || !insp.content) {
+            showToast('素材内容为空', 'warning');
+            return;
+        }
+        const chatInput = document.querySelector('.writing-workspace #aiChatInput');
+        if (!chatInput) return;
+        chatInput.value = `【素材：${insp.title || '未命名'}】\n${insp.content}\n\n请基于以上素材：`;
+        chatInput.focus();
+        chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
+        showToast('已引用素材到对话', 'success');
+    } catch (err) {
+        showToast('加载素材失败', 'danger');
+    }
 }
 
 // ========== 草稿 ==========
