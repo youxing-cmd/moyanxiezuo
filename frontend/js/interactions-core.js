@@ -1684,16 +1684,46 @@ async function initPageInteractions(page) {
                 const reader = res.body.getReader();
                 // 当前轮的 content 累积，叠加到 totalContent 的尾部展示
                 const baseShown = totalContent;
+
+                // Agent 模式：本轮创建 step card，启用 thinking 实时展示
+                const stepCard = useAgent ? createStepCard(aiBubble, round) : null;
+                // 已展示 tool_call 的 step 项映射：idx → element
+                const toolStepMap = new Map();
+
                 const sseResult = await consumeSSEStream(reader, {
                     onContent: (_d, full) => {
                         if (aiContentEl) aiContentEl.textContent = baseShown + full;
                         if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
+                        // Agent 模式：同步刷新 thinking 步骤
+                        if (stepCard && full && full.trim()) {
+                            appendThinkingStep(stepCard, full);
+                        }
+                    },
+                    onToolCallDelta: (idx, tc) => {
+                        if (!stepCard) return;
+                        // 函数名 + 参数完整后才创建（args 拼接到 } 结束时）
+                        if (!tc.function?.name) return;
+                        if (toolStepMap.has(idx)) return;
+                        // 等参数大致拼接完成（结尾为 }）再展示，避免半成品
+                        const argsStr = tc.function.arguments || '';
+                        if (!argsStr.endsWith('}')) return;
+                        let args = {};
+                        try { args = JSON.parse(argsStr); } catch { return; }
+                        const item = appendToolStep(stepCard, tc.function.name, args);
+                        if (item) toolStepMap.set(idx, item);
                     },
                 });
                 totalContent += sseResult.content || '';
 
+                // Agent 模式：thinking 完成
+                if (stepCard) finalizeThinkingStep(stepCard);
+
                 // 没有 tool_calls：本次回复就是最终输出
                 if (!sseResult.toolCalls || sseResult.toolCalls.length === 0) {
+                    if (stepCard) {
+                        updateStepCardSummary(stepCard, '思考完成');
+                        stepCard.classList.remove('open');
+                    }
                     maybeShowUndoButton(aiBubble);
                     maybeShowRouteFeedback(aiBubble, routeId);
                     // 最终 assistant 消息也加入 messages，用于持久化
@@ -1710,16 +1740,25 @@ async function initPageInteractions(page) {
                     tool_calls: sseResult.toolCalls,
                 });
 
-                // 收集本轮工具调用，最后渲染为一个卡片
+                // 收集本轮工具调用，最后渲染为一个卡片（非 Agent 模式用）
                 const roundToolCalls = [];
 
-                for (const tc of sseResult.toolCalls) {
+                for (let i = 0; i < sseResult.toolCalls.length; i++) {
+                    const tc = sseResult.toolCalls[i];
                     let parsedArgs = {};
                     try { parsedArgs = JSON.parse(tc.function.arguments || '{}'); } catch {}
+
+                    // Agent 模式：如果之前 onToolCallDelta 未补齐参数，这里补一条 step
+                    let stepItem = toolStepMap.get(i);
+                    if (stepCard && !stepItem) {
+                        stepItem = appendToolStep(stepCard, tc.function.name, parsedArgs);
+                        if (stepItem) toolStepMap.set(i, stepItem);
+                    }
 
                     // 写入类工具：用户确认（自动批准列表里的直接放行）
                     const confirmResult = await maybeConfirmToolCall(tc.function.name, parsedArgs);
                     if (!confirmResult.approved) {
+                        updateToolStep(stepItem, 'error', '用户拒绝');
                         roundToolCalls.push({
                             name: tc.function.name,
                             category: getToolCategory(tc.function.name),
@@ -1737,7 +1776,14 @@ async function initPageInteractions(page) {
                         addAutoApprove(tc.function.name);
                     }
 
-                    const result = await executeToolCall(tc.function.name, parsedArgs);
+                    let result;
+                    try {
+                        result = await executeToolCall(tc.function.name, parsedArgs);
+                        updateToolStep(stepItem, 'done');
+                    } catch (err) {
+                        result = JSON.stringify({ ok: false, error: err && err.message ? err.message : String(err) });
+                        updateToolStep(stepItem, 'error', err && err.message ? err.message : String(err));
+                    }
                     roundToolCalls.push({
                         name: tc.function.name,
                         category: getToolCategory(tc.function.name),
@@ -1751,8 +1797,12 @@ async function initPageInteractions(page) {
                     });
                 }
 
-                // 渲染本轮工具调用卡片
-                if (roundToolCalls.length > 0) {
+                // 渲染本轮工具调用卡片：
+                // - Agent 模式：step card 已就位，最后做 summary 总结
+                // - 手动模式：用旧的批量卡片
+                if (stepCard) {
+                    finalizeStepCard(stepCard, roundToolCalls);
+                } else if (roundToolCalls.length > 0) {
                     const trace = ensureToolTraceContainer(aiBubble);
                     if (trace) {
                         const card = createToolCallsCard(roundToolCalls);
