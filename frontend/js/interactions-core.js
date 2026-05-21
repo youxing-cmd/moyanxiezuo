@@ -2653,3 +2653,16 @@ function rejectDiff() {
     }
 }
 
+// 注入差异对比面板（兼容旧调用，关闭弹窗后在编辑器中展示 diff）
+function injectDiffPanel(resultId, originalText) {
+    const resultEl = document.getElementById(resultId);
+    if (!resultEl) return;
+    const resultText = resultEl.textContent || '';
+    if (!resultText || !originalText) return;
+    // 关闭当前弹窗
+    document.querySelector('.jz-modal-overlay')?.remove();
+    // 在编辑器中展示 diff
+    showDiffPreview(originalText, resultText);
+    showToast('已生成差异对比，请查看编辑器下方', 'info');
+}
+

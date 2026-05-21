@@ -1394,13 +1394,33 @@ async function handleDetectText() {
             if (actionBarContainer) {
                 createResultActionBar(actionBarContainer, {
                     text: text,
-                    actions: ['copy', 'retry', 'like', 'dislike'],
+                    actions: ['copy', 'replace', 'diff', 'retry', 'like', 'dislike'],
+                    originalText: plainText,
+                    resultSelector: '#detectResultContent',
+                    onReplace: (txt, html) => {
+                        const editorArea = document.getElementById('editorArea');
+                        if (!editorArea) return;
+                        const resultEl = document.getElementById('detectResultContent');
+                        const resultHtml = resultEl?.innerHTML || html || '';
+                        const sel = window.getSelection();
+                        if (sel.rangeCount > 0) {
+                            const range = sel.getRangeAt(0);
+                            range.deleteContents();
+                            const fragment = document.createRange().createContextualFragment(resultHtml);
+                            range.insertNode(fragment);
+                            sel.removeAllRanges();
+                        }
+                        document.querySelector('.jz-modal-overlay')?.remove();
+                        showToast('已替换文本', 'success');
+                        if (currentWorkId && currentChapterId) saveCurrentChapter(false);
+                    },
                     onRetry: () => {
                         document.querySelector('.jz-modal-overlay')?.remove();
                         handleDetectText();
                     }
                 });
             }
+            injectDiffPanel('detectResultContent', plainText);
             showToast('AI 纠错完成', 'success');
         },
         (err) => {
