@@ -23,98 +23,212 @@
 
             <!-- 三栏主体 -->
             <div class="editor-three-col">
-                <!-- 左栏：章节树 -->
+                <!-- 左栏：工作树（Manuscript + Global Information + AI 产物） -->
                 <div id="writeColLeft" class="col-left">
                     <div class="chapter-tree">
                         <div class="chapter-tree-header">
-                            <span>章节</span>
+                            <span>Writing Workspace</span>
                             <button onclick="showCreateChapterModal()" title="新建章节">+</button>
                         </div>
                         <div class="chapter-tree-body" id="leftPanel">
-                            <!-- 章节列表 -->
-                            <div id="chapterList">
-                                <div style="padding:8px 12px; text-align:center; color:var(--text-muted); font-size:12px;">加载中...</div>
+
+                            <!-- ========== Manuscript（手稿） ========== -->
+                            <div class="tree-section-header tree-section-root" onclick="toggleTreeNode('manuscript')">
+                                <span class="vol-arrow open" id="treeToggle-manuscript">▶</span>
+                                <span class="tree-dot" style="background:var(--accent)"></span>
+                                <span style="flex:1; font-weight:600;">Manuscript</span>
+                                <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); showCreateChapterModal()">+</button>
+                            </div>
+                            <div class="tree-section-body" id="treeBody-manuscript">
+                                <div id="chapterList">
+                                    <div style="padding:8px 12px; text-align:center; color:var(--text-muted); font-size:12px;">加载中...</div>
+                                </div>
                             </div>
 
-                            <!-- 作品灵感 -->
-                            <div class="tree-section-header" onclick="toggleWorkInspiration()">
-                                <span class="vol-arrow" id="workInspirationToggle">▶</span>
-                                <span class="tree-dot" style="background:var(--warning)"></span>
-                                <span style="flex:1">作品灵感</span>
-                                <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); quoteWorkInspirationToChat()">引用</button>
-                            </div>
-                            <div id="workInspirationContent" style="display:none; padding:3px 12px 3px 24px; font-size:11px; color:var(--text-secondary); line-height:1.5; max-height:50px; overflow:hidden; word-break:break-all;"></div>
-
-                            <!-- 作品详情 -->
-                            <div class="tree-section-header" onclick="toggleTreeNode('info')">
-                                <span class="vol-arrow" id="treeToggle-info">▶</span>
+                            <!-- ========== Global Information（全局信息） ========== -->
+                            <div class="tree-section-header tree-section-root" onclick="toggleTreeNode('global')">
+                                <span class="vol-arrow open" id="treeToggle-global">▶</span>
                                 <span class="tree-dot" style="background:var(--accent-light)"></span>
-                                <span style="flex:1">作品信息</span>
-                                <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); enterWorkDetail('edit', currentWorkId)">编辑</button>
+                                <span style="flex:1; font-weight:600;">Global Information</span>
                             </div>
-                            <div class="tree-section-body" id="treeBody-info" style="display:none;">
-                                <div id="workDetailInfo" style="padding:3px 12px 3px 24px; font-size:11px; color:var(--text-secondary); line-height:1.6;">
-                                    <div style="color:var(--text-muted);">加载中...</div>
+                            <div class="tree-section-body" id="treeBody-global">
+
+                                <!-- Outline 大纲 -->
+                                <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('outline')">
+                                    <span class="vol-arrow" id="treeToggle-outline">▶</span>
+                                    <span class="tree-icon">📋</span>
+                                    <span style="flex:1">Outline</span>
+                                    <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); showOutlineForm()">+</button>
                                 </div>
-                                <!-- 总纲 -->
-                                <div style="padding:3px 12px 3px 24px; margin-top:4px;">
-                                    <div style="font-size:11px; font-weight:600; color:var(--text-muted); margin-bottom:4px; display:flex; justify-content:space-between; align-items:center;">
-                                        <span>总纲</span>
-                                        <button class="btn btn-ghost btn-sm" style="padding:0 4px; font-size:10px;" onclick="showOutlineForm()">+</button>
-                                    </div>
-                                    <div id="workOutlinesContainer">
-                                        <div style="font-size:11px; color:var(--text-muted); cursor:pointer;" onclick="showOutlineForm()">暂无总纲</div>
+                                <div class="tree-section-body tree-section-sub-body" id="treeBody-outline" style="display:none;">
+                                    <div id="globalOutlineList">
+                                        <div class="tree-empty">暂无大纲</div>
                                     </div>
                                 </div>
+
+                                <!-- Characters 角色 -->
+                                <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('characters')">
+                                    <span class="vol-arrow" id="treeToggle-characters">▶</span>
+                                    <span class="tree-icon">👤</span>
+                                    <span style="flex:1">Characters</span>
+                                    <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); showCharacterForm()">+</button>
+                                </div>
+                                <div class="tree-section-body tree-section-sub-body" id="treeBody-characters" style="display:none;">
+                                    <div id="globalCharactersList">
+                                        <div class="tree-empty">暂无角色</div>
+                                    </div>
+                                </div>
+
+                                <!-- Locations 地点 -->
+                                <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('locations')">
+                                    <span class="vol-arrow" id="treeToggle-locations">▶</span>
+                                    <span class="tree-icon">📍</span>
+                                    <span style="flex:1">Locations</span>
+                                    <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); showSettingForm(null, 'location')">+</button>
+                                </div>
+                                <div class="tree-section-body tree-section-sub-body" id="treeBody-locations" style="display:none;">
+                                    <div id="globalLocationsList">
+                                        <div class="tree-empty">暂无地点</div>
+                                    </div>
+                                </div>
+
+                                <!-- Style 创作要求 -->
+                                <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('style')">
+                                    <span class="vol-arrow" id="treeToggle-style">▶</span>
+                                    <span class="tree-icon">🎨</span>
+                                    <span style="flex:1">Style</span>
+                                    <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); switchToolTab('memory');" title="查看风格 DNA 详情">详情</button>
+                                </div>
+                                <div class="tree-section-body tree-section-sub-body" id="treeBody-style" style="display:none;">
+                                    <div id="globalStyleList">
+                                        <div class="tree-empty">暂无风格分析</div>
+                                    </div>
+                                </div>
+
+                                <!-- Timeline 时间线 -->
+                                <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('timeline')">
+                                    <span class="vol-arrow" id="treeToggle-timeline">▶</span>
+                                    <span class="tree-icon">📅</span>
+                                    <span style="flex:1">Timeline</span>
+                                    <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); showSettingForm(null, 'timeline')">+</button>
+                                </div>
+                                <div class="tree-section-body tree-section-sub-body" id="treeBody-timeline" style="display:none;">
+                                    <div id="globalTimelineList">
+                                        <div class="tree-empty">暂无时间线</div>
+                                    </div>
+                                </div>
+
+                                <!-- State 状态 -->
+                                <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('state')">
+                                    <span class="vol-arrow" id="treeToggle-state">▶</span>
+                                    <span class="tree-icon">✅</span>
+                                    <span style="flex:1">State</span>
+                                    <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); showSettingForm(null, 'state')">+</button>
+                                </div>
+                                <div class="tree-section-body tree-section-sub-body" id="treeBody-state" style="display:none;">
+                                    <div id="globalStateList">
+                                        <div class="tree-empty">暂无状态</div>
+                                    </div>
+                                </div>
+
+                                <!-- Analysis 素材 -->
+                                <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('analysis-src')">
+                                    <span class="vol-arrow" id="treeToggle-analysis-src">▶</span>
+                                    <span class="tree-icon">🔍</span>
+                                    <span style="flex:1">Analysis</span>
+                                </div>
+                                <div class="tree-section-body tree-section-sub-body" id="treeBody-analysis-src" style="display:none;">
+                                    <div id="globalAnalysisList">
+                                        <div class="tree-empty">暂无素材</div>
+                                    </div>
+                                </div>
+
+                                <!-- 作品灵感 -->
+                                <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('inspiration')">
+                                    <span class="vol-arrow" id="treeToggle-inspiration">▶</span>
+                                    <span class="tree-icon">💡</span>
+                                    <span style="flex:1">作品灵感</span>
+                                    <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); quoteWorkInspirationToChat()">引用</button>
+                                </div>
+                                <div class="tree-section-body tree-section-sub-body" id="treeBody-inspiration" style="display:none;">
+                                    <div id="workInspirationContent" style="padding:3px 12px 3px 24px; font-size:11px; color:var(--text-secondary); line-height:1.5; max-height:120px; overflow:hidden; word-break:break-all;">
+                                        <div class="tree-empty">暂无灵感</div>
+                                    </div>
+                                </div>
+
+                                <!-- 作品详情 -->
+                                <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('info')">
+                                    <span class="vol-arrow" id="treeToggle-info">▶</span>
+                                    <span class="tree-icon">ℹ️</span>
+                                    <span style="flex:1">作品信息</span>
+                                    <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); enterWorkDetail('edit', currentWorkId)">编辑</button>
+                                </div>
+                                <div class="tree-section-body tree-section-sub-body" id="treeBody-info" style="display:none;">
+                                    <div id="workDetailInfo" style="padding:3px 12px 3px 24px; font-size:11px; color:var(--text-secondary); line-height:1.6;">
+                                        <div style="color:var(--text-muted);">加载中...</div>
+                                    </div>
+                                </div>
+
                             </div>
 
-                            <!-- AI 文件 -->
-                            <div class="tree-section-header" onclick="toggleTreeNode('artifacts')">
-                                <span class="vol-arrow" id="treeToggle-artifacts">▶</span>
+                            <!-- ========== AI 产物 ========== -->
+                            <div class="tree-section-header tree-section-root" onclick="toggleTreeNode('aiproduct')">
+                                <span class="vol-arrow" id="treeToggle-aiproduct">▶</span>
                                 <span class="tree-dot" style="background:var(--warning)"></span>
-                                <span style="flex:1">AI 文件</span>
+                                <span style="flex:1; font-weight:600;">AI 产物</span>
                             </div>
-                            <div class="tree-section-body" id="treeBody-artifacts" style="display:none;">
-                                <div id="artifactsList">
-                                    <div style="padding:3px 12px 3px 24px; font-size:11px; color:var(--text-muted);">对话中生成的内容会显示在这里</div>
+                            <div class="tree-section-body" id="treeBody-aiproduct" style="display:none;">
+
+                                <!-- AI 文件 -->
+                                <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('artifacts')">
+                                    <span class="vol-arrow" id="treeToggle-artifacts">▶</span>
+                                    <span class="tree-icon">📄</span>
+                                    <span style="flex:1">AI 文件</span>
                                 </div>
+                                <div class="tree-section-body tree-section-sub-body" id="treeBody-artifacts" style="display:none;">
+                                    <div id="artifactsList">
+                                        <div class="tree-empty">对话中生成的内容会显示在这里</div>
+                                    </div>
+                                </div>
+
+                                <!-- AI 分析 -->
+                                <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('analysis')">
+                                    <span class="vol-arrow" id="treeToggle-analysis">▶</span>
+                                    <span class="tree-icon">📊</span>
+                                    <span style="flex:1">AI 分析</span>
+                                    <button class="btn btn-ghost btn-sm" id="btnAIAnalysis" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); generateAIAnalysis()">拆书</button>
+                                </div>
+                                <div class="tree-section-body tree-section-sub-body" id="treeBody-analysis" style="display:none;">
+                                    <div style="padding:4px 8px;">
+                                        <div style="display:flex; gap:4px; margin-bottom:6px; justify-content:flex-end;">
+                                            <button class="btn btn-ghost btn-sm" id="btnReAnalysis" style="padding:1px 6px; font-size:10px; display:none;" onclick="generateAIAnalysis()">重新拆书</button>
+                                        </div>
+                                        <div id="analysisTabs" style="display:none; margin-bottom:6px; border-bottom:1px solid var(--border);">
+                                            <div style="display:flex; gap:2px; overflow-x:auto; padding-bottom:1px;">
+                                                <button class="analysis-tab active" data-tab="all" onclick="switchAnalysisTab('all')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--accent); border-bottom:2px solid var(--accent); cursor:pointer; white-space:nowrap; font-weight:600;">全文</button>
+                                                <button class="analysis-tab" data-tab="coreConflict" onclick="switchAnalysisTab('coreConflict')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">核心矛盾</button>
+                                                <button class="analysis-tab" data-tab="coreEmotion" onclick="switchAnalysisTab('coreEmotion')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">核心情绪</button>
+                                                <button class="analysis-tab" data-tab="characterSetting" onclick="switchAnalysisTab('characterSetting')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">人物设定</button>
+                                                <button class="analysis-tab" data-tab="plotTrend" onclick="switchAnalysisTab('plotTrend')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">剧情走向</button>
+                                                <button class="analysis-tab" data-tab="cliffhanger" onclick="switchAnalysisTab('cliffhanger')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">卡点剧情</button>
+                                            </div>
+                                        </div>
+                                        <div id="analysisActions" style="margin-bottom:6px; display:flex; gap:4px; justify-content:flex-end;">
+                                            <button class="btn btn-ghost btn-sm" style="padding:1px 6px; font-size:10px;" onclick="quoteAIAnalysisToChat()">引用</button>
+                                            <button class="btn btn-ghost btn-sm" style="padding:1px 6px; font-size:10px;" onclick="copyAIAnalysis()">复制</button>
+                                            <button class="btn btn-primary btn-sm" style="padding:1px 6px; font-size:10px;" onclick="saveAIAnalysisToInspiration()">收藏</button>
+                                        </div>
+                                        <div id="aiAnalysisContent" style="font-size:11px; color:var(--text-secondary); line-height:1.6;">
+                                            <div style="padding:8px; text-align:center; color:var(--text-muted); font-size:11px;">
+                                                <div>暂无分析数据</div>
+                                                <div style="font-size:10px; margin-top:2px;">点击「拆书」生成</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                             </div>
 
-                            <!-- AI 分析 -->
-                            <div class="tree-section-header" onclick="toggleTreeNode('analysis')">
-                                <span class="vol-arrow" id="treeToggle-analysis">▶</span>
-                                <span class="tree-dot" style="background:var(--info, #3b82f6)"></span>
-                                <span style="flex:1">AI 分析</span>
-                                <button class="btn btn-ghost btn-sm" id="btnAIAnalysis" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); generateAIAnalysis()">拆书</button>
-                            </div>
-                            <div class="tree-section-body" id="treeBody-analysis" style="display:none;">
-                                <div style="padding:4px 8px;">
-                                    <div style="display:flex; gap:4px; margin-bottom:6px; justify-content:flex-end;">
-                                        <button class="btn btn-ghost btn-sm" id="btnReAnalysis" style="padding:1px 6px; font-size:10px; display:none;" onclick="generateAIAnalysis()">重新拆书</button>
-                                    </div>
-                                    <div id="analysisTabs" style="display:none; margin-bottom:6px; border-bottom:1px solid var(--border);">
-                                        <div style="display:flex; gap:2px; overflow-x:auto; padding-bottom:1px;">
-                                            <button class="analysis-tab active" data-tab="all" onclick="switchAnalysisTab('all')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--accent); border-bottom:2px solid var(--accent); cursor:pointer; white-space:nowrap; font-weight:600;">全文</button>
-                                            <button class="analysis-tab" data-tab="coreConflict" onclick="switchAnalysisTab('coreConflict')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">核心矛盾</button>
-                                            <button class="analysis-tab" data-tab="coreEmotion" onclick="switchAnalysisTab('coreEmotion')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">核心情绪</button>
-                                            <button class="analysis-tab" data-tab="characterSetting" onclick="switchAnalysisTab('characterSetting')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">人物设定</button>
-                                            <button class="analysis-tab" data-tab="plotTrend" onclick="switchAnalysisTab('plotTrend')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">剧情走向</button>
-                                            <button class="analysis-tab" data-tab="cliffhanger" onclick="switchAnalysisTab('cliffhanger')" style="padding:4px 6px; font-size:10px; border:none; background:transparent; color:var(--text-muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;">卡点剧情</button>
-                                        </div>
-                                    </div>
-                                    <div id="analysisActions" style="margin-bottom:6px; display:flex; gap:4px; justify-content:flex-end;">
-                                        <button class="btn btn-ghost btn-sm" style="padding:1px 6px; font-size:10px;" onclick="quoteAIAnalysisToChat()">引用</button>
-                                        <button class="btn btn-ghost btn-sm" style="padding:1px 6px; font-size:10px;" onclick="copyAIAnalysis()">复制</button>
-                                        <button class="btn btn-primary btn-sm" style="padding:1px 6px; font-size:10px;" onclick="saveAIAnalysisToInspiration()">收藏</button>
-                                    </div>
-                                    <div id="aiAnalysisContent" style="font-size:11px; color:var(--text-secondary); line-height:1.6;">
-                                        <div style="padding:8px; text-align:center; color:var(--text-muted); font-size:11px;">
-                                            <div>暂无分析数据</div>
-                                            <div style="font-size:10px; margin-top:2px;">点击「拆书」生成</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>

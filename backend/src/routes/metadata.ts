@@ -114,7 +114,7 @@ metaRouter.delete('/:id/characters/:cid', async (c) => {
 // ========== 设定 ==========
 
 const settingSchema = z.object({
-  type: z.enum(['background', 'faction', 'location', 'thing']).default('background'),
+  type: z.enum(['background', 'faction', 'location', 'thing', 'timeline', 'state']).default('background'),
   name: z.string().min(1).max(100),
   content: z.string().default(''),
   sort: z.number().default(0),
