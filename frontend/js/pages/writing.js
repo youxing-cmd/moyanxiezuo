@@ -6,10 +6,10 @@
                     <span class="writing-topbar-logo">九章</span>
                     <span id="writingWorkTitle" class="writing-topbar-title">加载中...</span>
                     <div class="writing-topbar-sep"></div>
-                    <button class="topbar-btn" onclick="showToast('本章分析功能开发中','info')">本章分析</button>
-                    <button class="topbar-btn" onclick="showToast('人物面板功能开发中','info')">人物</button>
-                    <button class="topbar-btn" onclick="showToast('大纲面板功能开发中','info')">大纲</button>
-                    <button class="topbar-btn" onclick="showToast('设定面板功能开发中','info')">设定</button>
+                    <button class="topbar-btn" onclick="focusTreeSection('analysis')">本章分析</button>
+                    <button class="topbar-btn" onclick="focusTreeSection('characters')">人物</button>
+                    <button class="topbar-btn" onclick="focusTreeSection('outline')">大纲</button>
+                    <button class="topbar-btn" onclick="focusTreeSection('locations')">设定</button>
                     <div class="writing-topbar-sep"></div>
                     <button class="topbar-btn" onclick="showToast('字体设置功能开发中','info')">Aa</button>
                     <button class="topbar-btn" onclick="showToast('缩放功能开发中','info')">100%</button>

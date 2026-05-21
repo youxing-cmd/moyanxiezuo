@@ -106,7 +106,38 @@ function toggleTreeNode(nodeId) {
     if (!body || !toggle) return;
     const isExpanded = body.style.display !== 'none';
     body.style.display = isExpanded ? 'none' : 'block';
-    toggle.textContent = isExpanded ? '▶' : '▼';
+    // 兼容两种方式：保留 textContent 切换，同时维护 .open class 用于 CSS 旋转
+    if (toggle.classList) {
+        toggle.classList.toggle('open', !isExpanded);
+    }
+}
+
+// 顶部按钮：定位并展开左栏对应分区
+function focusTreeSection(nodeId) {
+    const body = document.getElementById('treeBody-' + nodeId);
+    const toggle = document.getElementById('treeToggle-' + nodeId);
+    if (!body || !toggle) {
+        if (typeof showToast === 'function') showToast('未找到对应面板', 'warning');
+        return;
+    }
+    // 同时展开父级 Global Information / AI 产物
+    ['global', 'aiproduct', 'manuscript'].forEach(parentId => {
+        const parentBody = document.getElementById('treeBody-' + parentId);
+        const parentToggle = document.getElementById('treeToggle-' + parentId);
+        if (parentBody && parentToggle && parentBody.contains(body)) {
+            parentBody.style.display = 'block';
+            if (parentToggle.classList) parentToggle.classList.add('open');
+        }
+    });
+    body.style.display = 'block';
+    if (toggle.classList) toggle.classList.add('open');
+    body.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // 高亮一下
+    const header = toggle.closest('.tree-section-header');
+    if (header) {
+        header.style.background = 'var(--accent-soft, rgba(99,102,241,0.12))';
+        setTimeout(() => { header.style.background = ''; }, 1200);
+    }
 }
 
 // 左栏tab切换（兼容旧代码：展开对应树节点并滚动）
