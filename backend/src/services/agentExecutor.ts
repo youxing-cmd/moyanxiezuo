@@ -225,6 +225,51 @@ async function runWriteChunk(step: LoadedStep, job: LoadedJob, allSteps: LoadedS
   step.output = { content, type: 'chunk' };
 }
 
+async function runUserInput(step: LoadedStep, job: LoadedJob) {
+  // user_input 不是真正"执行"，而是将 job 设为 waiting 状态等待用户介入
+  step.output = {
+    note: '等待用户输入',
+    hint: step.description || '请提供补充信息或选择',
+  };
+
+  // 将 job 整体标记为 waiting
+  await db
+    .update(agentJobs)
+    .set({ status: 'waiting', updatedAt: new Date() })
+    .where(eq(agentJobs.id, job.id));
+
+  await emitEvent(job.id, step.id, 'waiting_for_user', {
+    title: step.title,
+    description: step.description,
+  });
+}
+
+async function runSelfReview(step: LoadedStep, job: LoadedJob, allSteps: LoadedStep[]) {
+  const context = collectContextFromDeps(step, allSteps);
+  const system = `你是资深网文编辑。请对当前写作产出进行自检，评估以下维度并给出评分（1-10）和简要建议：
+1. 情节连贯性
+2. 角色一致性
+3. 爽点/钩子密度
+4. 文风稳定性
+5. 与总纲/设定的契合度
+
+如果总体评分 ≥ 7，输出 "通过"。否则输出 "不通过" 并给出优先修改建议。`;
+  const user = `${context ? '【上下文】\n' + context + '\n' : ''}【用户指令】\n${job.query}\n\n请进行自我审查。`;
+
+  const content = await callAgentLLM(system, user);
+  const passed = content.includes('通过') || content.includes('通过');
+  step.output = { content, passed, type: 'review' };
+}
+
+async function runPolish(step: LoadedStep, job: LoadedJob, allSteps: LoadedStep[]) {
+  const context = collectContextFromDeps(step, allSteps);
+  const system = TOOL_PROMPTS.polish || '你是专业网文润色师。对给定文本进行润色优化：提升画面感、强化情绪张力、精简冗余表达、统一句式节奏。保持原意和情节不变。';
+  const user = `${context ? '【待润色文本】\n' + context + '\n' : ''}【用户指令】\n${job.query}\n\n请润色上述文本。`;
+
+  const content = await callAgentLLM(system, user);
+  step.output = { content, type: 'polished' };
+}
+
 // ===== 主执行器 =====
 
 export async function executeJob(jobId: number): Promise<void> {
@@ -266,7 +311,7 @@ export async function executeJob(jobId: number): Promise<void> {
 async function executeStep(step: LoadedStep, job: LoadedJob, steps: LoadedStep[]) {
   console.log(`[agent-executor] 执行 step ${step.id}: ${step.taskType} — ${step.title}`);
 
-  const needsReflection = ['write_chunk', 'draft_outline', 'generate_ideas', 'create_artifact'].includes(step.taskType);
+  const needsReflection = ['write_chunk', 'draft_outline', 'generate_ideas', 'create_artifact', 'polish'].includes(step.taskType);
   const maxRetries = 3;
 
   while (step.retryCount < maxRetries) {
@@ -293,6 +338,15 @@ async function executeStep(step: LoadedStep, job: LoadedJob, steps: LoadedStep[]
         case 'write_chunk':
           await runWriteChunk(step, job, steps);
           break;
+        case 'user_input':
+          await runUserInput(step, job);
+          break;
+        case 'self_review':
+          await runSelfReview(step, job, steps);
+          break;
+        case 'polish':
+          await runPolish(step, job, steps);
+          break;
         default:
           step.output = { note: `task type ${step.taskType} 尚未实现` };
           console.log(`[agent-executor] step ${step.id} ${step.taskType} 尚未实现，跳过`);
@@ -313,6 +367,14 @@ async function executeStep(step: LoadedStep, job: LoadedJob, steps: LoadedStep[]
         return;
       }
       continue;
+    }
+
+    // user_input 特殊处理：标记为 waiting 并提前返回，不进入反射逻辑
+    if (step.taskType === 'user_input') {
+      await updateStepStatus(step.id, 'waiting', { output: step.output });
+      step.status = 'waiting';
+      await emitEvent(job.id, step.id, 'waiting', { taskType: step.taskType, output: step.output });
+      return;
     }
 
     // 非产出型步骤直接通过

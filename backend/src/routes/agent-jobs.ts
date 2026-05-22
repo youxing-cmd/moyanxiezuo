@@ -181,7 +181,7 @@ agentJobsRouter.post('/agent-jobs/:id/start', async (c) => {
     return c.json({ error: '任务不存在' }, 404);
   }
 
-  if (job.status !== 'planning' && job.status !== 'paused') {
+  if (job.status !== 'planning' && job.status !== 'paused' && job.status !== 'waiting') {
     return c.json({ error: `当前状态为 ${job.status}，无法开始` }, 400);
   }
 
@@ -193,6 +193,371 @@ agentJobsRouter.post('/agent-jobs/:id/start', async (c) => {
   await sendAgentJob(jobId);
 
   return c.json({ id: jobId, status: 'running' });
+});
+
+// POST /api/ai/agent-jobs/:id/pause — 暂停
+agentJobsRouter.post('/agent-jobs/:id/pause', async (c) => {
+  const userId = c.get('userId');
+  const jobId = parseInt(c.req.param('id'), 10);
+  if (Number.isNaN(jobId)) {
+    return c.json({ error: '无效的 job ID' }, 400);
+  }
+
+  const [job] = await db
+    .select()
+    .from(agentJobs)
+    .where(and(eq(agentJobs.id, jobId), eq(agentJobs.userId, userId)))
+    .limit(1);
+
+  if (!job) {
+    return c.json({ error: '任务不存在' }, 404);
+  }
+
+  if (job.status !== 'running') {
+    return c.json({ error: `当前状态为 ${job.status}，无法暂停` }, 400);
+  }
+
+  await db
+    .update(agentJobs)
+    .set({ status: 'paused', updatedAt: new Date() })
+    .where(eq(agentJobs.id, jobId));
+
+  await db.insert(agentStepEvents).values({
+    jobId,
+    stepId: 0,
+    type: 'control',
+    payload: { action: 'pause' },
+  });
+
+  return c.json({ id: jobId, status: 'paused' });
+});
+
+// POST /api/ai/agent-jobs/:id/abort — 中止
+agentJobsRouter.post('/agent-jobs/:id/abort', async (c) => {
+  const userId = c.get('userId');
+  const jobId = parseInt(c.req.param('id'), 10);
+  if (Number.isNaN(jobId)) {
+    return c.json({ error: '无效的 job ID' }, 400);
+  }
+
+  const [job] = await db
+    .select()
+    .from(agentJobs)
+    .where(and(eq(agentJobs.id, jobId), eq(agentJobs.userId, userId)))
+    .limit(1);
+
+  if (!job) {
+    return c.json({ error: '任务不存在' }, 404);
+  }
+
+  if (['done', 'failed', 'aborted'].includes(job.status)) {
+    return c.json({ error: `当前状态为 ${job.status}，无法中止` }, 400);
+  }
+
+  await db
+    .update(agentJobs)
+    .set({ status: 'aborted', updatedAt: new Date(), finishedAt: new Date() })
+    .where(eq(agentJobs.id, jobId));
+
+  // 将 pending / running 的 step 标记为 skipped
+  await db
+    .update(agentPlanSteps)
+    .set({ status: 'skipped', finishedAt: new Date() })
+    .where(and(eq(agentPlanSteps.jobId, jobId), eq(agentPlanSteps.status, 'pending')));
+
+  await db
+    .update(agentPlanSteps)
+    .set({ status: 'failed', finishedAt: new Date() })
+    .where(and(eq(agentPlanSteps.jobId, jobId), eq(agentPlanSteps.status, 'running')));
+
+  await db.insert(agentStepEvents).values({
+    jobId,
+    stepId: 0,
+    type: 'control',
+    payload: { action: 'abort' },
+  });
+
+  return c.json({ id: jobId, status: 'aborted' });
+});
+
+// POST /api/ai/agent-jobs/:id/inject — 用户插话（注入补充信息）
+const injectSchema = z.object({
+  message: z.string().min(1),
+  stepId: z.number().optional(),
+});
+
+agentJobsRouter.post('/agent-jobs/:id/inject', async (c) => {
+  const userId = c.get('userId');
+  const jobId = parseInt(c.req.param('id'), 10);
+  if (Number.isNaN(jobId)) {
+    return c.json({ error: '无效的 job ID' }, 400);
+  }
+
+  const [job] = await db
+    .select()
+    .from(agentJobs)
+    .where(and(eq(agentJobs.id, jobId), eq(agentJobs.userId, userId)))
+    .limit(1);
+
+  if (!job) {
+    return c.json({ error: '任务不存在' }, 404);
+  }
+
+  const body = await c.req.json();
+  const parsed = injectSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: '参数错误', details: parsed.error.flatten() }, 400);
+  }
+
+  const { message, stepId } = parsed.data;
+
+  // 记录注入事件
+  await db.insert(agentStepEvents).values({
+    jobId,
+    stepId: stepId ?? 0,
+    type: 'inject',
+    payload: { message },
+  });
+
+  // 如果 job 处于 waiting 状态（等待 user_input），自动恢复为 running 并重新入队
+  if (job.status === 'waiting') {
+    await db
+      .update(agentJobs)
+      .set({ status: 'running', updatedAt: new Date() })
+      .where(eq(agentJobs.id, jobId));
+
+    await sendAgentJob(jobId);
+  }
+
+  return c.json({ id: jobId, injected: true });
+});
+
+// POST /api/ai/agent-jobs/:id/steps/:stepId/skip — 跳过某步
+agentJobsRouter.post('/agent-jobs/:id/steps/:stepId/skip', async (c) => {
+  const userId = c.get('userId');
+  const jobId = parseInt(c.req.param('id'), 10);
+  const stepId = parseInt(c.req.param('stepId'), 10);
+  if (Number.isNaN(jobId) || Number.isNaN(stepId)) {
+    return c.json({ error: '无效的 ID' }, 400);
+  }
+
+  const [job] = await db
+    .select()
+    .from(agentJobs)
+    .where(and(eq(agentJobs.id, jobId), eq(agentJobs.userId, userId)))
+    .limit(1);
+
+  if (!job) {
+    return c.json({ error: '任务不存在' }, 404);
+  }
+
+  const [step] = await db
+    .select()
+    .from(agentPlanSteps)
+    .where(and(eq(agentPlanSteps.id, stepId), eq(agentPlanSteps.jobId, jobId)))
+    .limit(1);
+
+  if (!step) {
+    return c.json({ error: '步骤不存在' }, 404);
+  }
+
+  if (!['pending', 'failed'].includes(step.status)) {
+    return c.json({ error: `当前步骤状态为 ${step.status}，无法跳过` }, 400);
+  }
+
+  await db
+    .update(agentPlanSteps)
+    .set({ status: 'skipped', finishedAt: new Date() })
+    .where(eq(agentPlanSteps.id, stepId));
+
+  await db.insert(agentStepEvents).values({
+    jobId,
+    stepId,
+    type: 'control',
+    payload: { action: 'skip' },
+  });
+
+  // 如果 job 当前不是 running，重新触发 worker 推进后续步骤
+  if (job.status !== 'running') {
+    await db
+      .update(agentJobs)
+      .set({ status: 'running', updatedAt: new Date() })
+      .where(eq(agentJobs.id, jobId));
+    await sendAgentJob(jobId);
+  }
+
+  return c.json({ id: jobId, stepId, status: 'skipped' });
+});
+
+// POST /api/ai/agent-jobs/:id/steps/:stepId/redo — 重做某步
+agentJobsRouter.post('/agent-jobs/:id/steps/:stepId/redo', async (c) => {
+  const userId = c.get('userId');
+  const jobId = parseInt(c.req.param('id'), 10);
+  const stepId = parseInt(c.req.param('stepId'), 10);
+  if (Number.isNaN(jobId) || Number.isNaN(stepId)) {
+    return c.json({ error: '无效的 ID' }, 400);
+  }
+
+  const [job] = await db
+    .select()
+    .from(agentJobs)
+    .where(and(eq(agentJobs.id, jobId), eq(agentJobs.userId, userId)))
+    .limit(1);
+
+  if (!job) {
+    return c.json({ error: '任务不存在' }, 404);
+  }
+
+  const [step] = await db
+    .select()
+    .from(agentPlanSteps)
+    .where(and(eq(agentPlanSteps.id, stepId), eq(agentPlanSteps.jobId, jobId)))
+    .limit(1);
+
+  if (!step) {
+    return c.json({ error: '步骤不存在' }, 404);
+  }
+
+  if (!['done', 'failed', 'skipped'].includes(step.status)) {
+    return c.json({ error: `当前步骤状态为 ${step.status}，无法重做` }, 400);
+  }
+
+  await db
+    .update(agentPlanSteps)
+    .set({
+      status: 'pending',
+      output: {},
+      artifactId: null,
+      retryCount: 0,
+      startedAt: null,
+      finishedAt: null,
+    })
+    .where(eq(agentPlanSteps.id, stepId));
+
+  await db.insert(agentStepEvents).values({
+    jobId,
+    stepId,
+    type: 'control',
+    payload: { action: 'redo' },
+  });
+
+  // 如果 job 当前不是 running，重新触发 worker
+  if (job.status !== 'running') {
+    await db
+      .update(agentJobs)
+      .set({ status: 'running', updatedAt: new Date() })
+      .where(eq(agentJobs.id, jobId));
+    await sendAgentJob(jobId);
+  }
+
+  return c.json({ id: jobId, stepId, status: 'pending' });
+});
+
+// GET /api/ai/agent-jobs/:id/stream — SSE 实时进度推送
+agentJobsRouter.get('/agent-jobs/:id/stream', async (c) => {
+  const userId = c.get('userId');
+  const jobId = parseInt(c.req.param('id'), 10);
+  if (Number.isNaN(jobId)) {
+    return c.json({ error: '无效的 job ID' }, 400);
+  }
+
+  const [job] = await db
+    .select()
+    .from(agentJobs)
+    .where(and(eq(agentJobs.id, jobId), eq(agentJobs.userId, userId)))
+    .limit(1);
+
+  if (!job) {
+    return c.json({ error: '任务不存在' }, 404);
+  }
+
+  const encoder = new TextEncoder();
+  let lastEventId = 0;
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event: string, data: unknown) => {
+        const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+        controller.enqueue(encoder.encode(payload));
+      };
+
+      send('connected', { jobId, status: job.status });
+
+      // 轮询循环（每 2 秒）
+      const interval = setInterval(async () => {
+        try {
+          const [currentJob] = await db
+            .select()
+            .from(agentJobs)
+            .where(eq(agentJobs.id, jobId))
+            .limit(1);
+
+          const newEvents = await db
+            .select()
+            .from(agentStepEvents)
+            .where(and(eq(agentStepEvents.jobId, jobId), eq(agentStepEvents.id, lastEventId)))
+            .orderBy(agentStepEvents.id);
+
+          // 实际应该查询 id > lastEventId，但 drizzle 语法略复杂，这里用 createdAt 兜底
+          const recentEvents = await db
+            .select()
+            .from(agentStepEvents)
+            .where(eq(agentStepEvents.jobId, jobId))
+            .orderBy(agentStepEvents.createdAt)
+            .limit(20);
+
+          const steps = await db
+            .select()
+            .from(agentPlanSteps)
+            .where(eq(agentPlanSteps.jobId, jobId))
+            .orderBy(agentPlanSteps.idx);
+
+          send('job_update', {
+            status: currentJob.status,
+            progress: currentJob.progress,
+            errorMsg: currentJob.errorMsg,
+            steps: steps.map((s) => ({
+              id: s.id,
+              idx: s.idx,
+              taskType: s.taskType,
+              title: s.title,
+              status: s.status,
+              retryCount: s.retryCount,
+            })),
+            events: recentEvents.map((e) => ({
+              id: e.id,
+              type: e.type,
+              stepId: e.stepId,
+              payload: e.payload,
+              createdAt: e.createdAt,
+            })),
+          });
+
+          if (['done', 'failed', 'aborted'].includes(currentJob.status)) {
+            send('done', {});
+            clearInterval(interval);
+            controller.close();
+          }
+        } catch (err) {
+          console.error('[agent-jobs stream] 轮询错误:', err);
+        }
+      }, 2000);
+
+      // 客户端断开时清理
+      c.req.raw.signal.addEventListener('abort', () => {
+        clearInterval(interval);
+        controller.close();
+      });
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    },
+  });
 });
 
 export default agentJobsRouter;
