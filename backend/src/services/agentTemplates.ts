@@ -210,6 +210,6 @@ export async function incrementTemplateUse(templateId: number): Promise<void> {
   if (templateId < 0) return; // 官方模板不计数
   await db
     .update(agentPlanTemplates)
-    .set({ useCount: sql`${agentPlanTemplates.useCount} + 1` })
+    .set({ useCount: sql<number>`${agentPlanTemplates.useCount} + 1` })
     .where(eq(agentPlanTemplates.id, templateId));
 }

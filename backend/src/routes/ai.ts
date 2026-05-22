@@ -966,8 +966,9 @@ aiRouter.post('/artifacts/:id/link', async (c) => {
   }
 
   // 如果设置关联，校验目标实体存在且属于同一作品
-  const linkType = body.linkedEntityType ?? existing.linkedEntityType;
-  const linkId = body.linkedEntityId ?? existing.linkedEntityId;
+  // 用 !== undefined 区分「没传」和「传了 null」，避免 ?? 把显式 null 回退成旧值
+  const linkType = body.linkedEntityType !== undefined ? body.linkedEntityType : existing.linkedEntityType;
+  const linkId = body.linkedEntityId !== undefined ? body.linkedEntityId : existing.linkedEntityId;
   if (linkType && linkId) {
     if (!ALLOWED_LINK_TYPES.has(linkType)) {
       return c.json({ error: '非法的关联类型' }, 400);
