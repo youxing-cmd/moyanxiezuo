@@ -86,6 +86,12 @@ export async function firecrawlScrape(url: string): Promise<FirecrawlScrapeResul
 
 /** 深度研究：搜索 + 抓取 top k 结果 + LLM 总结 */
 export async function firecrawlSearchAndScrape(query: string, k = 3): Promise<string> {
+  // Mock 模式：不调用真实 Firecrawl，返回预设研究资料（用于 E2E 测试）
+  if (process.env.MOCK_FIRECRAWL === 'true') {
+    const { getMockFirecrawlResearch } = await import('../test/mocks/firecrawl.js');
+    return getMockFirecrawlResearch();
+  }
+
   if (!FIRECRAWL_API_KEY) {
     console.warn('[firecrawl] FIRECRAWL_API_KEY 未配置');
     return `[firecrawl 未配置] 无法搜索 "${query}"`;

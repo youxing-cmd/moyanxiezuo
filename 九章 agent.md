@@ -12,31 +12,33 @@
 
 V3 的目标是把九章从「AI 写作工具」升级为「AI 写作 Agent」，达到 Cursor Composer / Devin 在写作领域的对等体验。
 
-## 当前实现状态
+## 当前实现状态（避免重复开发）
 
-| 阶段 | 状态 | 说明 |
-|------|------|------|
-| P1 数据库与基础设施 | ✅ 已完成 | 4 张表已建，Worker 已注册，SSE 包装层已就绪 |
-| P2 Planner | ✅ 已完成 | gemini-2.5-pro 规划，Zod schema 校验，DAG 无环检查，业务规则校验已加 |
-| P3 Executor + 反思 | ✅ 已完成 | 9 种 task type 执行器，Reflector + 3 次重试，user_input waiting 态 |
-| P4 Composer UI | 🟡 半实现 | Plan 卡片渲染、按钮交互可用，但步骤输出展开、编辑 plan、多任务列表未做 |
-| P5 firecrawl + 新工具 | 🟡 半实现 | firecrawl search/scrape 已接入，6 个新工具已注册；但深度研究、来源摘要、credit 监控未完成 |
-| P6 模板 + 偏好学习 | ❌ 未开始 | plan template 表已建，逻辑未实现 |
+> 本节记录当前代码已经落地的范围，以及仍需修复/补齐的部分。后续开发以本节为准，避免重复重写已有模块。
 
-## 已知 Bug / 技术债（P0 已修复）
+| 阶段 | 当前状态 | 已落地内容 | 不要重复做 | 仍需补齐 |
+|------|----------|------------|------------|----------|
+| P1 数据库与基础设施 | 🟡 基础已落地 | `agent_jobs` / `agent_plan_steps` / `agent_step_events` / `agent_plan_templates` schema 已有；`agent-jobs` 路由已接入；`pg-boss` worker 已注册；SSE 状态流已实现 | 不要重新设计 4 张表和基础 CRUD API | 补迁移文件；修 worker 状态覆盖；补严格并发/用户级任务数限制 |
+| P2 Planner | 🟡 基础已落地 | `planner.ts` 已能调用 planner 模型、解析 JSON、做 Zod 校验和 DAG 无环检查 | 不要重写 planner 主入口 | 补业务规则校验：必须包含 `self_review`；参考作品任务必须包含 `web_research`；补 plan fallback |
+| P3 Executor + 反思 | 🟡 基础已落地 | `agentExecutor.ts` 已支持 9 类 task；`reflector.ts` 有确定性规则 + LLM 反思；支持 `waiting` / pause / abort / skip / redo 的基础状态 | 不要重写 executor 骨架 | 修 failed 误判 done；修 `self_review` 误判；修 `create_artifact` 空内容；补 `user_blocked` 状态 |
+| P4 Composer UI | 🟡 半实现 | `composer.js` / `agent-job-poller.js` 已引入；`interactions-core.js` 已有复杂任务检测和 Plan 卡片创建 | 不要另起一套 Plan 卡片组件 | 修 API_BASE/token/SSE 切换；补步骤输出展开、编辑 plan、跳过/重做、多任务列表 |
+| P5 firecrawl + 新工具 | 🟡 半实现 | `firecrawl.ts` 已接 search/scrape；`tools.ts` 已注册 `web_search` / `web_research` / `generate_hook` / `tighten_pacing` / `boost_payoff` / `check_consistency` | 不要重复注册同名工具 | 前端 `BACKEND_TOOLS` 补白名单；补来源摘要、URL 过滤、credit 日志、无 key 降级策略 |
+| P6 模板 + 偏好学习 | ❌ 未开始 | `agent_plan_templates` 表已存在 | 不要再新建同名表 | 补模板保存、相似任务匹配、用户偏好聚合、Planner 偏好注入 |
 
-| 问题 | 状态 | 修复方式 |
-|------|------|----------|
-| 前端 TDZ：`const API_BASE = typeof API_BASE !== 'undefined' ? API_BASE : ...` | ✅ 已修复 | 改为 `window.API_BASE` 取值 |
-| 鉴权 token key 错误：`authToken` → `jz_token` | ✅ 已修复 | agent-job-poller.js / composer.js 统一读 `jz_token` |
-| SSE/轮询切换失效：`sub.stop()` 设置 `sub.abort = true` 导致 startPolling() 直接返回 | ✅ 已修复 | `sub.stop` 只清理资源，`sub.sseAbort` 控制 SSE reader |
-| 新工具未进前端 BACKEND_TOOLS 白名单 | ✅ 已修复 | interactions-core.js 补全 6 个新工具 |
-| Executor 把 failed 算进 allDone 导致误判 done | ✅ 已修复 | allDone 只包含 done/skipped |
-| Worker 覆盖用户暂停/中止状态 | ✅ 已修复 | 执行前查当前状态，非 planning/paused/waiting 不执行 |
-| create_artifact 内容为空 | ✅ 已修复 | 无 input.content 时从依赖步骤 output.content 自动提取 |
-| self_review `includes('通过')` 误匹配"不通过" | ✅ 已修复 | `includes('通过') && !includes('不通过')` |
-| Planner 验证缺少业务规则 | ✅ 已修复 | validatePlan 增加 self_review 必检、参考作品必含 web_research |
-| 缺少数据库迁移文件 | ✅ 已修复 | `drizzle-kit generate` 生成 `drizzle/0000_*.sql` |
+## 已知 Bug / 技术债（P0 已修复，commit `3de9287`）
+
+| 问题 | 当前状态 | 影响 | 修复方式 |
+|------|----------|------|----------|
+| 前端 TDZ：`const API_BASE = typeof API_BASE !== 'undefined' ? API_BASE : ...` | ✅ 已修复 | `agent-job-poller.js` 加载即可能 `ReferenceError`；`composer.js` 点击操作时可能报错 | 改为 `const API_BASE = (typeof window !== 'undefined' && window.API_BASE) || '/api'`，避免同名 const 自引用 |
+| Agent 鉴权 token key 错误 | ✅ 已修复 | app 存 `jz_token`，但 composer/poller 读 `authToken`，导致开始执行、SSE、暂停/中止 401 | 统一读 `localStorage.getItem('jz_token')`（与 state.js 一致） |
+| SSE/轮询切换失效 | ✅ 已修复 | 页面隐藏/显示后订阅可能停止，后台轮询兜底不可用 | `sub.stop` 只清理资源（清除 timer 或设置 `sseAbort`），不设置 `sub.abort`；最终 unsubscribe 才 abort |
+| 新后端工具未进前端 `BACKEND_TOOLS` | ✅ 已修复 | 模型调用 P5 新工具时被当成前端工具，返回“未实现” | `interactions-core.js` 补全 `web_search`/`web_research`/`generate_hook`/`tighten_pacing`/`boost_payoff`/`check_consistency` |
+| Executor 把 `failed` 算作 `allDone` | ✅ 已修复 | 最后一个 step 失败时 job 可能被误标为 done | `allDone` 只接受 `done/skipped`；有 failed 则 job 进入 failed |
+| Worker 无条件把 job 改成 running | ✅ 已修复 | 用户暂停/中止后，队列任务可能把状态复活 | worker 执行前重新读取 job，只允许 `planning/paused/waiting` 的任务进入 running |
+| `create_artifact` 可能创建空内容 | ✅ 已修复 | Agent 完成后 artifact 没有正文/大纲内容 | 若 `step.input.content` 为空，从依赖步骤 `output.content` 自动提取 |
+| `self_review` 判断误匹配 | ✅ 已修复 | “不通过”也包含“通过”，可能被误判为通过 | `content.includes('通过') && !content.includes('不通过')` |
+| Planner 业务规则未强校验 | ✅ 已修复 | 计划可能缺少自检或参考研究步骤 | `validatePlan(plan, query?)` 增加 query-aware 规则：必含 `self_review`、参考作品必含 `web_research` |
+| 缺少数据库迁移文件 | ✅ 已补 | 部署/回滚/多人协作不稳 | `drizzle-kit generate` 生成 `drizzle/0000_flowery_sharon_carter.sql` |
 
 ## 剩余建议优化（P1）
 
@@ -44,6 +46,7 @@ V3 的目标是把九章从「AI 写作工具」升级为「AI 写作 Agent」�
 2. **self_review 维度按任务类型定制**：写正文评情节，起标题评吸引力，不要一套维度打天下
 3. **firecrawl URL 过滤**：过滤首页、目录页等低信息密度页面
 4. **Plan schema 输入设计**：step 的 input 字段目前 Planner 基本不填，需要明确 input/output/artifactSource/dependsOn 传递语义
+5. **任务状态语义统一**：建议固定为 `planning / ready / running / waiting / paused / user_blocked / failed / done / aborted`
 
 **用户决策已锁定**：
 - 架构形态：**异步型**（Plan 持久化 + 后台 worker 执行 + 前端轮询/SSE 刷新）
@@ -80,6 +83,142 @@ V3 的目标是把九章从「AI 写作工具」升级为「AI 写作 Agent」�
 [全程可暂停/中止/插话纠正/关浏览器]
 [回来继续看进度]
 ```
+
+---
+
+## 产品化目标补充：从 Agent Runtime 到写作 Agent Product
+
+当前技术路线能做出“会规划、会执行、会反思的 Agent Runtime”。但九章的目标不是让用户看见一个任务调度器，而是让作者得到一个可信赖的“编辑搭子”：它知道什么时候轻量回答、什么时候拆任务、什么时候让用户选择、什么时候把结果落回章节/草稿/设定/灵感库。
+
+### 体验分层
+
+| 层级 | 适用场景 | UI 形态 | 不该做什么 |
+|------|----------|---------|------------|
+| 轻量 AI | 起标题、问一句、润色选中段、解释设定 | 普通聊天气泡或小浮层 | 不展示复杂 Plan，不启动长任务 |
+| Agent 任务卡 | 写一章、审稿全文、参考爆款创作、章纲转正文 | 3-6 个主步骤的 Plan 卡片 | 不暴露 `web_research` / `create_artifact` 等技术名 |
+| 工作流面板 | 多轮创作、需要用户选择、长时间运行、多产物并行 | 任务列表 + 当前任务详情 + 产物区 | 不把事件日志当主界面 |
+
+### 用户可理解的步骤命名
+
+| 技术 task type | 用户看到的文案 |
+|----------------|----------------|
+| `read_context` | 读取作品设定 |
+| `web_research` | 研究参考作品 |
+| `generate_ideas` | 生成创作方向 |
+| `user_input` | 等你选择 |
+| `draft_outline` | 生成大纲 |
+| `write_chunk` | 写正文草稿 |
+| `self_review` | 编辑自检 |
+| `polish` | 优化文风 |
+| `create_artifact` | 保存产物 |
+
+### 交付闭环
+
+Agent 完成时不能只显示“任务完成”。必须根据产物类型给出明确操作：
+
+| 产物类型 | 默认主操作 | 次级操作 |
+|----------|------------|----------|
+| 正文草稿 | 采纳为新章节 | 插入当前章节 / 保存草稿 / 查看差异 |
+| 大纲 | 更新总纲 | 保存为版本 / 另存为灵感 |
+| 审稿报告 | 定位问题 | 逐条采纳修改 / 生成改稿方案 |
+| 角色/设定 | 更新设定库 | 保存为备选 / 对比旧设定 |
+| 灵感/选题 | 保存灵感库 | 扩写为作品 / 生成标题简介 |
+
+### 产品化补充开发计划
+
+下面这套计划是在原 P1-P6 技术分期之上补充的产品路线。执行时先完成 Product P0，再继续原技术 P6。
+
+#### Product P0：稳定性与可信闭环（优先级最高）
+
+目标：让用户能稳定完成一次复杂写作任务，并得到可采纳产物。
+
+| 任务 | 状态 | 验收标准 |
+|------|------|----------|
+| 修复 P0 bug 表中的前后端问题 | 待开始 | Agent 任务从创建到完成不报前端运行时错误；失败不会误报完成 |
+| 增加 mock E2E | 待开始 | 不依赖真实 LLM/Firecrawl 也能跑通 planner → executor → stream → artifact |
+| 明确任务状态机 | 待开始 | UI 和后端统一 `planning/ready/running/waiting/paused/user_blocked/failed/done/aborted` |
+| 完成后出现交付动作 | 待开始 | 正文类任务完成后至少提供“采纳为新章节/保存草稿/复制” |
+| 刷新恢复任务 | 待开始 | 刷新页面后能恢复当前 active job 的状态和步骤 |
+
+#### Product P1：Agent 入口策略
+
+目标：用户知道什么时候该用 Agent，什么时候该用普通 AI。
+
+| 任务 | 状态 | 验收标准 |
+|------|------|----------|
+| 复杂任务识别提示 | 待开始 | 输入“写一章/审稿全文/参考 xx 创作”时提示“交给 Agent 多步完成” |
+| 官方高频入口 | 待开始 | 写作页提供“写一章 / 审稿全文 / 参考爆款创作”三个入口 |
+| 简单任务降级 | 待开始 | 起标题、短润色、问答不进入 Agent Plan |
+| Agent 模式说明弱化 | 待开始 | UI 不展示技术解释，只展示任务收益和预计耗时 |
+
+#### Product P2：Plan 卡片产品化
+
+目标：Plan 像编辑工作安排，而不是工程日志。
+
+| 任务 | 状态 | 验收标准 |
+|------|------|----------|
+| 主步骤压缩 | 待开始 | 默认只展示 3-6 个主步骤，工具调用折叠到“执行记录” |
+| 步骤输出展开 | 待开始 | 每个完成步骤可展开查看摘要/正文/资料来源 |
+| 编辑计划 | 待开始 | 用户可修改步骤标题、补充要求、删除非必要步骤 |
+| 跳过/重做步骤 | 后端已实现，前端待接 | 卡片上可对 pending/done/failed 步骤执行跳过或重做 |
+| user_input 交互化 | 待开始 | 选择题显示为按钮组，开放问题显示为输入框 |
+
+#### Product P3：产物落地与版本管理
+
+目标：Agent 生成的内容能进入真实写作工作流。
+
+| 任务 | 状态 | 验收标准 |
+|------|------|----------|
+| 产物类型规范 | 待开始 | 明确 chapter_draft / outline / review_report / setting / inspiration 等类型 |
+| 采纳为章节 | 待开始 | 正文产物可直接创建章节或覆盖当前章节草稿 |
+| 差异对比 | 待开始 | 改稿/审稿结果支持原文 vs 建议稿对比 |
+| 版本记录 | 待开始 | 采纳前自动保存 chapter version，支持回滚 |
+| artifact 与作品树联动 | 待开始 | artifact 可链接到章节/总纲/角色/设定实体 |
+
+#### Product P4：编辑工作台
+
+目标：从“生成内容”升级成“帮用户改好内容”。
+
+| 任务 | 状态 | 验收标准 |
+|------|------|----------|
+| 主编审稿报告 | 待开始 | 输出剧情、人物、节奏、爽点、设定、文风六类问题 |
+| 问题定位 | 待开始 | 每个问题能定位到原文片段 |
+| 逐条修改建议 | 待开始 | 用户可逐条采纳、忽略、重写建议 |
+| 复核流程 | 待开始 | 修改后可重新审稿，并展示问题减少情况 |
+| 官方编辑方案 | 待开始 | 内置 3-5 个方案：短篇爆款、男频爽点、女频情感线、设定一致性、新手改稿 |
+
+#### Product P5：外部研究可信化
+
+目标：让用户相信“参考 xx”的研究不是乱编。
+
+| 任务 | 状态 | 验收标准 |
+|------|------|----------|
+| 来源展示 | 待开始 | 研究步骤显示来源标题、URL、抓取摘要 |
+| 事实/推断区分 | 待开始 | 报告中区分“资料依据”和“创作推断” |
+| Firecrawl 无 key 降级 | 待开始 | 未配置 key 时明确提示降级，不假装已联网 |
+| URL 质量过滤 | 待开始 | 过滤首页、目录、广告页、低内容页 |
+| 资料缓存 | 待开始 | 同一 query 短期复用搜索结果，降低 credit 消耗 |
+
+#### Product P6：模板与偏好学习
+
+目标：让 Agent 越用越懂用户。
+
+| 任务 | 状态 | 验收标准 |
+|------|------|----------|
+| 官方 Plan 模板 | 待开始 | 内置“写一章/审稿/参考爆款/章纲转正文/标题简介包装”模板 |
+| 保存为我的流程 | 待开始 | 完成 job 后可保存为个人模板 |
+| 相似任务匹配 | 待开始 | 下次相似 query 优先推荐历史模板 |
+| 偏好聚合 | 待开始 | 聚合用户常跳过步骤、常采纳类型、常拒绝表达 |
+| Planner 注入偏好 | 待开始 | 生成 plan 时考虑用户偏好，但允许用户手动覆盖 |
+
+### 推荐执行顺序
+
+1. 先修 **P0 bug**，让 Agent 能稳定跑通一次完整任务
+2. 做 **3 个官方高频任务**：写一章、审稿全文、参考爆款创作
+3. 打通 **结果采纳**：章节、草稿、artifact、版本记录
+4. 优化 **Plan UI**：少技术、多编辑语言、可展开产物
+5. 做 **Firecrawl 可信研究**：来源、摘要、降级、缓存
+6. 最后做 **模板和偏好学习**
 
 ---
 

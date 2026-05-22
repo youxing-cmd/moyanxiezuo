@@ -387,6 +387,12 @@ export async function callLLM(
   modelConfig?: ModelConfig | null,
   tools?: ChatTool[],
 ): Promise<Response> {
+  // Mock 模式：不调用真实 LLM，返回预设响应（用于 E2E 测试）
+  if (process.env.MOCK_LLM === 'true') {
+    const { getMockLLMResponse } = await import('../test/mocks/llm.js');
+    return getMockLLMResponse(messages, stream);
+  }
+
   // 1. 排队获取并发槽位
   await acquireSlot();
 
