@@ -134,11 +134,11 @@ Agent 完成时不能只显示“任务完成”。必须根据产物类型给�
 
 | 任务 | 状态 | 验收标准 |
 |------|------|----------|
-| 修复 P0 bug 表中的前后端问题 | 待开始 | Agent 任务从创建到完成不报前端运行时错误；失败不会误报完成 |
-| 增加 mock E2E | 待开始 | 不依赖真实 LLM/Firecrawl 也能跑通 planner → executor → stream → artifact |
-| 明确任务状态机 | 待开始 | UI 和后端统一 `planning/ready/running/waiting/paused/user_blocked/failed/done/aborted` |
-| 完成后出现交付动作 | 待开始 | 正文类任务完成后至少提供“采纳为新章节/保存草稿/复制” |
-| 刷新恢复任务 | 待开始 | 刷新页面后能恢复当前 active job 的状态和步骤 |
+| 修复 P0 bug 表中的前后端问题 | ✅ 已完成 | Agent 任务从创建到完成不报前端运行时错误；失败不会误报完成 |
+| 增加 mock E2E | ✅ 已完成 | `test-agent-mock.ts` + `src/test/mocks/` 覆盖完整链路，5 断言全通过 |
+| 明确任务状态机 | ✅ 已完成 | UI 和后端统一 `planning/ready/running/waiting/paused/user_blocked/failed/done/aborted` |
+| 完成后出现交付动作 | ✅ 已完成 | 正文类任务完成后显示交付面板：采纳为新章节 / 保存草稿 / 复制内容 |
+| 刷新恢复任务 | ✅ 已完成 | 写作页加载时自动恢复当前作品 active jobs，渲染 Plan 卡片并启动订阅 |
 
 #### Product P1：Agent 入口策略
 
