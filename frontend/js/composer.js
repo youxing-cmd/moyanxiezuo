@@ -99,7 +99,10 @@
 
     function renderActionButtons(status, jobId) {
         if (status === 'planning' || status === 'ready') {
-            return `<button class="plan-btn plan-btn-primary" data-action="start">▶ 开始执行</button>`;
+            return `
+                <button class="plan-btn plan-btn-primary" data-action="start">▶ 开始执行</button>
+                <button class="plan-btn" data-action="edit-plan">编辑计划</button>
+            `;
         }
         if (status === 'running') {
             return `
@@ -136,20 +139,94 @@
         const el = document.createElement('div');
         el.className = `plan-step plan-step--${step.status}`;
         el.dataset.stepId = String(step.id);
+        el.dataset.taskType = step.taskType || '';
 
         const icon = STATUS_ICONS[step.status] || STATUS_ICONS.pending;
         const label = STATUS_LABELS[step.status] || step.status;
+
+        const canSkip = ['pending', 'failed'].includes(step.status);
+        const canRedo = ['done', 'failed', 'skipped'].includes(step.status);
+        const canExpand = ['done', 'failed'].includes(step.status);
 
         el.innerHTML = `
             <div class="plan-step-main">
                 <span class="plan-step-icon">${icon}</span>
                 <span class="plan-step-title">${step.idx + 1}. ${escapeHtml(step.title)}</span>
                 <span class="plan-step-label">${label}</span>
+                ${canExpand ? `<button class="plan-step-expand" data-expand>展开</button>` : ''}
             </div>
             ${step.retryCount > 0 ? `<span class="plan-step-retry">重试 ${step.retryCount}</span>` : ''}
+            <div class="plan-step-actions" style="display:none;">
+                ${canSkip ? `<button class="plan-step-btn" data-skip>跳过</button>` : ''}
+                ${canRedo ? `<button class="plan-step-btn" data-redo>重做</button>` : ''}
+            </div>
+            <div class="plan-step-output" style="display:none;" data-step-output></div>
+            ${step.status === 'waiting' ? `
+            <div class="plan-step-input-area" data-step-input>
+                <div class="plan-step-options" data-step-options style="display:none;"></div>
+                <div class="plan-step-free-input" style="display:flex; gap:6px; margin-top:6px;">
+                    <input type="text" class="plan-step-input" placeholder="输入你的选择或回复..." />
+                    <button class="plan-step-btn plan-step-btn-primary" data-step-submit>发送</button>
+                </div>
+            </div>
+            ` : ''}
         `;
 
+        // 展开/折叠
+        const expandBtn = el.querySelector('[data-expand]');
+        const outputEl = el.querySelector('[data-step-output]');
+        if (expandBtn && outputEl) {
+            expandBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isHidden = outputEl.style.display === 'none';
+                outputEl.style.display = isHidden ? 'block' : 'none';
+                expandBtn.textContent = isHidden ? '收起' : '展开';
+            });
+        }
+
+        // 点击步骤主体显示/隐藏操作按钮
+        const mainEl = el.querySelector('.plan-step-main');
+        const actionsEl = el.querySelector('.plan-step-actions');
+        if (mainEl && actionsEl) {
+            mainEl.addEventListener('click', () => {
+                const isHidden = actionsEl.style.display === 'none';
+                actionsEl.style.display = isHidden ? 'flex' : 'none';
+            });
+        }
+
+        // user_input 交互：解析选项
+        const optionsEl = el.querySelector('[data-step-options]');
+        const freeInputEl = el.querySelector('.plan-step-free-input');
+        if (optionsEl && step.description) {
+            const options = parseOptionsFromText(step.description);
+            if (options.length > 0) {
+                optionsEl.style.display = 'flex';
+                optionsEl.innerHTML = options.map((opt) =>
+                    `<button class="plan-step-option-btn" data-option="${escapeHtml(opt)}">${escapeHtml(opt)}</button>`
+                ).join('');
+                if (freeInputEl) freeInputEl.style.display = 'none';
+            }
+        }
+
         return el;
+    }
+
+    function parseOptionsFromText(text) {
+        // 匹配 "1. xxx 2. xxx 3. xxx" 或 "A. xxx B. xxx" 或 "选项1: xxx 选项2: xxx"
+        const patterns = [
+            /(?:^|\n)\s*(?:\d+[.、]|选项\d+[：:]|[一二三四五六七八九十][、.])\s*([^\n]+)/g,
+            /(?:^|\n)\s*[-*]\s*([^\n]+)/g,
+        ];
+        const results = [];
+        for (const p of patterns) {
+            let m;
+            while ((m = p.exec(text)) !== null) {
+                const opt = m[1].trim();
+                if (opt && !results.includes(opt)) results.push(opt);
+            }
+            if (results.length > 0) break;
+        }
+        return results.slice(0, 6);
     }
 
     function bindPlanActions(card, jobId, options) {
@@ -164,6 +241,80 @@
         // 保存当前 artifact 内容，供交付按钮使用
         let currentArtifact = null;
         let currentWorkId = null;
+
+        // 步骤级别的 skip / redo / user_input 事件委托
+        const stepsContainer = card.querySelector('[data-steps-container]');
+        if (stepsContainer) {
+            stepsContainer.addEventListener('click', async (e) => {
+                const skipBtn = e.target.closest('[data-skip]');
+                const redoBtn = e.target.closest('[data-redo]');
+                const optionBtn = e.target.closest('[data-option]');
+                const submitBtn = e.target.closest('[data-step-submit]');
+                if (!skipBtn && !redoBtn && !optionBtn && !submitBtn) return;
+
+                const stepEl = e.target.closest('.plan-step');
+                if (!stepEl) return;
+                const stepId = stepEl.dataset.stepId;
+                if (!stepId) return;
+
+                if (skipBtn) {
+                    skipBtn.disabled = true;
+                    skipBtn.textContent = '跳过中...';
+                    try {
+                        await apiPost(`/ai/agent-jobs/${jobId}/steps/${stepId}/skip`);
+                        showToast('已跳过该步骤', 'success');
+                    } catch (err) {
+                        showToast(err.message || '跳过失败', 'error');
+                        skipBtn.disabled = false;
+                        skipBtn.textContent = '跳过';
+                    }
+                    return;
+                }
+
+                if (redoBtn) {
+                    redoBtn.disabled = true;
+                    redoBtn.textContent = '重做中...';
+                    try {
+                        await apiPost(`/ai/agent-jobs/${jobId}/steps/${stepId}/redo`);
+                        showToast('已重做该步骤', 'success');
+                    } catch (err) {
+                        showToast(err.message || '重做失败', 'error');
+                        redoBtn.disabled = false;
+                        redoBtn.textContent = '重做';
+                    }
+                    return;
+                }
+
+                // user_input 选项按钮
+                if (optionBtn) {
+                    const value = optionBtn.dataset.option;
+                    try {
+                        await apiPost(`/ai/agent-jobs/${jobId}/inject`, { message: value, stepId: Number(stepId) });
+                        showToast('已提交选择', 'success');
+                    } catch (err) {
+                        showToast(err.message || '提交失败', 'error');
+                    }
+                    return;
+                }
+
+                // user_input 输入框提交
+                if (submitBtn) {
+                    const input = stepEl.querySelector('.plan-step-input');
+                    const value = input?.value.trim();
+                    if (!value) return;
+                    submitBtn.disabled = true;
+                    try {
+                        await apiPost(`/ai/agent-jobs/${jobId}/inject`, { message: value, stepId: Number(stepId) });
+                        input.value = '';
+                        showToast('已提交回复', 'success');
+                    } catch (err) {
+                        showToast(err.message || '提交失败', 'error');
+                        submitBtn.disabled = false;
+                    }
+                    return;
+                }
+            });
+        }
 
         actionsEl.addEventListener('click', async (e) => {
             const btn = e.target.closest('[data-action]');
@@ -220,6 +371,11 @@
             if (action === 'dismiss') {
                 card.remove();
                 options.onDismiss?.(jobId);
+                return;
+            }
+
+            if (action === 'edit-plan') {
+                enterEditPlanMode(card, jobId);
                 return;
             }
 
@@ -309,6 +465,119 @@
         });
     }
 
+    // 进入编辑计划模式
+    function enterEditPlanMode(card, jobId) {
+        const stepsContainer = card.querySelector('[data-steps-container]');
+        if (!stepsContainer) return;
+
+        // 保存原始 HTML 以便取消
+        card._originalStepsHTML = stepsContainer.innerHTML;
+
+        // 给每个步骤添加删除按钮和编辑输入框
+        stepsContainer.querySelectorAll('.plan-step').forEach((stepEl) => {
+            const titleEl = stepEl.querySelector('.plan-step-title');
+            if (!titleEl) return;
+            const currentTitle = titleEl.textContent.replace(/^\d+\.\s*/, '');
+            const idx = stepEl.querySelector('.plan-step-title')?.textContent?.match(/^(\d+)\./)?.[1] || '';
+
+            titleEl.innerHTML = `
+                <span class="plan-step-idx">${idx}.</span>
+                <input type="text" class="plan-step-edit-input" value="${escapeHtml(currentTitle)}" />
+                <button class="plan-step-delete-btn" data-delete-step title="删除此步骤">×</button>
+            `;
+        });
+
+        // 替换操作按钮为保存/取消
+        const actionsEl = card.querySelector('.plan-actions');
+        if (actionsEl) {
+            actionsEl.innerHTML = `
+                <button class="plan-btn plan-btn-primary" data-action="save-plan">💾 保存计划</button>
+                <button class="plan-btn" data-action="cancel-edit">取消</button>
+            `;
+        }
+
+        // 绑定删除按钮
+        stepsContainer.querySelectorAll('[data-delete-step]').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const stepEl = btn.closest('.plan-step');
+                if (stepEl) {
+                    stepEl.style.opacity = '0.4';
+                    stepEl.dataset.deleted = 'true';
+                    btn.textContent = '已删除';
+                    btn.disabled = true;
+                }
+            });
+        });
+
+        // 绑定保存/取消
+        const newActionsEl = card.querySelector('.plan-actions');
+        if (newActionsEl) {
+            const handler = async (e) => {
+                const btn = e.target.closest('[data-action]');
+                if (!btn) return;
+                const action = btn.dataset.action;
+
+                if (action === 'cancel-edit') {
+                    // 恢复原始步骤
+                    if (card._originalStepsHTML) {
+                        stepsContainer.innerHTML = card._originalStepsHTML;
+                        delete card._originalStepsHTML;
+                    }
+                    // 恢复原始按钮
+                    const statusBadge = card.querySelector('.plan-status-badge');
+                    const status = statusBadge?.dataset.status || 'ready';
+                    newActionsEl.innerHTML = renderActionButtons(status, jobId);
+                    newActionsEl.removeEventListener('click', handler);
+                    return;
+                }
+
+                if (action === 'save-plan') {
+                    // 收集修改后的步骤
+                    const steps = [];
+                    stepsContainer.querySelectorAll('.plan-step').forEach((stepEl, idx) => {
+                        if (stepEl.dataset.deleted === 'true') return;
+                        const input = stepEl.querySelector('.plan-step-edit-input');
+                        const title = input?.value.trim() || '';
+                        const taskType = stepEl.dataset.taskType || 'read_context';
+                        steps.push({
+                            id: String(idx + 1),
+                            type: taskType,
+                            title,
+                            dependsOn: [],
+                        });
+                    });
+
+                    if (steps.length === 0) {
+                        showToast('计划不能为空', 'error');
+                        return;
+                    }
+
+                    btn.disabled = true;
+                    btn.textContent = '保存中...';
+                    try {
+                        await apiPost(`/ai/agent-jobs/${jobId}/plan`, {
+                            title: '用户编辑的计划',
+                            steps,
+                        });
+                        showToast('计划已保存', 'success');
+                        // 恢复按钮
+                        const statusBadge = card.querySelector('.plan-status-badge');
+                        const status = statusBadge?.dataset.status || 'ready';
+                        newActionsEl.innerHTML = renderActionButtons(status, jobId);
+                        newActionsEl.removeEventListener('click', handler);
+                    } catch (err) {
+                        showToast(err.message || '保存失败', 'error');
+                        btn.disabled = false;
+                        btn.textContent = '💾 保存计划';
+                    }
+                    return;
+                }
+            };
+            newActionsEl.addEventListener('click', handler);
+        }
+    }
+
     // ===== 更新 Plan 卡片（增量刷新） =====
     function updatePlanCard(card, data) {
         // 更新状态
@@ -329,13 +598,23 @@
             data.steps.forEach((step) => {
                 const stepEl = card.querySelector(`[data-step-id="${step.id}"]`);
                 if (stepEl) {
-                    // 仅当状态变化时更新 DOM
-                    if (!stepEl.classList.contains(`plan-step--${step.status}`)) {
-                        stepEl.className = `plan-step plan-step--${step.status}`;
-                        const icon = stepEl.querySelector('.plan-step-icon');
-                        const label = stepEl.querySelector('.plan-step-label');
-                        if (icon) icon.innerHTML = STATUS_ICONS[step.status] || STATUS_ICONS.pending;
-                        if (label) label.textContent = STATUS_LABELS[step.status] || step.status;
+                    const oldStatus = stepEl.className.match(/plan-step--(\w+)/)?.[1];
+                    // 状态变化时重建 DOM（保留 output 内容）
+                    if (oldStatus !== step.status) {
+                        const outputEl = stepEl.querySelector('[data-step-output]');
+                        const existingOutput = outputEl?.innerHTML || '';
+                        const newRow = createStepRow(step);
+                        if (existingOutput) {
+                            newRow.querySelector('[data-step-output]').innerHTML = existingOutput;
+                        }
+                        stepEl.replaceWith(newRow);
+                    }
+
+                    // 填充 output 内容（如果有 events 或 step.output）
+                    const outputEl = card.querySelector(`[data-step-id="${step.id}"] [data-step-output]`);
+                    if (outputEl && step.output?.content && !outputEl.innerHTML) {
+                        const text = String(step.output.content).slice(0, 800).replace(/\n/g, '<br>');
+                        outputEl.innerHTML = text + (String(step.output.content).length > 800 ? '<br>...' : '');
                     }
                 }
             });

@@ -1872,6 +1872,144 @@
     flex-shrink: 0;
 }
 
+.plan-step-expand {
+    font-size: 11px;
+    color: var(--accent);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.plan-step-expand:hover {
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.plan-step-actions {
+    display: flex;
+    gap: 6px;
+    padding: 4px 0 4px 26px;
+}
+
+.plan-step-btn {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.plan-step-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.plan-step-output {
+    padding: 8px 12px 8px 26px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    margin-top: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.plan-step-input-area {
+    padding: 8px 0 4px 26px;
+}
+
+.plan-step-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.plan-step-option-btn {
+    padding: 5px 10px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.plan-step-option-btn:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+}
+
+.plan-step-input {
+    flex: 1;
+    padding: 5px 10px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 12px;
+    outline: none;
+}
+
+.plan-step-input:focus {
+    border-color: var(--accent);
+}
+
+.plan-step-btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+}
+
+.plan-step-btn-primary:hover {
+    opacity: 0.9;
+}
+
+.plan-step-edit-input {
+    flex: 1;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+    min-width: 0;
+}
+
+.plan-step-edit-input:focus {
+    border-color: var(--accent);
+}
+
+.plan-step-delete-btn {
+    margin-left: 6px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: var(--danger);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+}
+
+.plan-step-delete-btn:hover {
+    opacity: 1;
+    background: rgba(239, 68, 68, 0.1);
+}
+
 .plan-footer {
     padding: 10px 14px;
     border-top: 1px solid var(--border);
