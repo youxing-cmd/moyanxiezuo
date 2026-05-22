@@ -1672,3 +1672,272 @@
     font-style: italic;
     line-height: 1.5;
 }
+
+/* ===== Plan Card（Agent Composer） ===== */
+.plan-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin: 12px 0;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.plan-header {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-tertiary);
+}
+
+.plan-header-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.plan-icon {
+    font-size: 16px;
+    line-height: 1;
+}
+
+.plan-title {
+    flex: 1;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.plan-status-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+.plan-status-badge[data-status="running"] {
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--warning);
+    border-color: var(--warning);
+}
+
+.plan-status-badge[data-status="done"] {
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--success);
+    border-color: var(--success);
+}
+
+.plan-status-badge[data-status="failed"],
+.plan-status-badge[data-status="aborted"] {
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--danger);
+    border-color: var(--danger);
+}
+
+.plan-status-badge[data-status="waiting"] {
+    background: rgba(59, 130, 246, 0.12);
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.plan-budget {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.plan-progress-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.plan-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+}
+
+.plan-progress-text {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    text-align: right;
+}
+
+.plan-steps {
+    padding: 8px 14px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.plan-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 13px;
+}
+
+.plan-step:last-child {
+    border-bottom: none;
+}
+
+.plan-step-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.plan-step-icon {
+    font-size: 14px;
+    line-height: 1;
+    width: 18px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.plan-step-title {
+    flex: 1;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.plan-step-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.plan-step-retry {
+    font-size: 11px;
+    color: var(--warning);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.plan-footer {
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-tertiary);
+}
+
+.plan-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.plan-btn {
+    padding: 5px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.plan-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--text-muted);
+}
+
+.plan-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.plan-btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+.plan-btn-primary:hover {
+    background: var(--accent-hover, #4f8cff);
+    border-color: var(--accent-hover, #4f8cff);
+}
+
+.plan-btn-danger {
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--danger);
+    border-color: var(--danger);
+}
+
+.plan-btn-danger:hover {
+    background: var(--danger);
+    color: #fff;
+}
+
+.plan-inject {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.plan-inject-input {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+}
+
+.plan-inject-input:focus {
+    border-color: var(--accent);
+}
+
+.plan-inject-btn {
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.plan-inject-msg {
+    margin-top: 8px;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.composer-spin {
+    display: inline-block;
+    animation: composerSpin 1.2s linear infinite;
+}
+
+@keyframes composerSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}

@@ -963,6 +963,145 @@ async function initPageInteractions(page) {
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
+        // ===== Composer 辅助函数 =====
+
+        // 检测用户输入是否属于"模糊创作类"指令
+        function detectComposerIntent(text) {
+            if (!text || text.length < 5) return false;
+            // 简单正则：包含"参考"+"写" / "帮我写" / "生成"+"大纲" / "写一篇" / "写一章" 等
+            const triggers = [
+                /参考.*写/,
+                /帮我写/,
+                /生成.*大纲/,
+                /生成.*章纲/,
+                /写一篇/,
+                /写一章/,
+                /写个.*故事/,
+                /写.*短篇/,
+                /写.*小说/,
+                /续写.*章/,
+                /扩写/,
+                /改写/,
+                /润色.*全文/,
+                /优化.*大纲/,
+            ];
+            return triggers.some((re) => re.test(text));
+        }
+
+        // 执行 Composer 流程：创建 agent-job → 渲染 Plan 卡片
+        async function runComposerFlow(query, container) {
+            const workId = currentWorkId ? Number(currentWorkId) : null;
+
+            // 显示"正在规划..."
+            const planningBubble = document.createElement('div');
+            planningBubble.className = 'msg-ai';
+            planningBubble.innerHTML = `
+                <div class="ai-msg-content" style="color:var(--text-muted); font-style:italic;">
+                    正在规划任务...
+                </div>
+            `;
+            container.appendChild(planningBubble);
+            container.scrollTop = container.scrollHeight;
+
+            let jobData;
+            try {
+                jobData = await api('/ai/agent-jobs', {
+                    method: 'POST',
+                    body: { query, workId },
+                });
+            } catch (err) {
+                planningBubble.innerHTML = `
+                    <div class="ai-msg-content" style="color:var(--danger);">
+                        规划失败: ${err.message || '未知错误'}
+                    </div>
+                `;
+                return;
+            }
+
+            // 移除 planning 提示
+            planningBubble.remove();
+
+            if (jobData.status === 'failed') {
+                const failBubble = document.createElement('div');
+                failBubble.className = 'msg-ai';
+                failBubble.innerHTML = `
+                    <div class="ai-msg-content" style="color:var(--danger);">
+                        规划失败: ${jobData.error || 'Planner 未能生成有效计划'}
+                    </div>
+                `;
+                container.appendChild(failBubble);
+                container.scrollTop = container.scrollHeight;
+                return;
+            }
+
+            // 获取完整 job 状态（含 steps）
+            let fullJob;
+            try {
+                fullJob = await api(`/ai/agent-jobs/${jobData.id}`);
+            } catch {
+                fullJob = { job: jobData, steps: [], events: [] };
+            }
+
+            // 渲染 Plan 卡片
+            const planData = {
+                id: jobData.id,
+                title: jobData.planTitle || query.slice(0, 30),
+                status: fullJob.job?.status || 'planning',
+                progress: fullJob.job?.progress || 0,
+                estimatedDuration: fullJob.steps?.length ? `约 ${fullJob.steps.length} 步` : '',
+                estimatedCost: '',
+                steps: (fullJob.steps || []).map((s) => ({
+                    id: s.id,
+                    idx: s.idx,
+                    taskType: s.taskType,
+                    title: s.title,
+                    status: s.status,
+                    retryCount: s.retryCount,
+                })),
+            };
+
+            const planCard = window.jzComposer.createPlanCard(planData, {
+                onStart: (id) => {
+                    // 用户点击"开始执行"后启动 SSE 订阅
+                    startPlanPolling(id, planCard);
+                },
+                onPause: () => showToast('已暂停', 'info'),
+                onAbort: () => showToast('已中止', 'info'),
+                onInject: (id, text) => {
+                    // 在卡片内显示用户插话
+                    const injectRow = document.createElement('div');
+                    injectRow.className = 'plan-inject-msg';
+                    injectRow.textContent = `💬 ${text}`;
+                    planCard.querySelector('.plan-footer')?.appendChild(injectRow);
+                },
+                onDismiss: () => {},
+            });
+
+            container.appendChild(planCard);
+            container.scrollTop = container.scrollHeight;
+
+            // 如果 job 已经是 running 状态（极少见），自动启动订阅
+            if (planData.status === 'running') {
+                startPlanPolling(jobData.id, planCard);
+            }
+        }
+
+        // 启动 Plan 卡片的实时刷新
+        function startPlanPolling(jobId, planCard) {
+            if (!window.jzAgentPoller) return;
+            window.jzAgentPoller.subscribeAgentJob(jobId, {
+                onUpdate: (data) => {
+                    window.jzComposer.updatePlanCard(planCard, data);
+                },
+                onDone: () => {
+                    showToast('Agent 任务已完成', 'success');
+                },
+                onError: (err) => {
+                    console.warn('[composer poll] 错误:', err);
+                },
+            });
+        }
+
         function createUserBubble(text) {
             const el = document.createElement('div');
             el.className = 'msg-user';
@@ -2017,6 +2156,12 @@ async function initPageInteractions(page) {
             chatMessages.scrollTop = chatMessages.scrollHeight;
             chatInput.value = '';
             trackAiUsage();
+
+            // ===== Composer 入口：检测模糊创作类指令 =====
+            if (detectComposerIntent(userContent)) {
+                await runComposerFlow(userContent, chatMessages);
+                return;
+            }
 
             // 构建消息历史（按token累计，不超过20K tokens）
             const messages = [
