@@ -245,6 +245,13 @@ async function runWriteChunk(step: LoadedStep, job: LoadedJob, allSteps: LoadedS
   step.output = { content, type: 'chunk' };
 }
 
+async function runWebResearch(step: LoadedStep, job: LoadedJob) {
+  const { firecrawlSearchAndScrape } = await import('./firecrawl.js');
+  const query = step.description || job.query;
+  const content = await firecrawlSearchAndScrape(query, 3);
+  step.output = { content, type: 'research' };
+}
+
 async function runUserInput(step: LoadedStep, job: LoadedJob) {
   // user_input 不是真正"执行"，而是将 job 设为 waiting 状态等待用户介入
   step.output = {
@@ -367,6 +374,9 @@ async function executeStep(step: LoadedStep, job: LoadedJob, steps: LoadedStep[]
           break;
         case 'write_chunk':
           await runWriteChunk(step, job, steps);
+          break;
+        case 'web_research':
+          await runWebResearch(step, job);
           break;
         case 'user_input':
           await runUserInput(step, job);
