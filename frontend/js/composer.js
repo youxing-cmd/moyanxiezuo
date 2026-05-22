@@ -6,21 +6,27 @@
 
     // ===== 状态图标 =====
     const STATUS_ICONS = {
+        planning: '<span style="color:var(--text-muted)">📝</span>',
+        ready: '<span style="color:var(--accent)">📋</span>',
         pending: '<span style="color:var(--text-muted)">○</span>',
         running: '<span class="composer-spin" style="color:var(--accent)">⟳</span>',
         done: '<span style="color:var(--success)">✓</span>',
         failed: '<span style="color:var(--danger)">✗</span>',
         skipped: '<span style="color:var(--text-muted)">⊘</span>',
         waiting: '<span style="color:var(--warning)">⏸</span>',
+        user_blocked: '<span style="color:var(--danger)">🚧</span>',
     };
 
     const STATUS_LABELS = {
+        planning: '规划中',
+        ready: '计划已生成',
         pending: '等待中',
         running: '执行中',
         done: '已完成',
         failed: '失败',
         skipped: '已跳过',
         waiting: '等待用户',
+        user_blocked: '需要你决定',
     };
 
     // ===== 创建 Plan 卡片 =====
@@ -83,7 +89,7 @@
     }
 
     function renderActionButtons(status, jobId) {
-        if (status === 'planning') {
+        if (status === 'planning' || status === 'ready') {
             return `<button class="plan-btn plan-btn-primary" data-action="start">▶ 开始执行</button>`;
         }
         if (status === 'running') {
@@ -102,6 +108,12 @@
         if (status === 'waiting') {
             return `
                 <button class="plan-btn plan-btn-primary" data-action="inject">💬 回复</button>
+                <button class="plan-btn plan-btn-danger" data-action="abort">⏹ 中止</button>
+            `;
+        }
+        if (status === 'user_blocked') {
+            return `
+                <button class="plan-btn" data-action="toggle-inject">💬 插话</button>
                 <button class="plan-btn plan-btn-danger" data-action="abort">⏹ 中止</button>
             `;
         }

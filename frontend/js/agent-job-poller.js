@@ -38,7 +38,7 @@
                 if (currentEvent === 'connected') callbacks.onUpdate?.(payload);
                 if (currentEvent === 'job_update') {
                     callbacks.onUpdate?.(payload);
-                    if (['done', 'failed', 'aborted'].includes(payload.status)) {
+                    if (['done', 'failed', 'aborted', 'user_blocked'].includes(payload.status)) {
                         callbacks.onDone?.();
                     }
                 }
@@ -119,7 +119,7 @@
                         steps: data.steps || [],
                         events: data.events || [],
                     });
-                    if (['done', 'failed', 'aborted'].includes(data.job?.status)) {
+                    if (['done', 'failed', 'aborted', 'user_blocked'].includes(data.job?.status)) {
                         callbacks.onDone?.();
                         if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
                         activeSubscriptions.delete(jobId);

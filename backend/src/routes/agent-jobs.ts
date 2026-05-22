@@ -42,17 +42,17 @@ agentJobsRouter.post('/agent-jobs', async (c) => {
     const plan = await planJob(query, { userId, workId: workId ?? null });
     await savePlanToSteps(job.id, plan);
 
-    // 规划成功，更新 job 状态为 planning（已有 plan）
+    // 规划成功，更新 job 状态为 ready（等待用户开始）
     await db
       .update(agentJobs)
       .set({
-        status: 'planning',
+        status: 'ready',
         updatedAt: new Date(),
         errorMsg: '',
       })
       .where(eq(agentJobs.id, job.id));
 
-    return c.json({ id: job.id, status: job.status, query: job.query, planTitle: plan.title }, 201);
+    return c.json({ id: job.id, status: 'ready', query: job.query, planTitle: plan.title }, 201);
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.error(`[agent-jobs] Planner 失败 jobId=${job.id}:`, err);
@@ -136,8 +136,8 @@ agentJobsRouter.put('/agent-jobs/:id/plan', async (c) => {
     return c.json({ error: '任务不存在' }, 404);
   }
 
-  if (job.status === 'running') {
-    return c.json({ error: '任务执行中，请先暂停再编辑 plan' }, 400);
+  if (['running', 'user_blocked'].includes(job.status)) {
+    return c.json({ error: `当前状态为 ${job.status}，无法编辑 plan` }, 400);
   }
 
   const body = await c.req.json();
@@ -181,7 +181,7 @@ agentJobsRouter.post('/agent-jobs/:id/start', async (c) => {
     return c.json({ error: '任务不存在' }, 404);
   }
 
-  if (job.status === 'done' || job.status === 'aborted') {
+  if (['done', 'failed', 'aborted', 'user_blocked'].includes(job.status)) {
     return c.json({ error: `当前状态为 ${job.status}，无法开始` }, 400);
   }
 
@@ -250,7 +250,7 @@ agentJobsRouter.post('/agent-jobs/:id/abort', async (c) => {
     return c.json({ error: '任务不存在' }, 404);
   }
 
-  if (['done', 'failed', 'aborted'].includes(job.status)) {
+  if (['done', 'aborted'].includes(job.status)) {
     return c.json({ error: `当前状态为 ${job.status}，无法中止` }, 400);
   }
 
@@ -259,7 +259,7 @@ agentJobsRouter.post('/agent-jobs/:id/abort', async (c) => {
     .set({ status: 'aborted', updatedAt: new Date(), finishedAt: new Date() })
     .where(eq(agentJobs.id, jobId));
 
-  // 将 pending / running 的 step 标记为 skipped
+  // 将 pending / running / waiting 的 step 标记为 skipped
   await db
     .update(agentPlanSteps)
     .set({ status: 'skipped', finishedAt: new Date() })
@@ -267,8 +267,13 @@ agentJobsRouter.post('/agent-jobs/:id/abort', async (c) => {
 
   await db
     .update(agentPlanSteps)
-    .set({ status: 'failed', finishedAt: new Date() })
+    .set({ status: 'skipped', finishedAt: new Date() })
     .where(and(eq(agentPlanSteps.jobId, jobId), eq(agentPlanSteps.status, 'running')));
+
+  await db
+    .update(agentPlanSteps)
+    .set({ status: 'skipped', finishedAt: new Date() })
+    .where(and(eq(agentPlanSteps.jobId, jobId), eq(agentPlanSteps.status, 'waiting')));
 
   await db.insert(agentStepEvents).values({
     jobId,

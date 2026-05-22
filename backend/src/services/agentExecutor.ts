@@ -356,14 +356,14 @@ export async function executeJob(jobId: number): Promise<void> {
           .where(eq(agentJobs.id, jobId));
         await emitEvent(jobId, null, 'done', {});
       } else {
-        // 有 pending 步骤但因依赖阻塞（上游有 failed），标记 job 为 failed
+        // 有 pending 步骤但因依赖阻塞（上游有 failed），标记 job 为 user_blocked，等待用户决定
         const hasFailed = steps.some((s) => s.status === 'failed');
         if (hasFailed) {
           await db
             .update(agentJobs)
-            .set({ status: 'failed', updatedAt: new Date(), finishedAt: new Date(), errorMsg: '部分步骤执行失败，任务无法继续' })
+            .set({ status: 'user_blocked', updatedAt: new Date(), errorMsg: '部分步骤执行失败，需要你决定如何处理' })
             .where(eq(agentJobs.id, jobId));
-          await emitEvent(jobId, null, 'failed', { reason: 'upstream step failed' });
+          await emitEvent(jobId, null, 'user_blocked', { reason: 'upstream step failed' });
         }
       }
       break;
