@@ -35,6 +35,7 @@
         const card = document.createElement('div');
         card.className = 'plan-card';
         card.dataset.jobId = String(data.id);
+        if (data.workId) card.dataset.workId = String(data.workId);
 
         const progressBar = renderProgressBar(data.progress || 0);
 
@@ -61,6 +62,14 @@
                 <div class="plan-inject" style="display:none;">
                     <input type="text" class="plan-inject-input" placeholder="对当前进度说点什么..." />
                     <button class="plan-inject-btn">发送</button>
+                </div>
+                <div class="plan-deliver" style="display:none;" data-deliver-panel>
+                    <div class="plan-deliver-preview" data-deliver-preview></div>
+                    <div class="plan-deliver-actions">
+                        <button class="plan-btn plan-btn-primary" data-action="adopt-chapter">📄 采纳为新章节</button>
+                        <button class="plan-btn" data-action="save-draft">📝 保存草稿</button>
+                        <button class="plan-btn" data-action="copy-content">📋 复制内容</button>
+                    </div>
                 </div>
             </div>
         `;
@@ -148,8 +157,13 @@
         const injectEl = card.querySelector('.plan-inject');
         const injectInput = card.querySelector('.plan-inject-input');
         const injectBtn = card.querySelector('.plan-inject-btn');
+        const deliverEl = card.querySelector('[data-deliver-panel]');
 
         if (!actionsEl) return;
+
+        // 保存当前 artifact 内容，供交付按钮使用
+        let currentArtifact = null;
+        let currentWorkId = null;
 
         actionsEl.addEventListener('click', async (e) => {
             const btn = e.target.closest('[data-action]');
@@ -208,7 +222,72 @@
                 options.onDismiss?.(jobId);
                 return;
             }
+
+            // 交付动作
+            if (action === 'adopt-chapter') {
+                if (!currentArtifact?.content || !currentWorkId) {
+                    showToast('没有可用的产物内容', 'error');
+                    return;
+                }
+                btn.disabled = true;
+                try {
+                    await apiPost(`/works/${currentWorkId}/chapters`, {
+                        title: currentArtifact.title || 'Agent 生成章节',
+                        content: currentArtifact.content,
+                    });
+                    showToast('已采纳为新章节', 'success');
+                    options.onAdopt?.(jobId, 'chapter');
+                } catch (err) {
+                    showToast(err.message || '采纳失败', 'error');
+                    btn.disabled = false;
+                }
+                return;
+            }
+
+            if (action === 'save-draft') {
+                if (!currentArtifact?.content || !currentWorkId) {
+                    showToast('没有可用的产物内容', 'error');
+                    return;
+                }
+                btn.disabled = true;
+                try {
+                    await apiPost(`/works/${currentWorkId}/drafts`, {
+                        title: currentArtifact.title || 'Agent 草稿',
+                        content: currentArtifact.content,
+                    });
+                    showToast('已保存为草稿', 'success');
+                    options.onSaveDraft?.(jobId);
+                } catch (err) {
+                    showToast(err.message || '保存失败', 'error');
+                    btn.disabled = false;
+                }
+                return;
+            }
+
+            if (action === 'copy-content') {
+                if (!currentArtifact?.content) {
+                    showToast('没有可用的产物内容', 'error');
+                    return;
+                }
+                navigator.clipboard.writeText(currentArtifact.content).then(() => {
+                    showToast('内容已复制到剪贴板', 'success');
+                }).catch(() => {
+                    showToast('复制失败，请手动复制', 'error');
+                });
+                return;
+            }
         });
+
+        // 暴露 setArtifact 供外部更新
+        card._setArtifact = (artifact, workId) => {
+            currentArtifact = artifact;
+            currentWorkId = workId;
+            const previewEl = deliverEl?.querySelector('[data-deliver-preview]');
+            if (previewEl && artifact?.content) {
+                const text = artifact.content.slice(0, 200).replace(/\n/g, ' ');
+                previewEl.textContent = text + (artifact.content.length > 200 ? '...' : '');
+            }
+        };
 
         // 插话发送
         const sendInject = async () => {
@@ -268,6 +347,19 @@
             const newButtons = renderActionButtons(data.status, data.id);
             if (actionsEl.innerHTML.trim() !== newButtons.trim()) {
                 actionsEl.innerHTML = newButtons;
+            }
+        }
+
+        // 交付面板：done 状态且收到 artifacts 时显示
+        const deliverEl = card.querySelector('[data-deliver-panel]');
+        if (deliverEl && data.status === 'done') {
+            deliverEl.style.display = 'block';
+            if (data.artifacts && data.artifacts.length > 0) {
+                const artifact = data.artifacts[0];
+                const workId = data.workId || card.dataset.workId;
+                if (card._setArtifact) {
+                    card._setArtifact(artifact, workId);
+                }
             }
         }
     }

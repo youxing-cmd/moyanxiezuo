@@ -116,8 +116,10 @@
                     callbacks.onUpdate?.({
                         status: data.job?.status,
                         progress: data.job?.progress,
+                        workId: data.job?.workId,
                         steps: data.steps || [],
                         events: data.events || [],
+                        artifacts: data.artifacts || [],
                     });
                     if (['done', 'failed', 'aborted', 'user_blocked'].includes(data.job?.status)) {
                         callbacks.onDone?.();

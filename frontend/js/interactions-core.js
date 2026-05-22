@@ -1048,6 +1048,7 @@ async function initPageInteractions(page) {
                 title: jobData.planTitle || query.slice(0, 30),
                 status: fullJob.job?.status || 'planning',
                 progress: fullJob.job?.progress || 0,
+                workId: fullJob.job?.workId || null,
                 estimatedDuration: fullJob.steps?.length ? `约 ${fullJob.steps.length} 步` : '',
                 estimatedCost: '',
                 steps: (fullJob.steps || []).map((s) => ({
@@ -1058,6 +1059,7 @@ async function initPageInteractions(page) {
                     status: s.status,
                     retryCount: s.retryCount,
                 })),
+                artifacts: fullJob.artifacts || [],
             };
 
             const planCard = window.jzComposer.createPlanCard(planData, {

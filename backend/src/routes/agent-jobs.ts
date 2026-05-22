@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { eq, and, desc, gt } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
 import { db } from '../db/index.js';
-import { agentJobs, agentPlanSteps, agentStepEvents } from '../db/schema.js';
+import { agentJobs, agentPlanSteps, agentStepEvents, aiArtifacts } from '../db/schema.js';
 import { sendAgentJob } from '../jobs/agentWorker.js';
 import { planJob, savePlanToSteps, validatePlan } from '../services/planner.js';
 
@@ -102,7 +102,17 @@ agentJobsRouter.get('/agent-jobs/:id', async (c) => {
     .orderBy(desc(agentStepEvents.createdAt))
     .limit(100);
 
-  return c.json({ job, steps, events });
+  // 查询该 job 关联的 artifacts（通过 workId 或 step 的 artifactId）
+  const artifacts = job.workId
+    ? await db
+        .select({ id: aiArtifacts.id, title: aiArtifacts.title, type: aiArtifacts.type, content: aiArtifacts.content, createdAt: aiArtifacts.createdAt })
+        .from(aiArtifacts)
+        .where(and(eq(aiArtifacts.workId, job.workId), eq(aiArtifacts.userId, userId)))
+        .orderBy(desc(aiArtifacts.createdAt))
+        .limit(10)
+    : [];
+
+  return c.json({ job, steps, events, artifacts });
 });
 
 // GET /api/ai/agent-jobs — 列出当前用户的 active jobs
@@ -537,6 +547,7 @@ agentJobsRouter.get('/agent-jobs/:id/stream', async (c) => {
           send('job_update', {
             status: currentJob.status,
             progress: currentJob.progress,
+            workId: currentJob.workId,
             errorMsg: currentJob.errorMsg,
             steps: steps.map((s) => ({
               id: s.id,
