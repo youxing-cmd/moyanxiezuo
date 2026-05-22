@@ -29,6 +29,33 @@
         user_blocked: '需要你决定',
     };
 
+    // 简化 diff：按段落对比，标记新增/删除
+    function simpleDiff(oldText, newText) {
+        const oldParas = oldText.split(/\n{2,}|\n/);
+        const newParas = newText.split(/\n{2,}|\n/);
+        const oldSet = new Set(oldParas.map((p) => p.trim()).filter((p) => p));
+        const newSet = new Set(newParas.map((p) => p.trim()).filter((p) => p));
+
+        let html = '';
+        for (const p of newParas) {
+            const trimmed = p.trim();
+            if (!trimmed) continue;
+            if (oldSet.has(trimmed)) {
+                html += `<div style="padding:2px 0;color:var(--text-secondary);">${escapeHtml(p)}</div>`;
+            } else {
+                html += `<div style="padding:2px 0;background:rgba(34,197,94,0.08);color:var(--success);">+ ${escapeHtml(p)}</div>`;
+            }
+        }
+        for (const p of oldParas) {
+            const trimmed = p.trim();
+            if (!trimmed) continue;
+            if (!newSet.has(trimmed)) {
+                html += `<div style="padding:2px 0;background:rgba(239,68,68,0.08);color:var(--danger);text-decoration:line-through;">- ${escapeHtml(p)}</div>`;
+            }
+        }
+        return html || '<div style="color:var(--text-muted);">无差异</div>';
+    }
+
     // ===== 创建 Plan 卡片 =====
     // data: { id, title, estimatedDuration, estimatedCost, steps: [{ id, idx, taskType, title, status, retryCount }], status, progress }
     function createPlanCard(data, options = {}) {
@@ -524,6 +551,25 @@
                 }
                 return;
             }
+
+            if (action === 'compare-original') {
+                if (!currentArtifact?.content) {
+                    showToast('没有可用的产物内容', 'error');
+                    return;
+                }
+                const original = window.jzEditor?.getContent?.() || '';
+                const diffHtml = simpleDiff(original, currentArtifact.content);
+                showModal('差异对比', `
+                    <div style="max-height:60vh;overflow:auto;font-size:13px;line-height:1.7;">
+                        <div style="margin-bottom:8px;color:var(--text-muted);font-size:12px;">
+                            <span style="color:var(--success)">绿色 = 新增</span> ·
+                            <span style="color:var(--danger)">红色 = 删除</span>
+                        </div>
+                        ${diffHtml}
+                    </div>
+                `);
+                return;
+            }
         });
 
         // 暴露 setArtifact 供外部更新
@@ -677,6 +723,7 @@
             chapter_draft: `
                 <button class="plan-btn plan-btn-primary" data-action="adopt-chapter">📄 采纳为新章节</button>
                 <button class="plan-btn" data-action="overwrite-chapter">🔄 覆盖当前草稿</button>
+                <button class="plan-btn" data-action="compare-original">🔍 对比原文</button>
                 <button class="plan-btn" data-action="save-draft">📝 保存草稿</button>
                 <button class="plan-btn" data-action="copy-content">📋 复制内容</button>
             `,
