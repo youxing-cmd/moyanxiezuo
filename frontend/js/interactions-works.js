@@ -245,14 +245,43 @@ async function loadWorksList(search = '', source = '', status = '') {
     }
 }
 
-// ========== 概览页统计 ==========
+// ========== 今日写作台统计 ==========
 async function loadDashboardStats() {
     try {
         const stats = await api('/stats');
 
+        // 今日新增字数
+        const todayWordsEl = document.getElementById('dashTodayWords');
+        if (todayWordsEl) {
+            const tw = stats.todayWords || 0;
+            todayWordsEl.textContent = tw >= 10000 ? (tw / 10000).toFixed(1) + '万' : tw.toString();
+        }
+        const todayWordsHintEl = document.getElementById('dashTodayWordsHint');
+        if (todayWordsHintEl) {
+            const tw = stats.todayWords || 0;
+            todayWordsHintEl.textContent = tw > 0 ? `今日已写作 ${tw} 字` : '开始今天的创作';
+        }
+
+        // 连续写作天数
+        const consecutiveDaysEl = document.getElementById('dashConsecutiveDays');
+        if (consecutiveDaysEl) consecutiveDaysEl.textContent = (stats.consecutiveDays || 0).toString();
+        const streakHintEl = document.getElementById('dashStreakHint');
+        if (streakHintEl) {
+            const days = stats.consecutiveDays || 0;
+            if (days >= 7) streakHintEl.textContent = '太棒了，保持节奏！';
+            else if (days >= 3) streakHintEl.textContent = '不错的势头';
+            else if (days > 0) streakHintEl.textContent = '坚持就是胜利';
+            else streakHintEl.textContent = '今天写一点吧';
+        }
+
         // 作品数量
         const workCountEl = document.getElementById('statWorkCount');
         if (workCountEl) workCountEl.textContent = stats.workCount || 0;
+
+        const workChangeEl = document.getElementById('statWorkChange');
+        if (workChangeEl) {
+            workChangeEl.textContent = (stats.workCount || 0) > 0 ? '继续创作' : '开始创作第一部作品';
+        }
 
         // 总字数
         const totalWordsEl = document.getElementById('statTotalWords');
@@ -261,17 +290,22 @@ async function loadDashboardStats() {
             totalWordsEl.textContent = words >= 10000 ? (words / 10000).toFixed(1) + '万' : words.toString();
         }
 
-        // 总章节数
-        const totalChaptersEl = document.getElementById('statTotalChapters');
-        if (totalChaptersEl) {
-            totalChaptersEl.textContent = (stats.totalChapters || 0).toString();
-        }
-
-        // AI 辅助次数（本地粗略统计）
-        const aiCountEl = document.getElementById('statAiCount');
-        if (aiCountEl) {
-            const aiCount = parseInt(localStorage.getItem('jz_ai_count') || '0');
-            aiCountEl.textContent = aiCount.toString();
+        // 近7天打卡
+        const weekStreakEl = document.getElementById('dashWeekStreak');
+        if (weekStreakEl && stats.last7Days) {
+            const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+            weekStreakEl.innerHTML = stats.last7Days.map(d => {
+                const date = new Date(d.date);
+                const dayLabel = weekDays[date.getDay()];
+                const active = d.hasWriting;
+                const bg = active ? 'rgba(34,197,94,0.12)' : 'var(--bg-tertiary)';
+                const border = active ? 'var(--success)' : 'var(--border)';
+                const color = active ? 'var(--success)' : 'var(--text-muted)';
+                return `<div title="${d.date}${active ? ' 已写作' : ' 未写作'}" style="flex:1;height:48px;border-radius:var(--radius-sm);background:${bg};border:1px solid ${border};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;">
+                    <span style="font-size:10px;color:var(--text-muted);">${dayLabel}</span>
+                    <span style="font-size:13px;font-weight:600;color:${color};">${active ? '✓' : '·'}</span>
+                </div>`;
+            }).join('');
         }
 
         // 最近编辑列表

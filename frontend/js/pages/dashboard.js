@@ -1,7 +1,19 @@
-    // ========== 概览 ==========
+    // ========== 今日写作台 ==========
     pages.dashboard = () => `
         <div class="page-section">
             <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-icon red">🔥</div>
+                    <div class="stat-value" id="dashTodayWords">--</div>
+                    <div class="stat-label">今日新增字数</div>
+                    <div class="stat-change positive" id="dashTodayWordsHint">开始今天的创作</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon orange">📅</div>
+                    <div class="stat-value" id="dashConsecutiveDays">--</div>
+                    <div class="stat-label">连续写作天数</div>
+                    <div class="stat-change positive" id="dashStreakHint">坚持就是胜利</div>
+                </div>
                 <div class="stat-card">
                     <div class="stat-icon blue">📚</div>
                     <div class="stat-value" id="statWorkCount">--</div>
@@ -12,19 +24,7 @@
                     <div class="stat-icon purple">✍️</div>
                     <div class="stat-value" id="statTotalWords">--</div>
                     <div class="stat-label">累计写作字数</div>
-                    <div class="stat-change positive">坚持就是胜利</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon green">🤖</div>
-                    <div class="stat-value" id="statAiCount">--</div>
-                    <div class="stat-label">AI 辅助次数</div>
-                    <div class="stat-change positive">善用 AI 提高效率</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon orange">📑</div>
-                    <div class="stat-value" id="statTotalChapters">--</div>
-                    <div class="stat-label">总章节数</div>
-                    <div class="stat-change positive">继续创作</div>
+                    <div class="stat-change positive">积少成多</div>
                 </div>
             </div>
 
@@ -32,22 +32,12 @@
                 <div class="card">
                     <div class="card-header">
                         <div>
-                            <div class="card-title">创作趋势</div>
-                            <div class="card-subtitle">近7日字数变化</div>
-                        </div>
-                        <div class="tabs" style="margin:0">
-                            <button class="tab active">周</button>
-                            <button class="tab">月</button>
+                            <div class="card-title">近7天打卡</div>
+                            <div class="card-subtitle">每日写作记录</div>
                         </div>
                     </div>
-                    <div class="chart-area">
-                        <div class="chart-bar" style="height: 40%"></div>
-                        <div class="chart-bar" style="height: 65%"></div>
-                        <div class="chart-bar" style="height: 55%"></div>
-                        <div class="chart-bar" style="height: 80%"></div>
-                        <div class="chart-bar" style="height: 70%"></div>
-                        <div class="chart-bar" style="height: 90%"></div>
-                        <div class="chart-bar" style="height: 75%"></div>
+                    <div id="dashWeekStreak" style="display:flex; gap:6px; padding:16px 0;">
+                        <div class="list-meta" style="color:var(--text-muted);">加载中...</div>
                     </div>
                 </div>
 
@@ -55,7 +45,7 @@
                     <div class="card-header">
                         <div>
                             <div class="card-title">最近编辑</div>
-                            <div class="card-subtitle">继续你的创作</div>
+                            <div class="card-subtitle">点击继续创作</div>
                         </div>
                     </div>
                     <div id="recentWorksList">

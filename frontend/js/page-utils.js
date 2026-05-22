@@ -1,7 +1,7 @@
 const pages = {};
 
 const pageTitles = {
-    dashboard: '概览',
+    dashboard: '今日写作台',
     works: '我的作品',
     writing: '长篇写作',
     'ai-tools': 'AI 工具库',
@@ -51,8 +51,8 @@ async function init() {
         });
     });
 
-    // 直接进入我的作品页
-    switchPage('works');
+    // 默认进入今日写作台
+    switchPage('dashboard');
 }
 
 // ========== 页面切换 ==========
