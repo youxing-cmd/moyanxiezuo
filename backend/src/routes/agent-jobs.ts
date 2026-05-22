@@ -181,13 +181,13 @@ agentJobsRouter.post('/agent-jobs/:id/start', async (c) => {
     return c.json({ error: '任务不存在' }, 404);
   }
 
-  if (['done', 'failed', 'aborted'].includes(job.status)) {
+  if (job.status === 'done' || job.status === 'aborted') {
     return c.json({ error: `当前状态为 ${job.status}，无法开始` }, 400);
   }
 
   await db
     .update(agentJobs)
-    .set({ status: 'running', updatedAt: new Date() })
+    .set({ status: 'running', updatedAt: new Date(), finishedAt: null, errorMsg: '' })
     .where(eq(agentJobs.id, jobId));
 
   await sendAgentJob(jobId);
@@ -396,11 +396,11 @@ agentJobsRouter.post('/agent-jobs/:id/steps/:stepId/skip', async (c) => {
     payload: { action: 'skip' },
   });
 
-  // 重新触发 worker 推进后续步骤（即使 job 是 running，worker 可能已结束当前轮询）
-  if (!['done', 'failed', 'aborted'].includes(job.status)) {
+  // 重新触发 worker 推进后续步骤（包括从 failed 恢复的场景）
+  if (job.status !== 'done' && job.status !== 'aborted') {
     await db
       .update(agentJobs)
-      .set({ status: 'running', updatedAt: new Date() })
+      .set({ status: 'running', updatedAt: new Date(), finishedAt: null, errorMsg: '' })
       .where(eq(agentJobs.id, jobId));
     await sendAgentJob(jobId);
   }
@@ -460,11 +460,11 @@ agentJobsRouter.post('/agent-jobs/:id/steps/:stepId/redo', async (c) => {
     payload: { action: 'redo' },
   });
 
-  // 重新触发 worker
-  if (!['done', 'failed', 'aborted'].includes(job.status)) {
+  // 重新触发 worker（包括从 failed 恢复的场景）
+  if (job.status !== 'done' && job.status !== 'aborted') {
     await db
       .update(agentJobs)
-      .set({ status: 'running', updatedAt: new Date() })
+      .set({ status: 'running', updatedAt: new Date(), finishedAt: null, errorMsg: '' })
       .where(eq(agentJobs.id, jobId));
     await sendAgentJob(jobId);
   }

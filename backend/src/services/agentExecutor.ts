@@ -5,6 +5,7 @@ import { buildWorkContextPrompt } from './contextBuilder.js';
 import { callLLM } from './llm.js';
 import { TOOL_PROMPTS } from '../routes/ai.js';
 import { reflectStep } from './reflector.js';
+import { getDefaultPresetModelId, getPresetModelById } from '../config/presetModels.js';
 
 interface LoadedJob {
   id: number;
@@ -155,10 +156,26 @@ function collectContextFromDeps(step: LoadedStep, allSteps: LoadedStep[]): strin
 }
 
 async function callAgentLLM(system: string, user: string): Promise<string> {
-  const res = await callLLM([
-    { role: 'system', content: system },
-    { role: 'user', content: user },
-  ], false);
+  const defaultModelId = getDefaultPresetModelId();
+  const model = defaultModelId ? getPresetModelById(defaultModelId) : null;
+  const modelConfig = model
+    ? {
+        provider: model.provider,
+        baseUrl: model.baseUrl,
+        apiKey: model.apiKey,
+        modelName: model.modelName,
+        contextTokens: model.contextTokens,
+      }
+    : null;
+
+  const res = await callLLM(
+    [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    false,
+    modelConfig,
+  );
   const data = await res.json();
   return data.choices?.[0]?.message?.content || '';
 }

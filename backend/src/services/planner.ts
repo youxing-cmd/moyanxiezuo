@@ -3,6 +3,7 @@ import { callLLM, type ChatMessage } from './llm.js';
 import { getPresetModelById } from '../config/presetModels.js';
 import { db } from '../db/index.js';
 import { agentPlanSteps } from '../db/schema.js';
+import { eq } from 'drizzle-orm';
 import { buildWorkContextPrompt } from './contextBuilder.js';
 
 export interface PlanContext {
@@ -215,15 +216,39 @@ export async function planJob(query: string, ctx: PlanContext): Promise<PlanResu
 }
 
 export async function savePlanToSteps(jobId: number, plan: PlanResult): Promise<void> {
+  // 1. 先插入所有步骤（dependsOn 暂时为空，避免引用尚未分配的数据库 id）
   const values = plan.steps.map((step, idx) => ({
     jobId,
     idx,
     taskType: step.type,
     title: step.title,
     description: step.description ?? '',
-    dependsOn: step.dependsOn ?? [],
+    dependsOn: [] as string[],
     status: 'pending' as const,
   }));
 
-  await db.insert(agentPlanSteps).values(values);
+  const inserted = await db.insert(agentPlanSteps).values(values).returning();
+
+  // 2. 建立 Planner id → 数据库 id 映射
+  const idMap = new Map<string, number>();
+  plan.steps.forEach((step, idx) => {
+    idMap.set(step.id, inserted[idx].id);
+  });
+
+  // 3. 更新 dependsOn 为实际数据库 id
+  for (let i = 0; i < plan.steps.length; i++) {
+    const step = plan.steps[i];
+    const dbId = inserted[i].id;
+    const realDependsOn = (step.dependsOn ?? [])
+      .map((depId) => idMap.get(depId))
+      .filter((id): id is number => id !== undefined)
+      .map(String);
+
+    if (realDependsOn.length > 0) {
+      await db
+        .update(agentPlanSteps)
+        .set({ dependsOn: realDependsOn })
+        .where(eq(agentPlanSteps.id, dbId));
+    }
+  }
 }
