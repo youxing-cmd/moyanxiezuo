@@ -968,10 +968,37 @@ async function initPageInteractions(page) {
 
         // ===== Composer 辅助函数 =====
 
+        // 检测用户输入是否属于"简单任务"（不应进入 Agent Plan）
+        function isSimpleTask(text) {
+            if (!text) return false;
+            const simplePatterns = [
+                /^起[个\s\d]*标题/,
+                /^给.*起[个\s\d]*标题/,
+                /^取[个\s\d]*名字/,
+                /^给.*取[个\s\d]*名字/,
+                /^润色[这此]段/,
+                /^润色[这此]句/,
+                /^润色选中/,
+                /^翻译/,
+                /^解释/,
+                /^什么是/,
+                /^为什么/,
+                /^怎么/,
+                /^如何/,
+                /^你好/,
+                /^谢谢/,
+                /^再见/,
+            ];
+            return simplePatterns.some((re) => re.test(text.trim()));
+        }
+
         // 检测用户输入是否属于"模糊创作类"指令
         function detectComposerIntent(text) {
             if (!text || text.length < 5) return false;
-            // 简单正则：包含"参考"+"写" / "帮我写" / "生成"+"大纲" / "写一篇" / "写一章" 等
+            // 简单任务直接降级，不走 Agent
+            if (isSimpleTask(text)) return false;
+
+            // 复杂任务触发 Agent Plan
             const triggers = [
                 /参考.*写/,
                 /帮我写/,
@@ -987,6 +1014,11 @@ async function initPageInteractions(page) {
                 /改写/,
                 /润色.*全文/,
                 /优化.*大纲/,
+                /审稿.*全文/,
+                /审稿.*章/,
+                /检查.*全文/,
+                /分析.*剧情/,
+                /分析.*人物/,
             ];
             return triggers.some((re) => re.test(text));
         }
@@ -2414,6 +2446,17 @@ async function initPageInteractions(page) {
             console.error('[九章 Debug] 未找到 chatInput 输入框');
         }
 
+        // Agent 高频入口按钮绑定
+        workspace.querySelectorAll('.agent-entry-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const query = btn.dataset.agentQuery;
+                if (query && chatInput) {
+                    chatInput.value = query;
+                    sendAiMessage();
+                }
+            });
+        });
+
         // 右栏滚动独立：防止滚动事件带动页面
         const rightCol = document.getElementById('writeColRight');
         if (rightCol) {
@@ -2876,7 +2919,7 @@ function updateAgentModeUI() {
         btn.style.color = isAuto ? 'var(--accent)' : 'var(--text-secondary)';
         btn.style.borderColor = isAuto ? 'var(--accent)' : 'var(--border)';
     }
-    if (hint) hint.textContent = isAuto ? '由 AI 自动选择模型和工具' : '手动选择模型和工具';
+    if (hint) hint.textContent = '复杂任务交给 Agent，预计 3-10 分钟完成';
     if (modelPicker) modelPicker.style.display = isAuto ? 'none' : '';
     if (toolPicker) toolPicker.style.display = isAuto ? 'none' : '';
 }

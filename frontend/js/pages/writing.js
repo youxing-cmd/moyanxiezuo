@@ -325,6 +325,20 @@
                         <div id="aiChatDialogBody" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
                             <div id="aiChatMessages" class="chat-messages"></div>
 
+                            <!-- Agent 高频入口 -->
+                            <div class="agent-entry-bar" id="agentEntryBar">
+                                <span class="agent-entry-label">Agent 任务</span>
+                                <button class="agent-entry-btn" data-agent-query="帮我写一章正文，延续当前剧情" title="AI 分析上下文后自动续写一章">
+                                    ✍️ 写一章
+                                </button>
+                                <button class="agent-entry-btn" data-agent-query="对当前章节进行全文审稿，检查剧情、人物、节奏、爽点、设定、文风" title="AI 对当前章节进行全面审稿">
+                                    🔍 审稿全文
+                                </button>
+                                <button class="agent-entry-btn" data-agent-query="参考当前热门爆款作品，给我写一篇同风格短篇" title="AI 研究爆款后模仿创作">
+                                    🎯 参考爆款创作
+                                </button>
+                            </div>
+
                             <!-- 输入区 -->
                             <div class="chat-input-area">
                                 <div class="chat-composer">
@@ -349,7 +363,7 @@
                                     </div>
                                 </div>
                                 <div class="chat-composer-hint">
-                                    <span id="agentModeHint">手动选择模型和工具</span>
+                                    <span id="agentModeHint">复杂任务交给 Agent，预计 3-10 分钟完成</span>
                                     <span>·</span>
                                     <span>Enter 发送 · Shift+Enter 换行</span>
                                 </div>

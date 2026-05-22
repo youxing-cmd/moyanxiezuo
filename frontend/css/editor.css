@@ -906,6 +906,45 @@
 }
 
 /* ====== 输入区（新版 Composer） ====== */
+.agent-entry-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-secondary);
+    flex-shrink: 0;
+    overflow-x: auto;
+}
+
+.agent-entry-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    margin-right: 4px;
+}
+
+.agent-entry-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.agent-entry-btn:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+}
+
 .chat-input-area {
     padding: 10px 14px 12px;
     border-top: 1px solid var(--border);
