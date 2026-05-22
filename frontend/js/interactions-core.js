@@ -425,6 +425,9 @@ async function initPageInteractions(page) {
         // 初始化 Agent 模式 UI
         updateAgentModeUI();
 
+        // 恢复当前作品的 active Agent jobs
+        restoreActiveJobs();
+
         // 初始化调试面板（仅 ?debug=1）
         setupDebugPanel();
 
@@ -1102,6 +1105,74 @@ async function initPageInteractions(page) {
                     console.warn('[composer poll] 错误:', err);
                 },
             });
+        }
+
+        // 页面刷新后恢复当前作品的 active Agent jobs
+        async function restoreActiveJobs() {
+            const workId = currentWorkId;
+            if (!workId || !window.jzComposer || !window.jzAgentPoller) return;
+
+            try {
+                const data = await api('/ai/agent-jobs');
+                const jobs = data.jobs || [];
+                const activeStatuses = ['running', 'paused', 'waiting', 'user_blocked', 'ready'];
+                const activeJobs = jobs.filter((j) => activeStatuses.includes(j.status) && j.workId === workId);
+
+                if (activeJobs.length === 0) return;
+
+                const container = document.getElementById('aiChatMessages');
+                if (!container) return;
+
+                for (const job of activeJobs) {
+                    // 获取完整状态
+                    let fullJob;
+                    try {
+                        fullJob = await api(`/ai/agent-jobs/${job.id}`);
+                    } catch {
+                        continue;
+                    }
+
+                    const planData = {
+                        id: job.id,
+                        title: job.query?.slice(0, 30) || 'Agent 任务',
+                        status: fullJob.job?.status || job.status,
+                        progress: fullJob.job?.progress || 0,
+                        workId: fullJob.job?.workId || workId,
+                        estimatedDuration: fullJob.steps?.length ? `约 ${fullJob.steps.length} 步` : '',
+                        estimatedCost: '',
+                        steps: (fullJob.steps || []).map((s) => ({
+                            id: s.id,
+                            idx: s.idx,
+                            taskType: s.taskType,
+                            title: s.title,
+                            status: s.status,
+                            retryCount: s.retryCount,
+                        })),
+                        artifacts: fullJob.artifacts || [],
+                    };
+
+                    const planCard = window.jzComposer.createPlanCard(planData, {
+                        onStart: (id) => startPlanPolling(id, planCard),
+                        onPause: () => showToast('已暂停', 'info'),
+                        onAbort: () => showToast('已中止', 'info'),
+                        onInject: (id, text) => {
+                            const injectRow = document.createElement('div');
+                            injectRow.className = 'plan-inject-msg';
+                            injectRow.textContent = `💬 ${text}`;
+                            planCard.querySelector('.plan-footer')?.appendChild(injectRow);
+                        },
+                        onDismiss: () => {},
+                    });
+
+                    container.appendChild(planCard);
+                    container.scrollTop = container.scrollHeight;
+
+                    // 自动启动轮询/SSE
+                    startPlanPolling(job.id, planCard);
+                }
+            } catch (err) {
+                console.warn('[restoreActiveJobs] 恢复失败:', err);
+            }
         }
 
         function createUserBubble(text) {
