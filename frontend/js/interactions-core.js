@@ -1339,7 +1339,14 @@ async function initPageInteractions(page) {
         }
 
         // 后端执行工具列表（需要走 POST /api/ai/tools/:name）
-        const BACKEND_TOOLS = new Set(['get_characters', 'get_outline']);
+        const BACKEND_TOOLS = new Set([
+            'get_characters',
+            'get_outline',
+            'get_artifacts',
+            'read_artifact',
+            'create_artifact',
+            'update_artifact',
+        ]);
 
         // 执行后端工具（fetch /api/ai/tools/:name）
         async function executeBackendTool(name, args) {
