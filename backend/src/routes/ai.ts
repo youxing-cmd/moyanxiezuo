@@ -46,16 +46,18 @@ aiRouter.use('*', async (c, next) => {
   const userId = c.get('userId');
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) return c.json({ error: '用户不存在' }, 404);
-  if (user.points < 1) {
-    return c.json({ error: '积分不足', need: 1, have: user.points, code: 'INSUFFICIENT_POINTS' }, 403);
+
+  const cost = path === '/api/ai/chapter-review' ? 6 : 1;
+  if (user.points < cost) {
+    return c.json({ error: '积分不足', need: cost, have: user.points, code: 'INSUFFICIENT_POINTS' }, 403);
   }
 
-  await db.update(users).set({ points: user.points - 1 }).where(eq(users.id, userId));
+  await db.update(users).set({ points: user.points - cost }).where(eq(users.id, userId));
   await db.insert(pointTransactions).values({
     userId,
     type: 'spend',
-    amount: -1,
-    description: 'AI模型调用',
+    amount: -cost,
+    description: cost === 1 ? 'AI模型调用' : 'AI章节审查',
   });
 
   await next();
@@ -813,6 +815,13 @@ aiRouter.post('/artifacts', async (c) => {
     return c.json({ error: 'workId, title, content 为必填' }, 400);
   }
 
+  const [work] = await db.select().from(works)
+    .where(and(eq(works.id, body.workId), eq(works.userId, userId)))
+    .limit(1);
+  if (!work) {
+    return c.json({ error: '作品不存在或无权限' }, 404);
+  }
+
   const [result] = await db.insert(aiArtifacts).values({
     workId: body.workId,
     userId,
@@ -847,6 +856,15 @@ aiRouter.put('/artifacts/:id', async (c) => {
 
   // accept 时同步到正式表
   if (body.status === 'accepted' && existing.status !== 'accepted') {
+    // 双重校验作品归属，防止 workId 被篡改后写入他人作品
+    if (existing.workId) {
+      const [work] = await db.select().from(works)
+        .where(and(eq(works.id, existing.workId), eq(works.userId, userId)))
+        .limit(1);
+      if (!work) {
+        return c.json({ error: '作品不存在或无权限' }, 403);
+      }
+    }
     if (existing.type === 'outline') {
       const [outline] = await db.insert(outlines).values({
         workId: existing.workId,
@@ -876,12 +894,12 @@ aiRouter.put('/artifacts/:id', async (c) => {
     }
   }
 
-  // reject 时如果已有同步记录，删除之
+  // reject 时如果已有同步记录，删除之（带上 workId 约束，防止误删）
   if (body.status === 'rejected' && existing.linkedEntityType && existing.linkedEntityId) {
     const tableMap: Record<string, any> = { characters, outlines, settings };
     const tbl = tableMap[existing.linkedEntityType];
     if (tbl) {
-      await db.delete(tbl).where(eq(tbl.id, existing.linkedEntityId));
+      await db.delete(tbl).where(and(eq(tbl.id, existing.linkedEntityId), eq(tbl.workId, existing.workId)));
     }
     updateData.linkedEntityType = '';
     updateData.linkedEntityId = null;
@@ -905,12 +923,12 @@ aiRouter.delete('/artifacts/:id', async (c) => {
     .limit(1);
   if (!existing) return c.json({ error: '不存在' }, 404);
 
-  // 如果已同步到正式表，也删除正式记录
+  // 如果已同步到正式表，也删除正式记录（带上 workId 约束，防止误删）
   if (existing.linkedEntityType && existing.linkedEntityId) {
     const tableMap: Record<string, any> = { characters, outlines, settings };
     const tbl = tableMap[existing.linkedEntityType];
     if (tbl) {
-      await db.delete(tbl).where(eq(tbl.id, existing.linkedEntityId));
+      await db.delete(tbl).where(and(eq(tbl.id, existing.linkedEntityId), eq(tbl.workId, existing.workId)));
     }
   }
 
@@ -919,6 +937,8 @@ aiRouter.delete('/artifacts/:id', async (c) => {
 });
 
 // POST /api/ai/artifacts/:id/link — 关联 artifact 到作品树实体（Agent 交付时用）
+const ALLOWED_LINK_TYPES = new Set(['characters', 'outlines', 'settings']);
+
 aiRouter.post('/artifacts/:id/link', async (c) => {
   const userId = c.get('userId');
   const id = parseInt(c.req.param('id'));
@@ -930,8 +950,33 @@ aiRouter.post('/artifacts/:id/link', async (c) => {
   if (!existing) return c.json({ error: '不存在' }, 404);
 
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
-  if (body.linkedEntityType !== undefined) updateData.linkedEntityType = body.linkedEntityType;
-  if (body.linkedEntityId !== undefined) updateData.linkedEntityId = body.linkedEntityId;
+
+  if (body.linkedEntityType !== undefined) {
+    if (body.linkedEntityType !== null && !ALLOWED_LINK_TYPES.has(body.linkedEntityType)) {
+      return c.json({ error: '非法的关联类型' }, 400);
+    }
+    updateData.linkedEntityType = body.linkedEntityType;
+  }
+  if (body.linkedEntityId !== undefined) {
+    updateData.linkedEntityId = body.linkedEntityId;
+  }
+
+  // 如果设置关联，校验目标实体存在且属于同一作品
+  const linkType = body.linkedEntityType ?? existing.linkedEntityType;
+  const linkId = body.linkedEntityId ?? existing.linkedEntityId;
+  if (linkType && linkId) {
+    if (!ALLOWED_LINK_TYPES.has(linkType)) {
+      return c.json({ error: '非法的关联类型' }, 400);
+    }
+    const tableMap: Record<string, any> = { characters, outlines, settings };
+    const tbl = tableMap[linkType];
+    const [target] = await db.select().from(tbl)
+      .where(and(eq(tbl.id, linkId), eq(tbl.workId, existing.workId)))
+      .limit(1);
+    if (!target) {
+      return c.json({ error: '关联实体不存在或不属于该作品' }, 400);
+    }
+  }
 
   const [updated] = await db.update(aiArtifacts)
     .set(updateData)
@@ -1782,7 +1827,7 @@ aiRouter.post('/chapter-review', async (c) => {
   const modelConfig = await resolveModelConfig(userId);
   const agents = ['plot', 'character', 'pacing', 'hook', 'continuity', 'style'] as const;
 
-  // 并行调用 4 个审查 Agent
+  // 并行调用 6 个审查 Agent
   const results = await Promise.allSettled(
     agents.map(async (agentType) => {
       const prompt = REVIEW_AGENT_PROMPTS[agentType];
@@ -1844,6 +1889,32 @@ aiRouter.post('/corrections', async (c) => {
 
   const userId = c.get('userId');
   const { workId, chapterId, aiContent, userAction, toolType, modelId } = parsed.data;
+
+  // 校验作品归属
+  if (workId) {
+    const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+    if (!work || work.userId !== userId) {
+      return c.json({ error: '作品不存在' }, 404);
+    }
+  }
+
+  // 校验章节归属
+  if (chapterId) {
+    const [chapter] = await db.select().from(chapters).where(eq(chapters.id, chapterId)).limit(1);
+    if (!chapter) {
+      return c.json({ error: '章节不存在' }, 404);
+    }
+    if (workId && chapter.workId !== workId) {
+      return c.json({ error: '章节不属于该作品' }, 400);
+    }
+    // 如果只传了 chapterId 没传 workId，确保章节属于当前用户
+    if (!workId) {
+      const [work] = await db.select().from(works).where(eq(works.id, chapter.workId)).limit(1);
+      if (!work || work.userId !== userId) {
+        return c.json({ error: '章节不存在' }, 404);
+      }
+    }
+  }
 
   await db.insert(aiCorrections).values({
     userId,
