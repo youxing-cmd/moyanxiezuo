@@ -863,8 +863,25 @@
                     // 填充 output 内容（如果有 events 或 step.output）
                     const outputEl = card.querySelector(`[data-step-id="${step.id}"] [data-step-output]`);
                     if (outputEl && step.output?.content && !outputEl.innerHTML) {
+                        let html = '';
+                        // web_research 步骤展示来源
+                        if (step.taskType === 'web_research' && step.output?.sources && step.output.sources.length > 0) {
+                            html += `<div style="margin-bottom:8px;font-size:11px;color:var(--text-muted);">📚 参考来源</div>`;
+                            for (const src of step.output.sources) {
+                                html += `<div style="margin-bottom:6px;padding:6px 8px;background:var(--bg-tertiary);border-radius:var(--radius-sm);font-size:12px;">
+                                    <div style="font-weight:500;color:var(--text-primary);margin-bottom:2px;">${escapeHtml(src.title)}</div>
+                                    <a href="${escapeHtml(src.url)}" target="_blank" style="color:var(--accent);font-size:11px;word-break:break-all;">${escapeHtml(src.url)}</a>
+                                    <div style="margin-top:4px;color:var(--text-secondary);font-size:11px;line-height:1.5;">${escapeHtml(src.excerpt).slice(0, 120)}...</div>
+                                </div>`;
+                            }
+                            html += `<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">`;
+                        }
                         const text = String(step.output.content).slice(0, 800).replace(/\n/g, '<br>');
-                        outputEl.innerHTML = text + (String(step.output.content).length > 800 ? '<br>...' : '');
+                        html += text + (String(step.output.content).length > 800 ? '<br>...' : '');
+                        if (step.taskType === 'web_research' && step.output?.sources && step.output.sources.length > 0) {
+                            html += `</div>`;
+                        }
+                        outputEl.innerHTML = html;
                     }
                 }
             });

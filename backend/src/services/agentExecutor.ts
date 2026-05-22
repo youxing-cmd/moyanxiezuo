@@ -277,8 +277,14 @@ async function runWebResearch(step: LoadedStep, job: LoadedJob) {
     query = cleaned || raw;
   }
 
-  const content = await firecrawlSearchAndScrape(query, 3);
-  step.output = { content, type: 'research' };
+  const result = await firecrawlSearchAndScrape(query, 3);
+  step.output = {
+    content: result.content,
+    sources: result.sources,
+    query: result.query,
+    cached: result.cached,
+    type: 'research',
+  };
 }
 
 async function runUserInput(step: LoadedStep, job: LoadedJob) {
