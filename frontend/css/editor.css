@@ -2460,4 +2460,25 @@
     color: var(--text-muted);
     font-size: 14px;
 }
+
+/* 复核对比 */
+.review-compare-badge {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.review-issue-status {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    flex-shrink: 0;
+}
 }

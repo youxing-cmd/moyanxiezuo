@@ -3178,6 +3178,15 @@ async function runChapterReview(workId, chapterId) {
         return;
     }
 
+    const storageKey = `jz_review_${workId}_${chapterId}`;
+    let previousData = null;
+    try {
+        const raw = sessionStorage.getItem(storageKey);
+        if (raw) previousData = JSON.parse(raw);
+    } catch {
+        previousData = null;
+    }
+
     showToast('正在审稿，请稍候...', 'info');
     try {
         const token = localStorage.getItem('jz_token');
@@ -3192,6 +3201,17 @@ async function runChapterReview(workId, chapterId) {
         const data = await res.json();
         if (!res.ok) {
             throw new Error(data.error || `审稿失败 ${res.status}`);
+        }
+
+        // 保存本次结果供下次复核对比
+        try {
+            sessionStorage.setItem(storageKey, JSON.stringify(data));
+        } catch {
+            /* ignore */
+        }
+
+        if (previousData) {
+            data.previousData = previousData;
         }
 
         window.jzReviewPanel.open(data, {
