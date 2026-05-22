@@ -2451,6 +2451,10 @@ async function initPageInteractions(page) {
             btn.addEventListener('click', () => {
                 // 审稿全文：直接调用 chapter-review API，不走聊天流程
                 if (btn.dataset.action === 'review') {
+                    if (isReviewing) {
+                        showToast('正在审稿中，请稍候...', 'warning');
+                        return;
+                    }
                     if (!currentWorkId || !currentChapterId) {
                         showToast('请先选择一个章节', 'warning');
                         return;
@@ -3173,6 +3177,10 @@ function injectDiffPanel(resultId, originalText) {
 
 // 从写作页左栏触发审稿
 function runChapterReviewFromTree(preset) {
+    if (isReviewing) {
+        showToast('正在审稿中，请稍候...', 'warning');
+        return;
+    }
     if (!currentWorkId || !currentChapterId) {
         showToast('请先选择一个章节', 'warning');
         return;
@@ -3184,11 +3192,28 @@ function runChapterReviewFromTree(preset) {
     runChapterReview(currentWorkId, currentChapterId, preset);
 }
 
+let isReviewing = false;
+
 // ===== 章节审稿 =====
 async function runChapterReview(workId, chapterId, _preset) {
+    if (isReviewing) {
+        showToast('正在审稿中，请稍候...', 'warning');
+        return;
+    }
     if (!window.jzReviewPanel) {
         showToast('审稿组件未加载', 'error');
         return;
+    }
+
+    isReviewing = true;
+
+    // 先保存当前编辑器内容，确保审稿针对的是最新内容
+    if (typeof saveCurrentChapter === 'function') {
+        try {
+            await saveCurrentChapter(false, 'review');
+        } catch {
+            /* 保存失败也继续审稿，用数据库版本 */
+        }
     }
 
     const storageKey = `jz_review_${workId}_${chapterId}`;
@@ -3266,13 +3291,41 @@ async function runChapterReview(workId, chapterId, _preset) {
             onLocate: (detail) => {
                 if (!detail.evidence) return;
                 const editor = document.getElementById('editorArea');
+                const scrollContainer = document.getElementById('editorScrollContainer');
                 if (!editor) return;
-                const text = editor.innerText || '';
-                const idx = text.indexOf(detail.evidence.slice(0, 30));
-                if (idx >= 0) {
-                    editor.focus();
-                    showToast('已定位到原文区域', 'success');
-                } else {
+                const searchText = detail.evidence.slice(0, 60);
+                let found = false;
+                const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+                while (walker.nextNode()) {
+                    const node = walker.currentNode;
+                    const idx = node.textContent.indexOf(searchText);
+                    if (idx >= 0) {
+                        const range = document.createRange();
+                        range.setStart(node, idx);
+                        range.setEnd(node, idx + Math.min(searchText.length, node.textContent.length - idx));
+                        const sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                        // 滚动到视口中央（使用实际滚动容器）
+                        const rect = range.getBoundingClientRect();
+                        const scroller = scrollContainer || editor;
+                        const scrollerRect = scroller.getBoundingClientRect();
+                        const scrollTop = scroller.scrollTop + (rect.top - scrollerRect.top) - scrollerRect.height / 2 + rect.height / 2;
+                        scroller.scrollTo({ top: scrollTop, behavior: 'smooth' });
+                        // 临时高亮：不修改 DOM，改用 ::selection 颜色 + 自动失焦恢复
+                        scroller.classList.add('editor-highlighting');
+                        setTimeout(() => {
+                            scroller.classList.remove('editor-highlighting');
+                            // 2.5 秒后清除选区，避免用户误操作覆盖
+                            const sel = window.getSelection();
+                            if (sel) sel.removeAllRanges();
+                        }, 2500);
+                        found = true;
+                        showToast('已定位并高亮原文', 'success');
+                        break;
+                    }
+                }
+                if (!found) {
                     showToast('未找到对应原文片段', 'warning');
                 }
             },
@@ -3280,6 +3333,8 @@ async function runChapterReview(workId, chapterId, _preset) {
     } catch (err) {
         console.error('[chapter-review] 失败:', err);
         showToast(err.message || '审稿请求失败', 'error');
+    } finally {
+        isReviewing = false;
     }
 }
 

@@ -956,8 +956,12 @@ aiRouter.post('/artifacts/:id/link', async (c) => {
       return c.json({ error: '非法的关联类型' }, 400);
     }
     updateData.linkedEntityType = body.linkedEntityType;
+    // 清空关联类型时同步清空关联 ID，防止脏数据残留
+    if (body.linkedEntityType === null) {
+      updateData.linkedEntityId = null;
+    }
   }
-  if (body.linkedEntityId !== undefined) {
+  if (body.linkedEntityId !== undefined && body.linkedEntityType !== null) {
     updateData.linkedEntityId = body.linkedEntityId;
   }
 
