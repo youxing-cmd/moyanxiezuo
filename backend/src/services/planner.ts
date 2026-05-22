@@ -56,7 +56,7 @@ const planSchema = z.object({
   steps: z.array(stepSchema).min(1),
 });
 
-function buildPlannerPrompt(query: string, workContext?: string | null): string {
+function buildPlannerPrompt(query: string, workContext?: string | null, preferences?: string): string {
   let prompt = `你是九章写作 Agent 的任务规划器。把用户的模糊指令拆成可执行的 task DAG。
 
 【规则】
@@ -100,6 +100,10 @@ function buildPlannerPrompt(query: string, workContext?: string | null): string 
 
   if (workContext) {
     prompt += `\n\n【作品上下文】\n${workContext}\n`;
+  }
+
+  if (preferences) {
+    prompt += `\n【用户偏好与习惯】\n${preferences}\n`;
   }
 
   prompt += `\n【用户指令】\n${query}\n\n请直接输出 JSON，不要有任何解释或 markdown 代码块。`;
@@ -190,8 +194,8 @@ export function validatePlan(plan: unknown, query?: string): PlanResult {
   };
 }
 
-async function callPlannerOnce(query: string, workContext: string | null): Promise<PlanResult> {
-  const prompt = buildPlannerPrompt(query, workContext);
+async function callPlannerOnce(query: string, workContext: string | null, preferences?: string): Promise<PlanResult> {
+  const prompt = buildPlannerPrompt(query, workContext, preferences);
 
   const model = getPresetModelById(PLANNER_MODEL_ID);
   const modelConfig = model
@@ -237,13 +241,22 @@ export async function planJob(query: string, ctx: PlanContext): Promise<PlanResu
     return validatePlan(plan, query);
   }
 
-  // 2. 无模板匹配，调用 LLM 生成
+  // 2. 无模板匹配，调用 LLM 生成（注入用户偏好）
   const workContext = ctx.workId ? await buildWorkContextPrompt(ctx.workId, ctx.userId) : null;
+  let preferences = '';
   try {
-    return await callPlannerOnce(query, workContext);
+    const { extractUserPreferences, formatPreferencesForPlanner } = await import('./preferenceExtractor.js');
+    const prefs = await extractUserPreferences(ctx.userId);
+    preferences = formatPreferencesForPlanner(prefs);
+  } catch {
+    // 偏好提取失败不阻塞主流程
+  }
+
+  try {
+    return await callPlannerOnce(query, workContext, preferences || undefined);
   } catch (err) {
     console.warn('[planner] 第一次规划失败，自动重试一次:', err);
-    return await callPlannerOnce(query, workContext);
+    return await callPlannerOnce(query, workContext, preferences || undefined);
   }
 }
 
