@@ -278,11 +278,11 @@ async function loadDashboardStats() {
             }
             if (heroPrimaryBtn) {
                 heroPrimaryBtn.textContent = '继续写作';
-                heroPrimaryBtn.onclick = () => enterWriting(pw.workId);
+                heroPrimaryBtn.onclick = () => enterWriting(pw.workId, pw.chapterId);
             }
             if (heroSecondaryBtn) {
                 heroSecondaryBtn.style.display = '';
-                heroSecondaryBtn.onclick = () => enterWriting(pw.workId);
+                heroSecondaryBtn.onclick = () => openWritingAgent(pw.workId, pw.chapterId);
             }
         } else {
             if (heroTitleEl) heroTitleEl.textContent = '开始你的创作之旅';
@@ -392,11 +392,7 @@ async function loadDashboardStats() {
                     const color = actionColors[a.type] || 'var(--accent)';
                     const isPrimary = idx === 0;
                     const btnClass = isPrimary ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
-                    const onclick = a.action === 'enterWriting' && a.workId
-                        ? `onclick="enterWriting(${a.workId})"`
-                        : a.action === 'showCreateWorkModal'
-                            ? `onclick="showCreateWorkModal()"`
-                            : `onclick="showToast('功能开发中', 'warning')"`;
+                    const onclick = `onclick="runDashboardAction('${a.action}', ${a.workId || 'null'}, ${a.chapterId || 'null'})"`;
                     return `
                         <div class="list-item" style="cursor:default;">
                             <div class="list-icon" style="background:${color}15;color:${color};font-size:18px;">${icon}</div>
@@ -410,9 +406,79 @@ async function loadDashboardStats() {
                 }).join('');
             }
         }
+
+        // === 今日目标进度 ===
+        const dailyGoal = parseInt(localStorage.getItem('jz_daily_goal_words') || '300');
+        const weeklyGoal = parseInt(localStorage.getItem('jz_weekly_goal_days') || '5');
+        const todayWords = stats.todayWords || 0;
+        const goalProgress = Math.min(100, Math.round((todayWords / dailyGoal) * 100));
+        const weekDaysDone = stats.last7Days ? stats.last7Days.filter(d => d.hasWriting).length : 0;
+
+        const heroGoalArea = document.getElementById('heroGoalArea');
+        if (heroGoalArea && stats.workCount > 0) {
+            heroGoalArea.style.display = '';
+        }
+
+        const heroGoalLabel = document.getElementById('heroGoalLabel');
+        if (heroGoalLabel) {
+            heroGoalLabel.textContent = `${todayWords} / ${dailyGoal} 字`;
+        }
+
+        const heroGoalFill = document.getElementById('heroGoalFill');
+        if (heroGoalFill) {
+            heroGoalFill.style.width = `${goalProgress}%`;
+        }
+
+        const heroGoalCelebration = document.getElementById('heroGoalCelebration');
+        if (heroGoalCelebration) {
+            heroGoalCelebration.style.display = todayWords >= dailyGoal ? '' : 'none';
+        }
+
+        const weekGoalLabel = document.getElementById('weekGoalLabel');
+        if (weekGoalLabel) {
+            weekGoalLabel.textContent = `本周 ${weekDaysDone}/${weeklyGoal} 天 · 每日写作记录`;
+        }
     } catch (err) {
         console.log('统计加载失败:', err.message);
     }
+}
+
+// ========== 目标设置 ==========
+function showGoalSettings() {
+    const dailyGoal = localStorage.getItem('jz_daily_goal_words') || '300';
+    const weeklyGoal = localStorage.getItem('jz_weekly_goal_days') || '5';
+    showModal('创作目标', `
+        <div style="display:flex; flex-direction:column; gap:16px;">
+            <div>
+                <label style="display:block; font-size:13px; color:var(--text-secondary); margin-bottom:6px;">每日目标字数</label>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    ${[100, 300, 500, 1000].map(v => `
+                        <button class="btn ${v === parseInt(dailyGoal) ? 'btn-primary' : 'btn-ghost'}"
+                            onclick="saveGoalSettings(${v}, null); showGoalSettings();"
+                            style="flex:1; min-width:60px;">${v}</button>
+                    `).join('')}
+                </div>
+            </div>
+            <div>
+                <label style="display:block; font-size:13px; color:var(--text-secondary); margin-bottom:6px;">每周目标天数</label>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    ${[3, 5, 6, 7].map(v => `
+                        <button class="btn ${v === parseInt(weeklyGoal) ? 'btn-primary' : 'btn-ghost'}"
+                            onclick="saveGoalSettings(null, ${v}); showGoalSettings();"
+                            style="flex:1; min-width:60px;">${v}</button>
+                    `).join('')}
+                </div>
+            </div>
+            <p style="font-size:12px; color:var(--text-muted); margin-top:4px;">目标达成时会在首页显示庆祝提示</p>
+        </div>
+    `);
+}
+
+function saveGoalSettings(dailyGoal, weeklyGoal) {
+    if (dailyGoal !== null) localStorage.setItem('jz_daily_goal_words', String(dailyGoal));
+    if (weeklyGoal !== null) localStorage.setItem('jz_weekly_goal_days', String(weeklyGoal));
+    // 刷新当前页面数据
+    loadDashboardStats();
 }
 
 async function loadProfileStats() {
@@ -576,10 +642,49 @@ async function executePermanentDelete(workId) {
     }
 }
 
+// Dashboard/作品列表统一行动入口，避免各模块直接耦合页面内部细节
+function runDashboardAction(action, workId = null, chapterId = null) {
+    switch (action) {
+        case 'enterWriting':
+            enterWriting(workId, chapterId);
+            break;
+        case 'openAgentReview':
+            openAgentReview(workId, chapterId);
+            break;
+        case 'showCreateWorkModal':
+            showCreateWorkModal();
+            break;
+        case 'exportDramaPackage':
+            showToast('短剧改编包功能开发中', 'warning');
+            break;
+        default:
+            showToast('功能开发中', 'warning');
+    }
+}
+
 // 进入写作页
-function enterWriting(workId) {
+function enterWriting(workId, chapterId = null) {
     currentWorkId = workId;
-    currentChapterId = null;
+    currentChapterId = chapterId || null;
+    pendingWritingAction = null;
+    switchPage('writing');
+}
+
+function openWritingAgent(workId, chapterId = null) {
+    currentWorkId = workId;
+    currentChapterId = chapterId || null;
+    pendingWritingAction = { type: 'agent_focus' };
+    switchPage('writing');
+}
+
+function openAgentReview(workId, chapterId = null) {
+    if (!workId) {
+        showToast('缺少作品信息，无法审稿', 'warning');
+        return;
+    }
+    currentWorkId = workId;
+    currentChapterId = chapterId || null;
+    pendingWritingAction = { type: 'review' };
     switchPage('writing');
 }
 
@@ -765,5 +870,4 @@ const workDetailState = {
 async function handleCreateWork() {
     enterWorkDetail('create');
 }
-
 

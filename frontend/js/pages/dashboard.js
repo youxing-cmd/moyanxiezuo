@@ -14,6 +14,19 @@
                     <button class="btn btn-primary hero-btn" id="heroPrimaryBtn">创建第一部作品</button>
                     <button class="btn btn-ghost hero-btn-secondary" id="heroSecondaryBtn" style="display:none;">AI 帮我推进</button>
                 </div>
+                <div class="hero-goal" id="heroGoalArea" style="display:none; margin-top: 16px; max-width: 420px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <span style="font-size:12px; color:var(--text-secondary);">今日目标</span>
+                        <span style="font-size:12px; color:var(--text-secondary); cursor:pointer;" id="heroGoalSettingLink" onclick="showGoalSettings()">设置</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <span style="font-size:12px; color:var(--text-muted);" id="heroGoalLabel">0 / 300 字</span>
+                        <span style="font-size:12px; color:var(--success); display:none;" id="heroGoalCelebration">🎉 今日目标达成</span>
+                    </div>
+                    <div class="progress-bar" style="height:6px;">
+                        <div class="progress-fill" id="heroGoalFill" style="width:0%; background:var(--success);"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- 创作指标卡 -->
@@ -46,7 +59,7 @@
                     <div class="card-header">
                         <div>
                             <div class="card-title">近7天打卡</div>
-                            <div class="card-subtitle">每日写作记录</div>
+                            <div class="card-subtitle" id="weekGoalLabel">每日写作记录</div>
                         </div>
                     </div>
                     <div id="dashWeekStreak" style="display:flex; gap:6px; padding:16px 0;">
