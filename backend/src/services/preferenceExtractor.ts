@@ -1,8 +1,8 @@
 // preferenceExtractor.ts — 用户偏好聚合（从 agent 行为数据中提取）
 
 import { db } from '../db/index.js';
-import { agentStepEvents, aiArtifacts, agentRoutes } from '../db/schema.js';
-import { eq, desc, gte, sql } from 'drizzle-orm';
+import { agentStepEvents, agentPlanSteps, aiArtifacts, agentRoutes, agentJobs } from '../db/schema.js';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 
 export interface UserPreferences {
   skippedSteps: string[];       // 常跳过的步骤类型
@@ -13,27 +13,52 @@ export interface UserPreferences {
 
 /** 聚合用户最近 100 条行为数据，提取偏好 */
 export async function extractUserPreferences(userId: number): Promise<UserPreferences> {
-  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 最近 30 天
+  // 1. 先获取用户最近的 job IDs
+  const userJobs = await db
+    .select({ id: agentJobs.id })
+    .from(agentJobs)
+    .where(eq(agentJobs.userId, userId))
+    .orderBy(sql`${agentJobs.createdAt} desc`)
+    .limit(50);
 
-  // 1. 统计常跳过的步骤类型
-  const skipEvents = await db
-    .select()
-    .from(agentStepEvents)
-    .where(
-      eq(agentStepEvents.jobId, sql`(SELECT id FROM agent_jobs WHERE user_id = ${userId})`)
-    )
-    .limit(100);
+  const jobIds = userJobs.map((j) => j.id);
 
-  // 简化为直接查询所有 control/skip 事件
-  const skipCounts = new Map<string, number>();
-  for (const evt of skipEvents) {
-    if (evt.type === 'control' && (evt.payload as Record<string, unknown>)?.action === 'skip') {
-      // payload 中没有 taskType，需要从 stepId 关联查询
-      // 为简化实现，先跳过精确统计
+  // 2. 统计常跳过的步骤类型
+  let skippedSteps: string[] = [];
+  if (jobIds.length > 0) {
+    const skipEvents = await db
+      .select({
+        stepId: agentStepEvents.stepId,
+      })
+      .from(agentStepEvents)
+      .where(
+        and(
+          inArray(agentStepEvents.jobId, jobIds),
+          eq(agentStepEvents.type, 'control'),
+          sql`${agentStepEvents.payload}->>'action' = 'skip'`
+        )
+      )
+      .limit(100);
+
+    const stepIds = skipEvents.map((e) => e.stepId).filter((id) => id > 0);
+    if (stepIds.length > 0) {
+      const steps = await db
+        .select({ taskType: agentPlanSteps.taskType })
+        .from(agentPlanSteps)
+        .where(inArray(agentPlanSteps.id, stepIds));
+
+      const skipCounts = new Map<string, number>();
+      for (const s of steps) {
+        skipCounts.set(s.taskType, (skipCounts.get(s.taskType) || 0) + 1);
+      }
+      skippedSteps = Array.from(skipCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([type]) => type);
     }
   }
 
-  // 2. 统计常采纳的产物类型（accepted artifacts）
+  // 3. 统计常采纳的产物类型（accepted artifacts）
   const artifacts = await db
     .select({ type: aiArtifacts.type })
     .from(aiArtifacts)
@@ -66,10 +91,6 @@ export async function extractUserPreferences(userId: number): Promise<UserPrefer
       avoidedPhrases.push('用户拒绝了路由建议');
     }
   }
-
-  // 简化 skippedSteps：直接基于常见模式返回
-  // 实际实现需要关联 agent_plan_steps 表获取 taskType
-  const skippedSteps: string[] = [];
 
   return {
     skippedSteps,

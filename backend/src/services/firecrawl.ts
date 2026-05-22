@@ -69,13 +69,15 @@ function isLowQualityUrl(url: string): boolean {
       'google.com',
       'baidu.com',
       'bing.com',
-      'zhihu.com/question', // 知乎问题页质量低（广告/软广多）
       'tieba.baidu.com',
       'weibo.com',
       'douyin.com',
       'bilibili.com',
     ];
     if (badHosts.some((h) => host.includes(h))) return true;
+
+    // 知乎问题页质量低（广告/软广多），但 hostname 不含路径，需单独判断
+    if (host === 'zhihu.com' && path.startsWith('/question')) return true;
 
     return false;
   } catch {
