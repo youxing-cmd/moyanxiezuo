@@ -181,7 +181,7 @@ agentJobsRouter.post('/agent-jobs/:id/start', async (c) => {
     return c.json({ error: '任务不存在' }, 404);
   }
 
-  if (job.status !== 'planning' && job.status !== 'paused' && job.status !== 'waiting') {
+  if (['done', 'failed', 'aborted'].includes(job.status)) {
     return c.json({ error: `当前状态为 ${job.status}，无法开始` }, 400);
   }
 
@@ -396,8 +396,8 @@ agentJobsRouter.post('/agent-jobs/:id/steps/:stepId/skip', async (c) => {
     payload: { action: 'skip' },
   });
 
-  // 如果 job 当前不是 running，重新触发 worker 推进后续步骤
-  if (job.status !== 'running') {
+  // 重新触发 worker 推进后续步骤（即使 job 是 running，worker 可能已结束当前轮询）
+  if (!['done', 'failed', 'aborted'].includes(job.status)) {
     await db
       .update(agentJobs)
       .set({ status: 'running', updatedAt: new Date() })
@@ -460,8 +460,8 @@ agentJobsRouter.post('/agent-jobs/:id/steps/:stepId/redo', async (c) => {
     payload: { action: 'redo' },
   });
 
-  // 如果 job 当前不是 running，重新触发 worker
-  if (job.status !== 'running') {
+  // 重新触发 worker
+  if (!['done', 'failed', 'aborted'].includes(job.status)) {
     await db
       .update(agentJobs)
       .set({ status: 'running', updatedAt: new Date() })

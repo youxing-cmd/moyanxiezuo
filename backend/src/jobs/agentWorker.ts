@@ -26,6 +26,15 @@ export async function initAgentWorker() {
 
   await boss.start();
 
+  // pg-boss v12 不会自动创建队列，需显式创建
+  try {
+    await boss.createQueue('agent-job');
+    console.log('[agent-worker] 队列 agent-job 已创建');
+  } catch (err) {
+    // 队列可能已存在，忽略错误
+    console.log('[agent-worker] 队列 agent-job 可能已存在');
+  }
+
   await boss.work('agent-job', { batchSize: 1 }, async (jobs: Job<{ jobId: number }>[]) => {
     const job = jobs[0];
     if (!job) return;

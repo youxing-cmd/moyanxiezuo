@@ -88,7 +88,10 @@ async function checkPaused(jobId: number): Promise<boolean> {
 }
 
 function pickNextStep(steps: LoadedStep[]): LoadedStep | null {
-  const doneIds = new Set(steps.filter((s) => s.status === 'done').map((s) => String(s.id)));
+  // done + skipped 都视为依赖已满足
+  const doneIds = new Set(
+    steps.filter((s) => s.status === 'done' || s.status === 'skipped').map((s) => String(s.id)),
+  );
 
   const candidates = steps
     .filter((s) => s.status === 'pending')
@@ -299,6 +302,16 @@ export async function executeJob(jobId: number): Promise<void> {
           .set({ status: 'done', progress: 100, updatedAt: new Date(), finishedAt: new Date() })
           .where(eq(agentJobs.id, jobId));
         await emitEvent(jobId, null, 'done', {});
+      } else {
+        // 有 pending 步骤但因依赖阻塞（上游有 failed），标记 job 为 failed
+        const hasFailed = steps.some((s) => s.status === 'failed');
+        if (hasFailed) {
+          await db
+            .update(agentJobs)
+            .set({ status: 'failed', updatedAt: new Date(), finishedAt: new Date(), errorMsg: '部分步骤执行失败，任务无法继续' })
+            .where(eq(agentJobs.id, jobId));
+          await emitEvent(jobId, null, 'failed', { reason: 'upstream step failed' });
+        }
       }
       break;
     }
