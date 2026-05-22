@@ -271,7 +271,7 @@
     }
 
     async function apiPost(path, body) {
-        const API_BASE = window.API_BASE || '';
+        const API_BASE = typeof API_BASE !== 'undefined' ? API_BASE : (window.API_BASE || '/api');
         const authToken = localStorage.getItem('authToken');
         const res = await fetch(`${API_BASE}${path}`, {
             method: 'POST',

@@ -5,9 +5,63 @@
     'use strict';
 
     const POLL_INTERVAL = 10000; // 轮询兜底：10 秒
-    const API_BASE = window.API_BASE || '';
+    const API_BASE = typeof API_BASE !== 'undefined' ? API_BASE : (window.API_BASE || '/api');
 
-    const activeSubscriptions = new Map(); // jobId -> { abort, type }
+    const activeSubscriptions = new Map(); // jobId -> { abort, stop }
+
+    /**
+     * 用 fetch + ReadableStream 手动解析 SSE（支持 Authorization header）
+     */
+    async function connectSSE(url, callbacks, sub) {
+        const authToken = localStorage.getItem('authToken');
+        const res = await fetch(url, {
+            headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
+        });
+        if (!res.ok) throw new Error(`SSE 连接失败 ${res.status}`);
+        if (!res.body) throw new Error('响应无 body');
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let currentEvent = null;
+
+        const flushLine = (line) => {
+            const t = line.trim();
+            if (!t) { currentEvent = null; return; }
+            if (t.startsWith('event:')) { currentEvent = t.slice(6).trim(); return; }
+            if (!t.startsWith('data:')) return;
+            const data = t.slice(5).trim();
+            if (data === '[DONE]') return;
+
+            try {
+                const payload = JSON.parse(data);
+                if (currentEvent === 'connected') callbacks.onUpdate?.(payload);
+                if (currentEvent === 'job_update') {
+                    callbacks.onUpdate?.(payload);
+                    if (['done', 'failed', 'aborted'].includes(payload.status)) {
+                        callbacks.onDone?.();
+                    }
+                }
+                if (currentEvent === 'done') callbacks.onDone?.();
+            } catch {
+                // 非 JSON payload 忽略
+            }
+        };
+
+        while (!sub.abort) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let nl;
+            while ((nl = buffer.indexOf('\n')) !== -1) {
+                const line = buffer.slice(0, nl);
+                buffer = buffer.slice(nl + 1);
+                flushLine(line);
+            }
+        }
+        if (buffer) flushLine(buffer);
+        reader.releaseLock();
+    }
 
     /**
      * 订阅 Agent Job 实时更新
@@ -24,50 +78,31 @@
         const sub = { abort: false };
         activeSubscriptions.set(jobId, sub);
 
-        // 页面在前台时用 SSE；切到后台时自动降级为轮询
         let useSSE = document.visibilityState === 'visible';
         let pollTimer = null;
+        let ssePromise = null;
 
         const startSSE = () => {
             if (sub.abort) return;
             useSSE = true;
             if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 
-            const authToken = localStorage.getItem('authToken');
             const url = `${API_BASE}/ai/agent-jobs/${jobId}/stream`;
-            const es = new EventSource(url, {
-                headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
-            });
-
-            es.addEventListener('connected', (e) => {
-                try { callbacks.onUpdate?.(JSON.parse(e.data)); } catch { }
-            });
-
-            es.addEventListener('job_update', (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    callbacks.onUpdate?.(data);
-                    if (data.status === 'done' || data.status === 'failed' || data.status === 'aborted') {
-                        callbacks.onDone?.();
-                        es.close();
-                        activeSubscriptions.delete(jobId);
-                    }
-                } catch { }
-            });
-
-            es.addEventListener('done', () => {
-                callbacks.onDone?.();
-                es.close();
-                activeSubscriptions.delete(jobId);
-            });
-
-            es.onerror = () => {
+            ssePromise = connectSSE(url, callbacks, sub).catch((err) => {
                 // SSE 出错时降级到轮询
-                es.close();
-                if (!sub.abort) startPolling();
-            };
+                if (!sub.abort) {
+                    callbacks.onError?.(err);
+                    startPolling();
+                }
+            });
 
-            sub.stop = () => { es.close(); };
+            sub.stop = () => {
+                sub.abort = true;
+                if (ssePromise) {
+                    // fetch 的 reader.read() 会在 abort 后返回 done
+                    // 这里不强制中断，靠 sub.abort 标志位退出循环
+                }
+            };
         };
 
         const startPolling = () => {
@@ -101,7 +136,7 @@
 
             poll(); // 立即执行一次
             pollTimer = setInterval(poll, POLL_INTERVAL);
-            sub.stop = () => { if (pollTimer) clearInterval(pollTimer); };
+            sub.stop = () => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } };
         };
 
         // 根据页面可见性选择模式

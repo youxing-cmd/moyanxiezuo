@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, gt } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
 import { db } from '../db/index.js';
 import { agentJobs, agentPlanSteps, agentStepEvents } from '../db/schema.js';
@@ -319,8 +319,27 @@ agentJobsRouter.post('/agent-jobs/:id/inject', async (c) => {
     payload: { message },
   });
 
-  // 如果 job 处于 waiting 状态（等待 user_input），自动恢复为 running 并重新入队
+  // 如果 job 处于 waiting 状态（等待 user_input），把 waiting 的 step 标记为 done，然后恢复运行
   if (job.status === 'waiting') {
+    // 找到当前 waiting 的 user_input step，标记为 done 并保存用户输入
+    const waitingSteps = await db
+      .select()
+      .from(agentPlanSteps)
+      .where(and(eq(agentPlanSteps.jobId, jobId), eq(agentPlanSteps.status, 'waiting')))
+      .limit(1);
+
+    if (waitingSteps.length > 0) {
+      const ws = waitingSteps[0];
+      await db
+        .update(agentPlanSteps)
+        .set({
+          status: 'done',
+          output: { ...ws.output, userMessage: message },
+          finishedAt: new Date(),
+        })
+        .where(eq(agentPlanSteps.id, ws.id));
+    }
+
     await db
       .update(agentJobs)
       .set({ status: 'running', updatedAt: new Date() })
@@ -492,19 +511,17 @@ agentJobsRouter.get('/agent-jobs/:id/stream', async (c) => {
             .where(eq(agentJobs.id, jobId))
             .limit(1);
 
+          // 增量事件：只推送 id > lastEventId 的新事件
           const newEvents = await db
             .select()
             .from(agentStepEvents)
-            .where(and(eq(agentStepEvents.jobId, jobId), eq(agentStepEvents.id, lastEventId)))
-            .orderBy(agentStepEvents.id);
+            .where(and(eq(agentStepEvents.jobId, jobId), gt(agentStepEvents.id, lastEventId)))
+            .orderBy(agentStepEvents.id)
+            .limit(50);
 
-          // 实际应该查询 id > lastEventId，但 drizzle 语法略复杂，这里用 createdAt 兜底
-          const recentEvents = await db
-            .select()
-            .from(agentStepEvents)
-            .where(eq(agentStepEvents.jobId, jobId))
-            .orderBy(agentStepEvents.createdAt)
-            .limit(20);
+          if (newEvents.length > 0) {
+            lastEventId = newEvents[newEvents.length - 1].id;
+          }
 
           const steps = await db
             .select()
@@ -524,7 +541,7 @@ agentJobsRouter.get('/agent-jobs/:id/stream', async (c) => {
               status: s.status,
               retryCount: s.retryCount,
             })),
-            events: recentEvents.map((e) => ({
+            events: newEvents.map((e) => ({
               id: e.id,
               type: e.type,
               stepId: e.stepId,
