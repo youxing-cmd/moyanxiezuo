@@ -5,7 +5,7 @@
     'use strict';
 
     const POLL_INTERVAL = 10000; // 轮询兜底：10 秒
-    const API_BASE = typeof API_BASE !== 'undefined' ? API_BASE : (window.API_BASE || '/api');
+    const API_BASE = (typeof window !== 'undefined' && window.API_BASE) || '/api';
 
     const activeSubscriptions = new Map(); // jobId -> { abort, stop }
 
@@ -13,7 +13,7 @@
      * 用 fetch + ReadableStream 手动解析 SSE（支持 Authorization header）
      */
     async function connectSSE(url, callbacks, sub) {
-        const authToken = localStorage.getItem('authToken');
+        const authToken = localStorage.getItem('jz_token');
         const res = await fetch(url, {
             headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
         });
@@ -48,7 +48,7 @@
             }
         };
 
-        while (!sub.abort) {
+        while (!sub.abort && !sub.sseAbort) {
             const { done, value } = await reader.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
@@ -83,36 +83,31 @@
         let ssePromise = null;
 
         const startSSE = () => {
-            if (sub.abort) return;
             useSSE = true;
             if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 
+            sub.sseAbort = false;
             const url = `${API_BASE}/ai/agent-jobs/${jobId}/stream`;
             ssePromise = connectSSE(url, callbacks, sub).catch((err) => {
                 // SSE 出错时降级到轮询
-                if (!sub.abort) {
+                if (!sub.abort && !sub.sseAbort) {
                     callbacks.onError?.(err);
                     startPolling();
                 }
             });
 
             sub.stop = () => {
-                sub.abort = true;
-                if (ssePromise) {
-                    // fetch 的 reader.read() 会在 abort 后返回 done
-                    // 这里不强制中断，靠 sub.abort 标志位退出循环
-                }
+                sub.sseAbort = true;
             };
         };
 
         const startPolling = () => {
-            if (sub.abort) return;
             useSSE = false;
 
             const poll = async () => {
                 if (sub.abort) return;
                 try {
-                    const authToken = localStorage.getItem('authToken');
+                    const authToken = localStorage.getItem('jz_token');
                     const res = await fetch(`${API_BASE}/ai/agent-jobs/${jobId}`, {
                         headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
                     });

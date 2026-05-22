@@ -42,6 +42,13 @@ export async function initAgentWorker() {
     console.log(`[agent-worker] 收到任务 jobId=${jobId}`);
 
     try {
+      // 先查询当前状态，避免覆盖用户已暂停/已中止的任务
+      const [current] = await db.select({ status: agentJobs.status }).from(agentJobs).where(eq(agentJobs.id, jobId)).limit(1);
+      if (!current || !['planning', 'paused', 'waiting'].includes(current.status)) {
+        console.log(`[agent-worker] jobId=${jobId} 当前状态为 ${current?.status}，不执行`);
+        return;
+      }
+
       // 更新任务状态为 running
       await db
         .update(agentJobs)

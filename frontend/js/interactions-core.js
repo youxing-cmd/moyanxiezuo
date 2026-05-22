@@ -1485,6 +1485,13 @@ async function initPageInteractions(page) {
             'read_artifact',
             'create_artifact',
             'update_artifact',
+            // P5 新增工具
+            'web_search',
+            'web_research',
+            'generate_hook',
+            'tighten_pacing',
+            'boost_payoff',
+            'check_consistency',
         ]);
 
         // 执行后端工具（fetch /api/ai/tools/:name）

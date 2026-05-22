@@ -143,7 +143,7 @@ agentJobsRouter.put('/agent-jobs/:id/plan', async (c) => {
   const body = await c.req.json();
 
   try {
-    const plan = validatePlan(body);
+    const plan = validatePlan(body, job.query);
 
     // 删除旧 steps
     await db.delete(agentPlanSteps).where(eq(agentPlanSteps.jobId, jobId));

@@ -55,9 +55,12 @@ export const REFLECTION_RULES: Partial<Record<string, ReflectionRule>> = {
       {
         check: (out) => {
           const c = typeof out.content === 'string' ? out.content : '';
-          // 至少包含 2 个数字编号（3 个方向）
-          const matches = c.match(/\d+[.、]/g);
-          return !!matches && matches.length >= 2;
+          // 支持多种编号格式：1. / 1、 / ## 方向一 / ### 1. / - 方向1
+          const numbered = (c.match(/\d+[.、]/g) || []).length;
+          const markdownHeaders = (c.match(/^#{2,3}\s+/gm) || []).length;
+          const listItems = (c.match(/^[-*]\s+/gm) || []).length;
+          const chineseNumbers = (c.match(/[一二三四五六七八九十]+[、.]/g) || []).length;
+          return numbered >= 2 || markdownHeaders >= 2 || listItems >= 3 || chineseNumbers >= 2;
         },
         message: '未生成足够的题材方向（需至少 3 个）',
         fix: '请确保输出包含 3 个差异化的题材方向，每个方向有标题和核心梗',

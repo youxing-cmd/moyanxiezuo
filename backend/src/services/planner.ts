@@ -46,6 +46,7 @@ const stepSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   dependsOn: z.array(z.string()).optional().default([]),
+  input: z.record(z.any()).optional().default({}),
 });
 
 const planSchema = z.object({
@@ -133,7 +134,7 @@ function checkDAGNoCycle(steps: PlanStep[]): boolean {
   return visited === steps.length;
 }
 
-export function validatePlan(plan: unknown): PlanResult {
+export function validatePlan(plan: unknown, query?: string): PlanResult {
   const validation = planSchema.safeParse(plan);
   if (!validation.success) {
     throw new Error(`Plan schema 校验失败: ${validation.error.message}`);
@@ -158,6 +159,19 @@ export function validatePlan(plan: unknown): PlanResult {
 
   if (!checkDAGNoCycle(data.steps)) {
     throw new Error('Plan 中存在循环依赖');
+  }
+
+  // 业务规则约束
+  const hasSelfReview = data.steps.some((s) => s.type === 'self_review');
+  if (!hasSelfReview) {
+    throw new Error('Plan 必须包含至少 1 个 self_review 步骤');
+  }
+
+  if (query && (/参考/.test(query) || /《[^》]+》/.test(query))) {
+    const hasWebResearch = data.steps.some((s) => s.type === 'web_research');
+    if (!hasWebResearch) {
+      throw new Error('用户指令涉及"参考 xx"，Plan 必须包含 web_research 步骤');
+    }
   }
 
   return {
@@ -201,7 +215,7 @@ async function callPlannerOnce(query: string, workContext: string | null): Promi
     throw new Error('Planner 输出不是合法 JSON');
   }
 
-  return validatePlan(parsed);
+  return validatePlan(parsed, query);
 }
 
 export async function planJob(query: string, ctx: PlanContext): Promise<PlanResult> {

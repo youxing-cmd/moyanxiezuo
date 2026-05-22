@@ -191,11 +191,25 @@ async function runReadContext(step: LoadedStep, job: LoadedJob) {
   step.output = { content: ctx ?? '', note: '已读取作品上下文' };
 }
 
-async function runCreateArtifact(step: LoadedStep, job: LoadedJob) {
+async function runCreateArtifact(step: LoadedStep, job: LoadedJob, allSteps: LoadedStep[]) {
   const input = step.input as { title?: string; content?: string; type?: string };
   const title = input.title ?? step.title ?? '未命名产物';
-  const content = input.content ?? '';
   const type = input.type ?? 'note';
+
+  // 优先取 step.input.content；若为空，从依赖步骤的 output.content 自动提取
+  let content = input.content ?? '';
+  if (!content) {
+    for (const depId of step.dependsOn) {
+      const dep = allSteps.find((s) => String(s.id) === depId);
+      if (dep?.output) {
+        const out = dep.output as Record<string, unknown>;
+        if (typeof out.content === 'string' && out.content) {
+          content = out.content;
+          break;
+        }
+      }
+    }
+  }
 
   if (!job.workId) {
     throw new Error('create_artifact 需要 workId');
@@ -247,7 +261,22 @@ async function runWriteChunk(step: LoadedStep, job: LoadedJob, allSteps: LoadedS
 
 async function runWebResearch(step: LoadedStep, job: LoadedJob) {
   const { firecrawlSearchAndScrape } = await import('./firecrawl.js');
-  const query = step.description || job.query;
+  const raw = step.description || job.query;
+
+  // 提取搜索关键词：优先取《》内内容，再去掉指令性后缀
+  let query = raw;
+  const bookMatch = raw.match(/《([^》]+)》/);
+  if (bookMatch) {
+    query = `《${bookMatch[1]}》 核心爽点 风格分析 爆款元素`;
+  } else {
+    // 去掉常见指令后缀，保留前 20 字作为关键词
+    const cleaned = raw
+      .replace(/(给我|帮我|请|需要|想要)[\s\S]*$/g, '')
+      .replace(/写[一篇个段章].*$/g, '')
+      .trim();
+    query = cleaned || raw;
+  }
+
   const content = await firecrawlSearchAndScrape(query, 3);
   step.output = { content, type: 'research' };
 }
@@ -284,7 +313,7 @@ async function runSelfReview(step: LoadedStep, job: LoadedJob, allSteps: LoadedS
   const user = `${context ? '【上下文】\n' + context + '\n' : ''}【用户指令】\n${job.query}\n\n请进行自我审查。`;
 
   const content = await callAgentLLM(system, user);
-  const passed = content.includes('通过') || content.includes('通过');
+  const passed = content.includes('通过') && !content.includes('不通过');
   step.output = { content, passed, type: 'review' };
 }
 
@@ -318,8 +347,8 @@ export async function executeJob(jobId: number): Promise<void> {
 
     const step = pickNextStep(steps);
     if (!step) {
-      // 没有待执行的 step，检查是否全部完成
-      const allDone = steps.every((s) => ['done', 'skipped', 'failed'].includes(s.status));
+      // 没有待执行的 step，检查是否全部完成（failed 不算完成）
+      const allDone = steps.every((s) => ['done', 'skipped'].includes(s.status));
       if (allDone) {
         await db
           .update(agentJobs)
@@ -364,7 +393,7 @@ async function executeStep(step: LoadedStep, job: LoadedJob, steps: LoadedStep[]
           await runReadContext(step, job);
           break;
         case 'create_artifact':
-          await runCreateArtifact(step, job);
+          await runCreateArtifact(step, job, steps);
           break;
         case 'generate_ideas':
           await runGenerateIdeas(step, job, steps);

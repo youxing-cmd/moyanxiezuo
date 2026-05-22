@@ -12,6 +12,39 @@
 
 V3 的目标是把九章从「AI 写作工具」升级为「AI 写作 Agent」，达到 Cursor Composer / Devin 在写作领域的对等体验。
 
+## 当前实现状态
+
+| 阶段 | 状态 | 说明 |
+|------|------|------|
+| P1 数据库与基础设施 | ✅ 已完成 | 4 张表已建，Worker 已注册，SSE 包装层已就绪 |
+| P2 Planner | ✅ 已完成 | gemini-2.5-pro 规划，Zod schema 校验，DAG 无环检查，业务规则校验已加 |
+| P3 Executor + 反思 | ✅ 已完成 | 9 种 task type 执行器，Reflector + 3 次重试，user_input waiting 态 |
+| P4 Composer UI | 🟡 半实现 | Plan 卡片渲染、按钮交互可用，但步骤输出展开、编辑 plan、多任务列表未做 |
+| P5 firecrawl + 新工具 | 🟡 半实现 | firecrawl search/scrape 已接入，6 个新工具已注册；但深度研究、来源摘要、credit 监控未完成 |
+| P6 模板 + 偏好学习 | ❌ 未开始 | plan template 表已建，逻辑未实现 |
+
+## 已知 Bug / 技术债（P0 已修复）
+
+| 问题 | 状态 | 修复方式 |
+|------|------|----------|
+| 前端 TDZ：`const API_BASE = typeof API_BASE !== 'undefined' ? API_BASE : ...` | ✅ 已修复 | 改为 `window.API_BASE` 取值 |
+| 鉴权 token key 错误：`authToken` → `jz_token` | ✅ 已修复 | agent-job-poller.js / composer.js 统一读 `jz_token` |
+| SSE/轮询切换失效：`sub.stop()` 设置 `sub.abort = true` 导致 startPolling() 直接返回 | ✅ 已修复 | `sub.stop` 只清理资源，`sub.sseAbort` 控制 SSE reader |
+| 新工具未进前端 BACKEND_TOOLS 白名单 | ✅ 已修复 | interactions-core.js 补全 6 个新工具 |
+| Executor 把 failed 算进 allDone 导致误判 done | ✅ 已修复 | allDone 只包含 done/skipped |
+| Worker 覆盖用户暂停/中止状态 | ✅ 已修复 | 执行前查当前状态，非 planning/paused/waiting 不执行 |
+| create_artifact 内容为空 | ✅ 已修复 | 无 input.content 时从依赖步骤 output.content 自动提取 |
+| self_review `includes('通过')` 误匹配"不通过" | ✅ 已修复 | `includes('通过') && !includes('不通过')` |
+| Planner 验证缺少业务规则 | ✅ 已修复 | validatePlan 增加 self_review 必检、参考作品必含 web_research |
+| 缺少数据库迁移文件 | ✅ 已修复 | `drizzle-kit generate` 生成 `drizzle/0000_*.sql` |
+
+## 剩余建议优化（P1）
+
+1. **简单任务免 user_input**：起标题/起名字等短任务，planner 应直接输出结果，不要暂停等用户选择
+2. **self_review 维度按任务类型定制**：写正文评情节，起标题评吸引力，不要一套维度打天下
+3. **firecrawl URL 过滤**：过滤首页、目录页等低信息密度页面
+4. **Plan schema 输入设计**：step 的 input 字段目前 Planner 基本不填，需要明确 input/output/artifactSource/dependsOn 传递语义
+
 **用户决策已锁定**：
 - 架构形态：**异步型**（Plan 持久化 + 后台 worker 执行 + 前端轮询/SSE 刷新）
 - 外部知识：**接入 firecrawl**（网络搜索/scrape/deep-research）
@@ -122,7 +155,7 @@ P6 模板 + 偏好学习     →  长得快
 
 | 表 | 字段 | 用途 |
 |----|------|------|
-| `agent_jobs` | id, userId, workId, query, status(planning/running/paused/done/failed/aborted), planId, progress, errorMsg, createdAt, updatedAt, finishedAt | 整体任务实例 |
+| `agent_jobs` | id, userId, workId, query, status(planning/running/paused/waiting/done/failed/aborted), planId, progress, errorMsg, createdAt, updatedAt, finishedAt | 整体任务实例 |
 | `agent_plan_steps` | id, jobId, parentId(支持嵌套), idx, taskType, title, description, status(pending/running/done/skipped/failed), dependsOn(JSON), input(JSON), output(JSON), artifactId(可选), reflectionResult, retryCount, startedAt, finishedAt | DAG 单个节点 |
 | `agent_step_events` | id, jobId, stepId, type(start/log/tool_call/llm_call/output/reflection/error), payload(JSON), createdAt | 审计/调试事件流 |
 | `agent_plan_templates` | id, userId, name, description, query, plan(JSON), useCount, createdAt | 成功 plan 沉淀为模板 |
@@ -142,7 +175,7 @@ P6 模板 + 偏好学习     →  长得快
 
 当前 `streamResponse` 直接透传上游 SSE，无法注入 plan 进度。新建：
 
-- `backend/src/services/sseWrapper.ts`：导出 `wrapSSE(upstream, eventHandlers)`，返回 ReadableStream
+- `backend/src/services/sseWrapper.ts`：导出 `wrapSSE(upstream, eventHandlers)`，返回 ReadableStream（**已创建但暂未实际接入 Agent Job 流**）
 - 支持自定义事件：`event: plan_update`、`event: step_start`、`event: step_done`、`event: artifact_created`
 - 前端 `consumeSSEStream` 扩展回调：`onPlanUpdate / onStepUpdate / onArtifactCreated`
 
@@ -415,7 +448,7 @@ export async function firecrawlSearchAndScrape(query: string, k = 3): Promise<Sc
 
 ### P5.3 修复前端 BACKEND_TOOLS 集合 bug
 
-`frontend/js/interactions-core.js:1315` 的 `BACKEND_TOOLS` 集合遗漏了 4 个 artifact 工具，导致它们被错当成前端工具执行失败。本期一并修复。
+前端 `BACKEND_TOOLS` 集合遗漏了新注册的后端工具，导致它们被错当成前端工具执行失败。本期一并修复。
 
 ---
 
@@ -452,8 +485,7 @@ backend/
 │  │  ├─ agentExecutor.ts           P3 Executor 主循环
 │  │  ├─ reflector.ts               P3 自检
 │  │  ├─ firecrawl.ts               P5 网络搜索
-│  │  ├─ sseWrapper.ts              P1 SSE 包装
-│  │  └─ writingTools.ts            P5 写作工具实现
+│  │  └─ sseWrapper.ts              P1 SSE 包装（已创建，暂未接入）
 │  ├─ jobs/
 │  │  └─ agentWorker.ts             P1 后台 worker
 │  ├─ routes/
@@ -602,3 +634,68 @@ cd backend && npm run dev
 - ❌ **不引入向量数据库** — 4 层记忆已够用，向量化是后续优化
 - ❌ **不做协作多人模式** — V4 规划
 - ❌ **不接入第三方写作 API**（如波斯笔） — 工具自给自足
+
+---
+
+## 迁移策略
+
+开发环境可用 `db:push` 快速迭代：
+
+```bash
+cd backend && npm run db:push
+```
+
+生产部署和版本控制必须使用迁移文件：
+
+```bash
+cd backend && npx drizzle-kit generate   # 生成 SQL 迁移
+cd backend && npx drizzle-kit migrate    # 执行迁移
+```
+
+当前已生成 `drizzle/0000_flowery_sharon_carter.sql`，包含完整的 27 张表 DDL。
+
+---
+
+## E2E 验证说明
+
+### 测试脚本
+
+`backend/test-agent-e2e.ts` 是端到端测试入口：
+
+```bash
+cd backend && node --env-file=.env --import tsx test-agent-e2e.ts
+```
+
+**前置条件**：
+- PostgreSQL 在本地运行（`DATABASE_URL` 已配置）
+- `.env` 中 `WANGSU_BASE_URL` + `WANGSU_API_KEY` 已配置（用于真实 LLM 调用）
+- 或 `.env` 中 `AI_BASE_URL` + `AI_API_KEY` + `AI_MODEL` 已配置（回退模型）
+
+**测试行为**：
+- 默认调用真实 LLM（gemini-2.5-pro / 默认模型）和真实 Firecrawl API
+- 测试用户 phone = `__e2e_test_user__`，每次运行前自动清理该用户的旧 job
+- 覆盖 Planner → Executor → 状态流转 完整链路
+
+**Mock 模式（暂未实现）**：
+- 如需不烧真实 API，可在 `callAgentLLM` / `firecrawlSearchAndScrape` 处注入 mock
+- 推荐后续增加 `MOCK_LLM=true MOCK_FIRECRAWL=true` 环境变量开关
+
+---
+
+## 前端集成说明
+
+### 职责边界
+
+| 文件 | 职责 |
+|------|------|
+| `frontend/js/composer.js` | Plan 卡片渲染（createPlanCard / updatePlanCard）、按钮交互（开始/暂停/中止/插话） |
+| `frontend/js/agent-job-poller.js` | Agent Job 实时刷新：SSE 长连接 + 轮询兜底 + visibility change 切换 |
+| `frontend/js/interactions-core.js` | BACKEND_TOOLS 白名单、consumeSSEStream、工具确认对话框 |
+| `frontend/js/pages/writing.js` | 写作页右栏挂载点（`#aiChatDialogBody`） |
+
+### 约定
+
+- **API_BASE**：统一从 `window.API_BASE` 读取（后端渲染时注入，默认 `/api`）
+- **Token**：统一读 `localStorage.getItem('jz_token')`（与 `state.js` 保持一致）
+- **状态枚举**：job 状态 = `planning/running/paused/waiting/done/failed/aborted`
+- **灰度开关**：当前 Agent 入口通过 URL 参数 `?agent=1` 控制，后续可升级为用户级开关

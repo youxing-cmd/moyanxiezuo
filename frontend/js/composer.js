@@ -271,13 +271,13 @@
     }
 
     async function apiPost(path, body) {
-        const API_BASE = typeof API_BASE !== 'undefined' ? API_BASE : (window.API_BASE || '/api');
-        const authToken = localStorage.getItem('authToken');
-        const res = await fetch(`${API_BASE}${path}`, {
+        const baseUrl = (typeof window !== 'undefined' && window.API_BASE) || '/api';
+        const token = localStorage.getItem('jz_token');
+        const res = await fetch(`${baseUrl}${path}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
             body: body ? JSON.stringify(body) : undefined,
         });
