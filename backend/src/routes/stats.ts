@@ -109,6 +109,118 @@ statsRouter.get('/', async (c) => {
     }
   }
 
+  // === primaryWork：最近编辑的作品及其最新章节 ===
+  let primaryWork: {
+    workId: number;
+    workTitle: string;
+    workEmoji: string;
+    workStatus: string;
+    chapterId: number;
+    chapterTitle: string;
+    chapterWordCount: number;
+    chapterUpdatedAt: Date | null;
+  } | null = null;
+
+  if (recentWorks.length > 0) {
+    const pw = recentWorks[0];
+    const latestChapter = await db.select()
+      .from(chapters)
+      .where(eq(chapters.workId, pw.id))
+      .orderBy(desc(chapters.updatedAt))
+      .limit(1);
+
+    if (latestChapter.length > 0) {
+      const ch = latestChapter[0];
+      primaryWork = {
+        workId: pw.id,
+        workTitle: pw.title,
+        workEmoji: (pw as any).emoji || '📖',
+        workStatus: pw.status,
+        chapterId: ch.id,
+        chapterTitle: ch.title,
+        chapterWordCount: ch.wordCount || 0,
+        chapterUpdatedAt: ch.updatedAt,
+      };
+    } else {
+      primaryWork = {
+        workId: pw.id,
+        workTitle: pw.title,
+        workEmoji: (pw as any).emoji || '📖',
+        workStatus: pw.status,
+        chapterId: 0,
+        chapterTitle: '暂无章节',
+        chapterWordCount: 0,
+        chapterUpdatedAt: pw.updatedAt,
+      };
+    }
+  }
+
+  // === nextActions：规则生成的行动建议 ===
+  const nextActions: Array<{
+    type: string;
+    title: string;
+    description: string;
+    action: string;
+    workId?: number;
+    chapterId?: number;
+  }> = [];
+
+  if (!primaryWork) {
+    nextActions.push({
+      type: 'create_work',
+      title: '创建第一部作品',
+      description: '开启你的创作之旅',
+      action: 'showCreateWorkModal',
+    });
+  } else {
+    // 主行动：继续写作
+    nextActions.push({
+      type: 'continue_writing',
+      title: `继续写《${primaryWork.workTitle}》`,
+      description: primaryWork.chapterId
+        ? `上次编辑：${primaryWork.chapterTitle}`
+        : '开始创作第一章',
+      action: 'enterWriting',
+      workId: primaryWork.workId,
+      chapterId: primaryWork.chapterId || undefined,
+    });
+
+    // 今日未写，提示开始
+    if (todayWords === 0) {
+      nextActions.push({
+        type: 'start_today',
+        title: '开始今天的创作',
+        description: '哪怕只写 50 字，也是推进',
+        action: 'enterWriting',
+        workId: primaryWork.workId,
+        chapterId: primaryWork.chapterId || undefined,
+      });
+    }
+
+    // 章节字数多，建议审稿
+    if (primaryWork.chapterWordCount > 4000) {
+      nextActions.push({
+        type: 'review_chapter',
+        title: '检查上一章节奏',
+        description: `上一章 ${primaryWork.chapterWordCount} 字，建议做一次节奏检查`,
+        action: 'openAgentReview',
+        workId: primaryWork.workId,
+        chapterId: primaryWork.chapterId || undefined,
+      });
+    }
+
+    // 作品章节数足够，建议改编
+    if (totalChapters >= 5) {
+      nextActions.push({
+        type: 'adaptation',
+        title: '生成短剧改编包',
+        description: `当前作品已有 ${totalChapters} 章，可以尝试短剧化`,
+        action: 'exportDramaPackage',
+        workId: primaryWork.workId,
+      });
+    }
+  }
+
   return c.json({
     workCount,
     totalWords,
@@ -117,6 +229,8 @@ statsRouter.get('/', async (c) => {
     consecutiveDays,
     last7Days,
     todayWords,
+    primaryWork,
+    nextActions,
   });
 });
 

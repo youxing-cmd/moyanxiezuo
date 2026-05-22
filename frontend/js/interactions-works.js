@@ -250,47 +250,73 @@ async function loadDashboardStats() {
     try {
         const stats = await api('/stats');
 
-        // 今日新增字数
+        // === 主行动区 ===
+        const heroTodayWordsEl = document.getElementById('heroTodayWords');
+        if (heroTodayWordsEl) {
+            const tw = stats.todayWords || 0;
+            heroTodayWordsEl.textContent = `今日新增 ${tw >= 10000 ? (tw / 10000).toFixed(1) + '万' : tw} 字`;
+        }
+        const heroConsecutiveDaysEl = document.getElementById('heroConsecutiveDays');
+        if (heroConsecutiveDaysEl) {
+            heroConsecutiveDaysEl.textContent = `连续创作 ${stats.consecutiveDays || 0} 天`;
+        }
+        const heroTitleEl = document.getElementById('heroTitle');
+        const heroDescEl = document.getElementById('heroDesc');
+        const heroPrimaryBtn = document.getElementById('heroPrimaryBtn');
+        const heroSecondaryBtn = document.getElementById('heroSecondaryBtn');
+
+        if (stats.primaryWork) {
+            const pw = stats.primaryWork;
+            if (heroTitleEl) heroTitleEl.textContent = pw.chapterTitle && pw.chapterTitle !== '暂无章节'
+                ? `《${pw.workTitle}》· ${pw.chapterTitle}`
+                : `《${pw.workTitle}》`;
+            if (heroDescEl) {
+                const timeStr = pw.chapterUpdatedAt ? formatTimeAgo(pw.chapterUpdatedAt) : '最近';
+                heroDescEl.textContent = pw.chapterTitle && pw.chapterTitle !== '暂无章节'
+                    ? `上次编辑于 ${timeStr}`
+                    : '开始创作第一章';
+            }
+            if (heroPrimaryBtn) {
+                heroPrimaryBtn.textContent = '继续写作';
+                heroPrimaryBtn.onclick = () => enterWriting(pw.workId);
+            }
+            if (heroSecondaryBtn) {
+                heroSecondaryBtn.style.display = '';
+                heroSecondaryBtn.onclick = () => enterWriting(pw.workId);
+            }
+        } else {
+            if (heroTitleEl) heroTitleEl.textContent = '开始你的创作之旅';
+            if (heroDescEl) heroDescEl.textContent = '创建第一部作品，迈出第一步';
+            if (heroPrimaryBtn) {
+                heroPrimaryBtn.textContent = '创建第一部作品';
+                heroPrimaryBtn.onclick = () => showCreateWorkModal();
+            }
+            if (heroSecondaryBtn) heroSecondaryBtn.style.display = 'none';
+        }
+
+        // === 今日新增字数（指标卡）===
         const todayWordsEl = document.getElementById('dashTodayWords');
         if (todayWordsEl) {
             const tw = stats.todayWords || 0;
             todayWordsEl.textContent = tw >= 10000 ? (tw / 10000).toFixed(1) + '万' : tw.toString();
         }
-        const todayWordsHintEl = document.getElementById('dashTodayWordsHint');
-        if (todayWordsHintEl) {
-            const tw = stats.todayWords || 0;
-            todayWordsHintEl.textContent = tw > 0 ? `今日已写作 ${tw} 字` : '开始今天的创作';
-        }
 
-        // 连续写作天数
+        // === 连续写作天数（指标卡）===
         const consecutiveDaysEl = document.getElementById('dashConsecutiveDays');
         if (consecutiveDaysEl) consecutiveDaysEl.textContent = (stats.consecutiveDays || 0).toString();
-        const streakHintEl = document.getElementById('dashStreakHint');
-        if (streakHintEl) {
-            const days = stats.consecutiveDays || 0;
-            if (days >= 7) streakHintEl.textContent = '太棒了，保持节奏！';
-            else if (days >= 3) streakHintEl.textContent = '不错的势头';
-            else if (days > 0) streakHintEl.textContent = '坚持就是胜利';
-            else streakHintEl.textContent = '今天写一点吧';
-        }
 
-        // 作品数量
+        // === 作品数量 ===
         const workCountEl = document.getElementById('statWorkCount');
         if (workCountEl) workCountEl.textContent = stats.workCount || 0;
 
-        const workChangeEl = document.getElementById('statWorkChange');
-        if (workChangeEl) {
-            workChangeEl.textContent = (stats.workCount || 0) > 0 ? '继续创作' : '开始创作第一部作品';
-        }
-
-        // 总字数
+        // === 总字数 ===
         const totalWordsEl = document.getElementById('statTotalWords');
         if (totalWordsEl) {
             const words = stats.totalWords || 0;
             totalWordsEl.textContent = words >= 10000 ? (words / 10000).toFixed(1) + '万' : words.toString();
         }
 
-        // 近7天打卡
+        // === 近7天打卡 ===
         const weekStreakEl = document.getElementById('dashWeekStreak');
         if (weekStreakEl && stats.last7Days) {
             const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
@@ -308,7 +334,7 @@ async function loadDashboardStats() {
             }).join('');
         }
 
-        // 最近编辑列表
+        // === 最近编辑列表 ===
         const recentListEl = document.getElementById('recentWorksList');
         if (recentListEl && stats.recentWorks) {
             if (stats.recentWorks.length === 0) {
@@ -332,6 +358,56 @@ async function loadDashboardStats() {
                         <span class="list-badge ${statusClass[w.status] || 'badge-draft'}">${statusMap[w.status] || w.status}</span>
                     </div>
                 `).join('');
+            }
+        }
+
+        // === 下一步建议 ===
+        const nextActionsEl = document.getElementById('nextActionsList');
+        if (nextActionsEl && stats.nextActions) {
+            if (stats.nextActions.length === 0) {
+                nextActionsEl.innerHTML = `
+                    <div class="list-item">
+                        <div class="list-content">
+                            <div class="list-meta" style="color:var(--text-muted);">暂无建议</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                const actionIcons = {
+                    continue_writing: '✍️',
+                    create_work: '📝',
+                    start_today: '🚀',
+                    review_chapter: '🔍',
+                    adaptation: '🎬',
+                };
+                const actionColors = {
+                    continue_writing: 'var(--accent)',
+                    create_work: 'var(--success)',
+                    start_today: 'var(--warning)',
+                    review_chapter: 'var(--info)',
+                    adaptation: 'var(--danger)',
+                };
+                nextActionsEl.innerHTML = stats.nextActions.map((a, idx) => {
+                    const icon = actionIcons[a.type] || '💡';
+                    const color = actionColors[a.type] || 'var(--accent)';
+                    const isPrimary = idx === 0;
+                    const btnClass = isPrimary ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+                    const onclick = a.action === 'enterWriting' && a.workId
+                        ? `onclick="enterWriting(${a.workId})"`
+                        : a.action === 'showCreateWorkModal'
+                            ? `onclick="showCreateWorkModal()"`
+                            : `onclick="showToast('功能开发中', 'warning')"`;
+                    return `
+                        <div class="list-item" style="cursor:default;">
+                            <div class="list-icon" style="background:${color}15;color:${color};font-size:18px;">${icon}</div>
+                            <div class="list-content">
+                                <div class="list-title">${a.title}</div>
+                                <div class="list-meta">${a.description}</div>
+                            </div>
+                            <button class="${btnClass}" ${onclick}>${isPrimary ? '去做' : '查看'}</button>
+                        </div>
+                    `;
+                }).join('');
             }
         }
     } catch (err) {
