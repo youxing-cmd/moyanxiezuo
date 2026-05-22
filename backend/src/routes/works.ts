@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { works, chapters, chapterVersions, chapterSummaries, workStyleDNA, drafts, characters, outlines, settings, aiConversations } from '../db/schema.js';
+import { works, chapters, chapterVersions, chapterSummaries, workStyleDNA, drafts, characters, outlines, settings, aiConversations, aiArtifacts, aiCorrections, agentJobs, agentPlanSteps, agentStepEvents, creationActivities } from '../db/schema.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { generateChapterSummary } from '../services/chapterSummary.js';
 import { generateAndSaveStyleDNA } from '../services/styleDNA.js';
+import { awardPointsForAction } from '../routes/points.js';
 import { eq, and, ilike, desc, isNull, isNotNull, inArray } from 'drizzle-orm';
 
 const worksRouter = new Hono();
@@ -86,6 +87,9 @@ worksRouter.post('/', async (c) => {
   });
 
   await db.update(works).set({ chapterCount: 1 }).where(eq(works.id, result.id));
+
+  // 自动发放创建作品积分（不阻塞响应）
+  awardPointsForAction(userId, 'create_work', result.id).catch(() => {});
 
   return c.json({
     id: result.id,
@@ -242,6 +246,75 @@ worksRouter.get('/:id/style-dna', async (c) => {
   });
 });
 
+// GET /api/works/:id/chapters/:cid/summary — 读取单个章节摘要
+worksRouter.get('/:id/chapters/:cid/summary', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+  const chapterId = parseInt(c.req.param('cid'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const [chapter] = await db.select().from(chapters).where(eq(chapters.id, chapterId)).limit(1);
+  if (!chapter || chapter.workId !== workId) {
+    return c.json({ error: '章节不存在' }, 404);
+  }
+
+  const [summary] = await db.select().from(chapterSummaries).where(eq(chapterSummaries.chapterId, chapterId)).limit(1);
+
+  return c.json({
+    chapterId: chapter.id,
+    title: chapter.title,
+    summary: summary?.summary || '',
+    keyEvents: summary?.keyEvents || [],
+    involvedCharacters: summary?.involvedCharacters || [],
+    openHooks: summary?.openHooks || [],
+    characterChanges: summary?.characterChanges || [],
+  });
+});
+
+// POST /api/works/:id/chapters/:cid/suggestion — 生成下一章建议
+worksRouter.post('/:id/chapters/:cid/suggestion', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+  const chapterId = parseInt(c.req.param('cid'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  const [chapter] = await db.select().from(chapters).where(eq(chapters.id, chapterId)).limit(1);
+  if (!chapter || chapter.workId !== workId) {
+    return c.json({ error: '章节不存在' }, 404);
+  }
+
+  const [summary] = await db.select().from(chapterSummaries).where(eq(chapterSummaries.chapterId, chapterId)).limit(1);
+  const [dna] = await db.select().from(workStyleDNA).where(eq(workStyleDNA.workId, workId)).limit(1);
+
+  if (!summary) {
+    return c.json({ error: '暂无摘要，请先保存章节' }, 400);
+  }
+
+  // TODO: 调用 LLM 生成下一章建议
+  // 当前返回基于 openHooks 的占位建议
+  const suggestions = summary.openHooks?.length > 0
+    ? summary.openHooks.slice(0, 3).map((hook, i) => ({
+        id: i + 1,
+        title: `承接钩子：${hook.slice(0, 20)}...`,
+        description: hook,
+      }))
+    : [
+        { id: 1, title: '继续推进主线', description: '基于当前章节内容，推进主线剧情发展' },
+        { id: 2, title: '引入新冲突', description: '在下一章中引入新的冲突或阻碍' },
+        { id: 3, title: '深化角色关系', description: '通过对话或事件深化角色之间的关系' },
+      ];
+
+  return c.json({ suggestions });
+});
+
 // DELETE /api/works/:id — 软删除
 worksRouter.delete('/:id', async (c) => {
   const userId = c.get('userId');
@@ -288,8 +361,21 @@ worksRouter.delete('/:id/permanent', async (c) => {
 
   const chapterIds = await db.select({ id: chapters.id }).from(chapters).where(eq(chapters.workId, id));
   if (chapterIds.length > 0) {
-    await db.delete(chapterVersions).where(inArray(chapterVersions.chapterId, chapterIds.map(c => c.id)));
+    const cids = chapterIds.map(c => c.id);
+    await db.delete(chapterVersions).where(inArray(chapterVersions.chapterId, cids));
+    await db.delete(chapterSummaries).where(inArray(chapterSummaries.chapterId, cids));
+    await db.delete(aiCorrections).where(inArray(aiCorrections.chapterId, cids));
   }
+  await db.delete(workStyleDNA).where(eq(workStyleDNA.workId, id));
+  await db.delete(aiArtifacts).where(eq(aiArtifacts.workId, id));
+  await db.delete(aiCorrections).where(eq(aiCorrections.workId, id));
+  const jobIds = await db.select({ id: agentJobs.id }).from(agentJobs).where(eq(agentJobs.workId, id));
+  if (jobIds.length > 0) {
+    const jids = jobIds.map(j => j.id);
+    await db.delete(agentStepEvents).where(inArray(agentStepEvents.jobId, jids));
+    await db.delete(agentPlanSteps).where(inArray(agentPlanSteps.jobId, jids));
+  }
+  await db.delete(agentJobs).where(eq(agentJobs.workId, id));
   await db.delete(drafts).where(eq(drafts.workId, id));
   await db.delete(characters).where(eq(characters.workId, id));
   await db.delete(outlines).where(eq(outlines.workId, id));
@@ -347,6 +433,16 @@ worksRouter.post('/:id/chapters', async (c) => {
     updatedAt: new Date(),
   }).where(eq(works.id, workId));
 
+  // 记录创作活动
+  await db.insert(creationActivities).values({
+    userId,
+    workId,
+    chapterId: result.id,
+    type: 'write',
+    title: `创建了章节「${title}」`,
+    metadata: { wordCount: content.length || 0, action: 'create_chapter' },
+  });
+
   return c.json(result);
 });
 
@@ -384,11 +480,17 @@ worksRouter.put('/:id/chapters/reorder', async (c) => {
     return c.json({ error: '参数错误' }, 400);
   }
 
-  await Promise.all(body.ids.map((id: number, index: number) =>
-    db.update(chapters)
+  // 只更新属于当前作品的章节，防止跨作品篡改排序
+  const validChapters = await db.select({ id: chapters.id }).from(chapters)
+    .where(and(eq(chapters.workId, workId), inArray(chapters.id, body.ids)));
+  const validIdSet = new Set(validChapters.map(c => c.id));
+
+  await Promise.all(body.ids.map((id: number, index: number) => {
+    if (!validIdSet.has(id)) return Promise.resolve();
+    return db.update(chapters)
       .set({ orderIndex: index })
-      .where(eq(chapters.id, id))
-  ));
+      .where(eq(chapters.id, id));
+  }));
 
   return c.json({ success: true });
 });
@@ -473,6 +575,25 @@ worksRouter.put('/:id/chapters/:cid', async (c) => {
 
     // 异步更新风格 DNA（不阻塞响应）
     generateAndSaveStyleDNA(workId, userId).catch(() => {});
+
+    // 自动发放完成章节积分（不阻塞响应）
+    awardPointsForAction(userId, 'save_chapter', cid).catch(() => {});
+
+    // 记录创作活动
+    const newWordCount = (updateData.wordCount as number) || 0;
+    const addedWords = Math.max(0, newWordCount - (chapter.wordCount || 0));
+    await db.insert(creationActivities).values({
+      userId,
+      workId,
+      chapterId: cid,
+      type: 'write',
+      title: addedWords > 0 ? `写了 ${addedWords} 字` : '保存了章节',
+      metadata: {
+        wordCount: newWordCount,
+        addedWords,
+        action: 'update_chapter',
+      },
+    });
   }
 
   // 重新计算作品字数
@@ -505,6 +626,8 @@ worksRouter.delete('/:id/chapters/:cid', async (c) => {
   }
 
   await db.delete(chapterVersions).where(eq(chapterVersions.chapterId, cid));
+  await db.delete(chapterSummaries).where(eq(chapterSummaries.chapterId, cid));
+  await db.delete(aiCorrections).where(eq(aiCorrections.chapterId, cid));
   await db.delete(chapters).where(eq(chapters.id, cid));
 
   // 重新计算

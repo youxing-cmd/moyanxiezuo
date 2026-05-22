@@ -249,8 +249,12 @@ async function saveInspiration(id) {
             await api(`/inspirations/${id}`, { method: 'PUT', body: { title, source, tags, content, lengthType } });
             showToast('灵感已更新', 'success');
         } else {
-            await api('/inspirations', { method: 'POST', body: { title, source, tags, content, lengthType } });
+            const result = await api('/inspirations', { method: 'POST', body: { title, source, tags, content, lengthType } });
             showToast('灵感已保存', 'success');
+            api('/activities', {
+                method: 'POST',
+                body: { type: 'inspiration', title: `保存灵感「${title}」`, metadata: { inspirationId: result?.id } }
+            }).catch(() => {});
         }
         document.querySelector('.jz-modal-overlay')?.remove();
         loadInspirations(inspCurrentPage);

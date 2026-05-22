@@ -53,6 +53,23 @@
                 </div>
             </div>
 
+            <!-- 今日推进 -->
+            <div class="card" style="margin-bottom: 24px;">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">今日推进</div>
+                        <div class="card-subtitle">今天的创作记录</div>
+                    </div>
+                </div>
+                <div id="todayActivitiesList">
+                    <div class="list-item">
+                        <div class="list-content">
+                            <div class="list-meta" style="color:var(--text-muted);">加载中...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- 近7天打卡 + 最近编辑 -->
             <div class="grid-2" style="margin-bottom: 24px;">
                 <div class="card">

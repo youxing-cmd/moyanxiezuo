@@ -112,6 +112,21 @@
             </div>
 
             <div class="card" style="margin-bottom: 20px;">
+                <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 16px;">创作目标</div>
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">每日目标字数（0 = 不设置）</div>
+                        <input type="number" class="form-input" id="profileDailyGoal" value="${u.dailyGoal || 0}" min="0" placeholder="例如 3000" style="width: 100%;">
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">每周有效创作天数（0 = 不设置）</div>
+                        <input type="number" class="form-input" id="profileWeeklyGoalDays" value="${u.weeklyGoalDays || 0}" min="0" max="7" placeholder="例如 5" style="width: 100%;">
+                    </div>
+                    <button class="btn btn-primary" onclick="saveWritingGoals()">保存目标</button>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom: 20px;">
                 <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 16px;">订阅状态</div>
                 <div id="profileSubscriptionCard" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: var(--bg-tertiary); border-radius: var(--radius); border: 1px solid var(--border);">
                     <div style="display: flex; align-items: center; gap: 12px;">

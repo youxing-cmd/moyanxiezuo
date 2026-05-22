@@ -3252,6 +3252,18 @@ async function runChapterReview(workId, chapterId, _preset) {
             data.previousData = previousData;
         }
 
+        // 记录审稿完成活动
+        api('/activities', {
+            method: 'POST',
+            body: {
+                workId,
+                chapterId,
+                type: 'review',
+                title: `完成「${data.chapterTitle || '章节'}」审稿`,
+                metadata: { issuesFound: data.issues?.length || 0, preset: _preset }
+            }
+        }).catch(() => {});
+
         window.jzReviewPanel.open(data, {
             onReReview: () => runChapterReview(workId, chapterId),
             onApply: (detail) => {
@@ -3284,6 +3296,17 @@ async function runChapterReview(workId, chapterId, _preset) {
                 if (replaced) {
                     editor.dispatchEvent(new Event('input', { bubbles: true }));
                     showToast('已应用修改', 'success');
+                    // 记录采纳建议活动
+                    api('/activities', {
+                        method: 'POST',
+                        body: {
+                            workId,
+                            chapterId,
+                            type: 'accept_review',
+                            title: '采纳审稿建议',
+                            metadata: { issueType: detail.type || 'general' }
+                        }
+                    }).catch(() => {});
                 } else {
                     showToast('未找到对应原文片段，请手动替换', 'warning');
                 }

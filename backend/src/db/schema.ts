@@ -17,6 +17,8 @@ export const users = pgTable('users', {
   lastSubmissionAt: timestamp('last_submission_at', { mode: 'date' }),
   lastCheckInAt: timestamp('last_check_in_at', { mode: 'date' }),
   feishuUnionId: text('feishu_union_id').unique(),
+  dailyGoal: integer('daily_goal').notNull().default(0),
+  weeklyGoalDays: integer('weekly_goal_days').notNull().default(0),
   createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
 });
 
@@ -358,5 +360,16 @@ export const agentPlanTemplates = pgTable('agent_plan_templates', {
   query: text('query').notNull().default(''),
   plan: jsonb('plan').$type<Record<string, unknown>>().notNull().default({}),
   useCount: integer('use_count').notNull().default(0),
+  createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
+});
+
+export const creationActivities = pgTable('creation_activities', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull(),
+  workId: integer('work_id'),
+  chapterId: integer('chapter_id'),
+  type: text('type').notNull(),
+  title: text('title').notNull().default(''),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
 });

@@ -408,35 +408,74 @@ async function loadDashboardStats() {
         }
 
         // === 今日目标进度 ===
-        const dailyGoal = parseInt(localStorage.getItem('jz_daily_goal_words') || '300');
-        const weeklyGoal = parseInt(localStorage.getItem('jz_weekly_goal_days') || '5');
+        const dailyGoal = stats.dailyGoal || 0;
+        const weeklyGoalDays = stats.weeklyGoalDays || 0;
+        const weeklyActiveDays = stats.weeklyActiveDays || 0;
         const todayWords = stats.todayWords || 0;
-        const goalProgress = Math.min(100, Math.round((todayWords / dailyGoal) * 100));
-        const weekDaysDone = stats.last7Days ? stats.last7Days.filter(d => d.hasWriting).length : 0;
 
         const heroGoalArea = document.getElementById('heroGoalArea');
-        if (heroGoalArea && stats.workCount > 0) {
-            heroGoalArea.style.display = '';
+        if (heroGoalArea) {
+            heroGoalArea.style.display = (dailyGoal > 0 && stats.workCount > 0) ? '' : 'none';
         }
 
-        const heroGoalLabel = document.getElementById('heroGoalLabel');
-        if (heroGoalLabel) {
-            heroGoalLabel.textContent = `${todayWords} / ${dailyGoal} 字`;
-        }
-
-        const heroGoalFill = document.getElementById('heroGoalFill');
-        if (heroGoalFill) {
-            heroGoalFill.style.width = `${goalProgress}%`;
-        }
-
-        const heroGoalCelebration = document.getElementById('heroGoalCelebration');
-        if (heroGoalCelebration) {
-            heroGoalCelebration.style.display = todayWords >= dailyGoal ? '' : 'none';
+        if (dailyGoal > 0) {
+            const goalProgress = Math.min(100, Math.round((todayWords / dailyGoal) * 100));
+            const heroGoalLabel = document.getElementById('heroGoalLabel');
+            if (heroGoalLabel) {
+                heroGoalLabel.textContent = `${todayWords} / ${dailyGoal} 字`;
+            }
+            const heroGoalFill = document.getElementById('heroGoalFill');
+            if (heroGoalFill) {
+                heroGoalFill.style.width = `${goalProgress}%`;
+            }
+            const heroGoalCelebration = document.getElementById('heroGoalCelebration');
+            if (heroGoalCelebration) {
+                heroGoalCelebration.style.display = todayWords >= dailyGoal ? '' : 'none';
+            }
         }
 
         const weekGoalLabel = document.getElementById('weekGoalLabel');
         if (weekGoalLabel) {
-            weekGoalLabel.textContent = `本周 ${weekDaysDone}/${weeklyGoal} 天 · 每日写作记录`;
+            if (weeklyGoalDays > 0) {
+                weekGoalLabel.textContent = `本周 ${weeklyActiveDays}/${weeklyGoalDays} 天 · 有效创作记录`;
+            } else {
+                weekGoalLabel.textContent = '每日写作记录';
+            }
+        }
+
+        // === 今日推进 ===
+        const todayActivitiesEl = document.getElementById('todayActivitiesList');
+        if (todayActivitiesEl && stats.todayActivities) {
+            if (stats.todayActivities.length === 0) {
+                todayActivitiesEl.innerHTML = `
+                    <div style="padding:12px 0; color:var(--text-muted); font-size:13px;">
+                        今天还没有创作记录，点击上方「继续写作」开始
+                    </div>
+                `;
+            } else {
+                const activityIcons = {
+                    write: '✍️',
+                    edit: '✏️',
+                    review: '🔍',
+                    inspiration: '💡',
+                    agent_task: '🤖',
+                    export_adaptation: '🎬',
+                    worldbuilding: '🌍',
+                };
+                todayActivitiesEl.innerHTML = stats.todayActivities.map((a) => {
+                    const icon = activityIcons[a.type] || '📝';
+                    const timeStr = a.createdAt ? formatTimeAgo(a.createdAt) : '';
+                    return `
+                        <div class="list-item" style="cursor:default; padding:10px 14px;">
+                            <div class="list-icon" style="width:32px;height:32px;font-size:14px;">${icon}</div>
+                            <div class="list-content">
+                                <div class="list-title" style="font-size:13px;">${a.title}</div>
+                                <div class="list-meta">${timeStr}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
         }
     } catch (err) {
         console.log('统计加载失败:', err.message);
@@ -642,7 +681,9 @@ async function executePermanentDelete(workId) {
     }
 }
 
-// Dashboard/作品列表统一行动入口，避免各模块直接耦合页面内部细节
+// Dashboard/作品列表统一行动入口
+// DASHBOARD CONTRACT: 所有 Dashboard 跳转必须走此函数。新增 action 在此 switch 注册，
+// 禁止在模板里写 onclick 跳转逻辑。
 function runDashboardAction(action, workId = null, chapterId = null) {
     switch (action) {
         case 'enterWriting':
@@ -663,6 +704,7 @@ function runDashboardAction(action, workId = null, chapterId = null) {
 }
 
 // 进入写作页
+// DASHBOARD CONTRACT: 必须传 chapterId。禁止恢复"默认永远选第一章"的逻辑。
 function enterWriting(workId, chapterId = null) {
     currentWorkId = workId;
     currentChapterId = chapterId || null;

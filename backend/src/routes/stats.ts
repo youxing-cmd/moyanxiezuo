@@ -1,13 +1,15 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { works, chapters, chapterVersions } from '../db/schema.js';
+import { works, chapters, chapterVersions, creationActivities, users } from '../db/schema.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { eq, desc, isNull, and, inArray, asc } from 'drizzle-orm';
+import { eq, desc, isNull, and, inArray, asc, gte, lt } from 'drizzle-orm';
 
 const statsRouter = new Hono();
 statsRouter.use('*', authMiddleware);
 
 // GET /api/stats — 用户写作统计
+// DASHBOARD CONTRACT: 此返回结构是 Dashboard 唯一可信数据源。新增字段须向后兼容，
+// 删除/重命名字段需同步改前端。所有模块通过 nextActions 进入，禁止直接操作 DOM。
 statsRouter.get('/', async (c) => {
   const userId = c.get('userId');
 
@@ -199,14 +201,40 @@ statsRouter.get('/', async (c) => {
 
     // 章节字数多，建议审稿
     if (primaryWork.chapterWordCount > 4000) {
-      nextActions.push({
-        type: 'review_chapter',
-        title: '检查上一章节奏',
-        description: `上一章 ${primaryWork.chapterWordCount} 字，建议做一次节奏检查`,
-        action: 'openAgentReview',
-        workId: primaryWork.workId,
-        chapterId: primaryWork.chapterId || undefined,
-      });
+      // 查询该章节是否有 review / accept_review activity
+      const chapterActivities = await db.select({ type: creationActivities.type })
+        .from(creationActivities)
+        .where(
+          and(
+            eq(creationActivities.userId, userId),
+            eq(creationActivities.chapterId, primaryWork.chapterId)
+          )
+        )
+        .orderBy(desc(creationActivities.createdAt))
+        .limit(20);
+
+      const hasReview = chapterActivities.some(a => a.type === 'review');
+      const hasAccept = chapterActivities.some(a => a.type === 'accept_review');
+
+      if (hasReview && !hasAccept) {
+        nextActions.push({
+          type: 're_review_chapter',
+          title: '审稿后未采纳',
+          description: '已审稿但未采纳建议，建议复查',
+          action: 'openAgentReview',
+          workId: primaryWork.workId,
+          chapterId: primaryWork.chapterId || undefined,
+        });
+      } else {
+        nextActions.push({
+          type: 'review_chapter',
+          title: '检查上一章节奏',
+          description: `上一章 ${primaryWork.chapterWordCount} 字，建议做一次节奏检查`,
+          action: 'openAgentReview',
+          workId: primaryWork.workId,
+          chapterId: primaryWork.chapterId || undefined,
+        });
+      }
     }
 
     // 作品章节数足够，建议改编
@@ -221,6 +249,58 @@ statsRouter.get('/', async (c) => {
     }
   }
 
+  // === 用户目标 ===
+  const [user] = await db.select({ dailyGoal: users.dailyGoal, weeklyGoalDays: users.weeklyGoalDays }).from(users).where(eq(users.id, userId)).limit(1);
+  const dailyGoal = user?.dailyGoal || 0;
+  const weeklyGoalDays = user?.weeklyGoalDays || 0;
+
+  // === 本周有效创作天数（基于 activity）===
+  const weekStart = new Date();
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // 本周日
+
+  const weekActivityList = await db.select({ createdAt: creationActivities.createdAt })
+    .from(creationActivities)
+    .where(
+      and(
+        eq(creationActivities.userId, userId),
+        gte(creationActivities.createdAt, weekStart)
+      )
+    );
+
+  const activeDaySet = new Set<string>();
+  for (const a of weekActivityList) {
+    if (a.createdAt) activeDaySet.add(a.createdAt.toISOString().split('T')[0]);
+  }
+  const weeklyActiveDays = activeDaySet.size;
+
+  // === 今日创作活动 ===
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+
+  const todayActivityList = await db.select()
+    .from(creationActivities)
+    .where(
+      and(
+        eq(creationActivities.userId, userId),
+        gte(creationActivities.createdAt, today),
+        lt(creationActivities.createdAt, tomorrow)
+      )
+    )
+    .orderBy(desc(creationActivities.createdAt))
+    .limit(10);
+
+  const todayActivities = todayActivityList.map(a => ({
+    id: a.id,
+    type: a.type,
+    title: a.title,
+    workId: a.workId,
+    chapterId: a.chapterId,
+    metadata: a.metadata,
+    createdAt: a.createdAt,
+  }));
+
   return c.json({
     workCount,
     totalWords,
@@ -231,6 +311,10 @@ statsRouter.get('/', async (c) => {
     todayWords,
     primaryWork,
     nextActions,
+    todayActivities,
+    dailyGoal,
+    weeklyGoalDays,
+    weeklyActiveDays,
   });
 });
 

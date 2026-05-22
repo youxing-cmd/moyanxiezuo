@@ -148,8 +148,29 @@ auth.get('/me', authMiddleware, async (c) => {
     workCount: user.workCount,
     subscriptionType: user.subscriptionType,
     subscriptionExpireAt: user.subscriptionExpireAt,
+    dailyGoal: user.dailyGoal,
+    weeklyGoalDays: user.weeklyGoalDays,
     createdAt: user.createdAt,
   });
+});
+
+// PUT /api/auth/me/goals — 更新创作目标
+auth.put('/me/goals', authMiddleware, async (c) => {
+  const userId = c.get('userId');
+  const body = await c.req.json();
+  const dailyGoal = typeof body.dailyGoal === 'number' ? Math.max(0, body.dailyGoal) : undefined;
+  const weeklyGoalDays = typeof body.weeklyGoalDays === 'number' ? Math.max(0, Math.min(7, body.weeklyGoalDays)) : undefined;
+
+  const updateData: Record<string, number> = {};
+  if (dailyGoal !== undefined) updateData.dailyGoal = dailyGoal;
+  if (weeklyGoalDays !== undefined) updateData.weeklyGoalDays = weeklyGoalDays;
+
+  if (Object.keys(updateData).length === 0) {
+    return c.json({ error: '参数错误' }, 400);
+  }
+
+  await db.update(users).set(updateData).where(eq(users.id, userId));
+  return c.json({ success: true });
 });
 
 // POST /api/auth/send-code — 发送验证码

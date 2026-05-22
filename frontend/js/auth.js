@@ -543,6 +543,22 @@ async function saveProfile(field) {
     }
 }
 
+async function saveWritingGoals() {
+    const dailyGoal = parseInt(document.getElementById('profileDailyGoal')?.value || '0');
+    const weeklyGoalDays = parseInt(document.getElementById('profileWeeklyGoalDays')?.value || '0');
+    try {
+        await api('/auth/me/goals', {
+            method: 'PUT',
+            body: { dailyGoal, weeklyGoalDays }
+        });
+        currentUser.dailyGoal = dailyGoal;
+        currentUser.weeklyGoalDays = weeklyGoalDays;
+        showToast('创作目标已保存', 'success');
+    } catch (err) {
+        showToast(err.message || '保存失败', 'danger');
+    }
+}
+
 function showAvatarPicker() {
     const emojis = ['🧑','👩','🧙','🧛','🧟','🤖','👽','🐉','🦊','🐺','🦁','🐯','🐼','🐨','🐸','🐙','🦄','🦅','🦉','🐦','🌟','🔥','⚡','❄️','🌊','🌙','☀️','🌈'];
     const grid = emojis.map(e => `<div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-tertiary);transition:background 0.15s;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='var(--bg-tertiary)'" onclick="document.getElementById('editAvatar').value='${e}';saveProfile('avatar')">${e}</div>

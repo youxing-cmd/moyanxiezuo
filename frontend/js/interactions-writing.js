@@ -44,16 +44,46 @@ async function loadWritingPage() {
         // 加载作品元数据（标签、角色、设定、总纲）
         loadWorkMetadata(work);
 
-        // 自动选中第一个章节
+        // 优先选中外部入口传入的章节；没有传入时回退第一章
         if (work.chapterList && work.chapterList.length > 0) {
-            const first = work.chapterList[0];
-            await switchChapter(first.id, first.title, first.content);
+            const targetChapter = currentChapterId
+                ? work.chapterList.find(ch => Number(ch.id) === Number(currentChapterId))
+                : null;
+            const selected = targetChapter || work.chapterList[0];
+            await switchChapter(selected.id, selected.title, selected.content, selected.outline);
         }
 
         // 恢复展开状态
         restoreSectionState();
+
+        runPendingWritingAction();
     } catch (err) {
         showToast('加载作品失败: ' + err.message, 'danger');
+    }
+}
+
+// ⚠️ DASHBOARD CONTRACT: pendingWritingAction 是跨页面状态传递机制。
+// Dashboard → 写作页的 action 必须在此处理，新增类型需在此注册。
+function runPendingWritingAction() {
+    if (!pendingWritingAction) return;
+    const action = pendingWritingAction;
+    pendingWritingAction = null;
+
+    if (action.type === 'review') {
+        if (currentWorkId && currentChapterId && typeof runChapterReview === 'function') {
+            runChapterReview(currentWorkId, currentChapterId);
+        } else {
+            showToast('请先选择一个章节', 'warning');
+        }
+        return;
+    }
+
+    if (action.type === 'agent_focus') {
+        const input = document.getElementById('aiChatInput');
+        if (input) {
+            input.focus();
+            input.value = input.value || '帮我分析当前章节，并给出下一步创作建议';
+        }
     }
 }
 
@@ -363,6 +393,33 @@ function renderChapterList(chapters) {
     });
 
     container.innerHTML = html;
+
+    // 绑定章节项点击事件（避免内联 onclick 的字符串转义问题）
+    container.querySelectorAll('.chapter-tree-item').forEach(el => {
+        el.addEventListener('click', (e) => {
+            if (e.target.closest('[data-action]')) return;
+            const chId = parseInt(el.dataset.chapterId);
+            switchChapter(chId, el.dataset.title, el.dataset.content, el.dataset.outline);
+        });
+        el.querySelector('[data-action="rename"]')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            renameChapter(parseInt(el.dataset.chapterId), el.dataset.title);
+        });
+        el.querySelector('[data-action="versions"]')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showChapterVersions(parseInt(el.dataset.chapterId));
+        });
+    });
+}
+
+function escapeHtmlForAttr(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function renderChapterItem(ch) {
@@ -370,24 +427,27 @@ function renderChapterItem(ch) {
     const activeStyle = isActive
         ? 'color:var(--accent); background:rgba(99,102,241,0.08);'
         : 'color:var(--text-secondary);';
+    const safeTitle = escapeHtmlForAttr(ch.title);
+    const safeContent = escapeHtmlForAttr(ch.content);
+    const safeOutline = escapeHtmlForAttr(ch.outline);
     return `
         <div class="chapter-tree-item ${isActive ? 'active' : ''}" data-chapter-id="${ch.id}"
              draggable="true"
              style="padding:6px 8px 6px 16px; border-radius:var(--radius-sm); cursor:pointer; font-size:12px; margin-bottom:2px; display:flex; justify-content:space-between; align-items:center; ${activeStyle}"
-             onclick="switchChapter(${ch.id}, '${ch.title.replace(/'/g, "\\'")}', this.dataset.content, this.dataset.outline)"
-             data-content="${(ch.content || '').replace(/"/g, '&quot;').replace(/'/g, "&#39;")}"
-             data-outline="${(ch.outline || '').replace(/"/g, '&quot;').replace(/'/g, "&#39;")}">
+             data-title="${safeTitle}"
+             data-content="${safeContent}"
+             data-outline="${safeOutline}">
             <span style="display:flex; align-items:center; gap:6px;">
                 <span style="color:var(--text-muted); cursor:grab; font-size:10px;">⋮⋮</span>
-                ${ch.title}
+                ${safeTitle}
             </span>
             <span style="display:flex; align-items:center; gap:4px;">
                 <span class="chapter-word-count" style="font-size:11px; color:var(--text-muted);">${ch.wordCount || 0}字</span>
                 <span style="font-size:10px; color:var(--text-muted); padding:1px 4px; border-radius:3px; cursor:pointer;"
-                      onclick="event.stopPropagation(); renameChapter(${ch.id}, '${ch.title.replace(/'/g, "\\'")}')"
+                      data-action="rename"
                       title="重命名">✏️</span>
                 <span style="font-size:10px; color:var(--text-muted); padding:1px 4px; border-radius:3px; cursor:pointer;"
-                      onclick="event.stopPropagation(); showChapterVersions(${ch.id})"
+                      data-action="versions"
                       title="历史版本">🕐</span>
             </span>
         </div>
@@ -673,6 +733,9 @@ async function saveCurrentChapter(showToastMsg = true, source = 'manual') {
         if (showToastMsg) showToast('保存成功', 'success');
         updateSaveButtonState('saved');
 
+        // 3秒后刷新本章摘要面板（等后端异步生成）
+        setTimeout(() => loadChapterSummaryPanel(), 3000);
+
         // 左侧章节列表不做任何同步，标题/字数仅在页面加载或手动重命名时更新
     } catch (err) {
         if (showToastMsg) showToast('保存失败: ' + err.message, 'danger');
@@ -681,6 +744,76 @@ async function saveCurrentChapter(showToastMsg = true, source = 'manual') {
         throw err;
     } finally {
         isSaving = false;
+    }
+}
+
+// 加载本章摘要面板
+async function loadChapterSummaryPanel() {
+    if (!currentWorkId || !currentChapterId) return;
+    try {
+        const data = await api(`/works/${currentWorkId}/chapters/${currentChapterId}/summary`);
+        if (!data || !data.summary) return;
+
+        const chatBody = document.getElementById('aiChatDialogBody');
+        if (!chatBody) return;
+
+        let panel = document.getElementById('chapterSummaryPanel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'chapterSummaryPanel';
+            panel.style.cssText = 'padding:12px 16px; border-bottom:1px solid var(--border); background:var(--bg-secondary); max-height:200px; overflow-y:auto;';
+            chatBody.insertBefore(panel, chatBody.firstChild);
+        }
+
+        const keyEvents = (data.keyEvents || []).map(e => `<li style="margin:2px 0; font-size:12px; color:var(--text-secondary);">${escapeHtml(e)}</li>`).join('');
+        const openHooks = (data.openHooks || []).map(h => `<li style="margin:2px 0; font-size:12px; color:var(--accent);">${escapeHtml(h)}</li>`).join('');
+
+        panel.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; cursor:pointer;" onclick="document.getElementById('summaryPanelContent').style.display = document.getElementById('summaryPanelContent').style.display === 'none' ? '' : 'none'">
+                <span style="font-size:13px; font-weight:600; color:var(--text-primary);">本章摘要</span>
+                <span style="font-size:11px; color:var(--text-muted);">点击展开/收起</span>
+            </div>
+            <div id="summaryPanelContent">
+                <div style="font-size:12px; color:var(--text-secondary); margin-bottom:8px; line-height:1.5;">${escapeHtml(data.summary)}</div>
+                ${keyEvents ? `<div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">关键事件</div><ul style="margin:0 0 8px 16px; padding:0;">${keyEvents}</ul>` : ''}
+                ${openHooks ? `<div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">开放钩子</div><ul style="margin:0 0 8px 16px; padding:0;">${openHooks}</ul>` : ''}
+                <button class="btn btn-primary btn-sm" style="width:100%;" onclick="loadNextChapterSuggestions()">生成下一章建议</button>
+                <div id="nextChapterSuggestions" style="margin-top:8px;"></div>
+            </div>
+        `;
+    } catch (err) {
+        // 摘要尚未生成，静默忽略
+    }
+}
+
+// 加载下一章建议
+async function loadNextChapterSuggestions() {
+    if (!currentWorkId || !currentChapterId) return;
+    const container = document.getElementById('nextChapterSuggestions');
+    if (!container) return;
+    container.innerHTML = '<div style="font-size:12px; color:var(--text-muted);">生成中...</div>';
+    try {
+        const data = await api(`/works/${currentWorkId}/chapters/${currentChapterId}/suggestion`, { method: 'POST' });
+        if (!data.suggestions || data.suggestions.length === 0) {
+            container.innerHTML = '<div style="font-size:12px; color:var(--text-muted);">暂无建议</div>';
+            return;
+        }
+        container.innerHTML = data.suggestions.map(s => `
+            <div style="padding:8px 12px; margin:4px 0; background:var(--bg-tertiary); border-radius:var(--radius-sm); border:1px solid var(--border); cursor:pointer;" onclick="applySuggestionToInput('${escapeHtml(s.description).replace(/'/g, "\\'")}')">
+                <div style="font-size:12px; font-weight:600; color:var(--text-primary);">${escapeHtml(s.title)}</div>
+                <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">${escapeHtml(s.description)}</div>
+            </div>
+        `).join('');
+    } catch (err) {
+        container.innerHTML = '<div style="font-size:12px; color:var(--danger);">生成失败</div>';
+    }
+}
+
+function applySuggestionToInput(text) {
+    const input = document.getElementById('aiChatInput');
+    if (input) {
+        input.value = text;
+        input.focus();
     }
 }
 
@@ -1718,4 +1851,3 @@ async function handleDeleteDraft(draftId) {
         showToast(err.message || '删除失败', 'danger');
     }
 }
-
