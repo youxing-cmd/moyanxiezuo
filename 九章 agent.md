@@ -169,11 +169,11 @@ Agent 完成时不能只显示“任务完成”。必须根据产物类型给�
 
 | 任务 | 状态 | 验收标准 |
 |------|------|----------|
-| 产物类型规范 | 待开始 | 明确 chapter_draft / outline / review_report / setting / inspiration 等类型 |
-| 采纳为章节 | 待开始 | 正文产物可直接创建章节或覆盖当前章节草稿 |
-| 差异对比 | 待开始 | 改稿/审稿结果支持原文 vs 建议稿对比 |
-| 版本记录 | 待开始 | 采纳前自动保存 chapter version，支持回滚 |
-| artifact 与作品树联动 | 待开始 | artifact 可链接到章节/总纲/角色/设定实体 |
+| 产物类型规范 | 已完成 | 明确 chapter_draft / outline / review_report / setting / inspiration 等类型 |
+| 采纳为章节 | 已完成 | 正文产物可直接创建章节或覆盖当前章节草稿 |
+| 差异对比 | 已完成 | 改稿/审稿结果支持原文 vs 建议稿对比 |
+| 版本记录 | 已完成 | 采纳前自动保存 chapter version，支持回滚 |
+| artifact 与作品树联动 | 已完成 | artifact 可链接到章节/总纲/角色/设定实体 |
 
 #### Product P4：编辑工作台
 

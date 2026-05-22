@@ -410,11 +410,14 @@
                 }
                 btn.disabled = true;
                 try {
-                    await apiPost(`/works/${currentWorkId}/chapters`, {
+                    const res = await apiPost(`/works/${currentWorkId}/chapters`, {
                         title: currentArtifact.title || 'Agent 生成章节',
                         content: currentArtifact.content,
                     });
                     showToast('已采纳为新章节', 'success');
+                    if (res?.id && currentArtifact?.id) {
+                        await linkArtifact(currentArtifact.id, 'chapters', res.id);
+                    }
                     options.onAdopt?.(jobId, 'chapter');
                 } catch (err) {
                     showToast(err.message || '采纳失败', 'error');
@@ -430,11 +433,14 @@
                 }
                 btn.disabled = true;
                 try {
-                    await apiPost(`/works/${currentWorkId}/drafts`, {
+                    const res = await apiPost(`/works/${currentWorkId}/drafts`, {
                         title: currentArtifact.title || 'Agent 草稿',
                         content: currentArtifact.content,
                     });
                     showToast('已保存为草稿', 'success');
+                    if (res?.id && currentArtifact?.id) {
+                        await linkArtifact(currentArtifact.id, 'drafts', res.id);
+                    }
                     options.onSaveDraft?.(jobId);
                 } catch (err) {
                     showToast(err.message || '保存失败', 'error');
@@ -465,9 +471,12 @@
                 if (!confirm('确定要覆盖当前章节草稿吗？原内容将保存为版本。')) return;
                 btn.disabled = true;
                 try {
-                    // 先保存版本
+                    // 先保存版本（使用当前编辑器内容）
+                    const editorContent = (typeof window.jzEditor?.getFullText === 'function')
+                        ? window.jzEditor.getFullText()
+                        : (document.getElementById('editorArea')?.innerText || '');
                     await apiPost(`/works/${currentWorkId}/chapters/${currentChapterId}/versions`, {
-                        content: window.jzEditor?.getContent?.() || '',
+                        content: editorContent,
                         source: 'auto',
                     });
                     // 再覆盖内容
@@ -476,6 +485,9 @@
                         content: currentArtifact.content,
                     });
                     showToast('已覆盖当前章节草稿，原内容已保存为版本', 'success');
+                    if (currentArtifact?.id) {
+                        await linkArtifact(currentArtifact.id, 'chapters', currentChapterId);
+                    }
                     options.onOverwrite?.(jobId);
                 } catch (err) {
                     showToast(err.message || '覆盖失败', 'error');
@@ -491,13 +503,61 @@
                 }
                 btn.disabled = true;
                 try {
-                    await apiPost(`/metadata/${currentWorkId}/outlines`, {
+                    const res = await apiPost(`/metadata/${currentWorkId}/outlines`, {
                         title: currentArtifact.title || '总纲',
                         content: currentArtifact.content,
                     });
                     showToast('已更新总纲', 'success');
+                    if (res?.id && currentArtifact?.id) {
+                        await linkArtifact(currentArtifact.id, 'outlines', res.id);
+                    }
                 } catch (err) {
                     showToast(err.message || '更新失败', 'error');
+                    btn.disabled = false;
+                }
+                return;
+            }
+
+            if (action === 'save-version') {
+                if (!currentArtifact?.content || !currentWorkId) {
+                    showToast('没有可用的产物内容', 'error');
+                    return;
+                }
+                btn.disabled = true;
+                try {
+                    const res = await apiPost(`/metadata/${currentWorkId}/outlines`, {
+                        title: currentArtifact.title || '大纲版本',
+                        content: currentArtifact.content,
+                    });
+                    showToast('已保存为新版本大纲', 'success');
+                    if (res?.id && currentArtifact?.id) {
+                        await linkArtifact(currentArtifact.id, 'outlines', res.id);
+                    }
+                } catch (err) {
+                    showToast(err.message || '保存失败', 'error');
+                    btn.disabled = false;
+                }
+                return;
+            }
+
+            if (action === 'save-alternative') {
+                if (!currentArtifact?.content || !currentWorkId) {
+                    showToast('没有可用的产物内容', 'error');
+                    return;
+                }
+                btn.disabled = true;
+                try {
+                    const res = await apiPost(`/metadata/${currentWorkId}/settings`, {
+                        name: currentArtifact.title || '备选设定',
+                        type: 'background',
+                        content: currentArtifact.content,
+                    });
+                    showToast('已保存为备选设定', 'success');
+                    if (res?.id && currentArtifact?.id) {
+                        await linkArtifact(currentArtifact.id, 'settings', res.id);
+                    }
+                } catch (err) {
+                    showToast(err.message || '保存失败', 'error');
                     btn.disabled = false;
                 }
                 return;
@@ -519,12 +579,15 @@
                 }
                 btn.disabled = true;
                 try {
-                    await apiPost(`/metadata/${currentWorkId}/settings`, {
+                    const res = await apiPost(`/metadata/${currentWorkId}/settings`, {
                         name: currentArtifact.title || '新设定',
                         type: 'background',
                         content: currentArtifact.content,
                     });
                     showToast('已更新设定', 'success');
+                    if (res?.id && currentArtifact?.id) {
+                        await linkArtifact(currentArtifact.id, 'settings', res.id);
+                    }
                 } catch (err) {
                     showToast(err.message || '更新失败', 'error');
                     btn.disabled = false;
@@ -539,12 +602,15 @@
                 }
                 btn.disabled = true;
                 try {
-                    await apiPost('/inspirations', {
+                    const res = await apiPost('/inspirations', {
                         title: currentArtifact.title || 'Agent 灵感',
                         content: currentArtifact.content,
                         source: 'agent',
                     });
                     showToast('已保存到灵感库', 'success');
+                    if (res?.id && currentArtifact?.id) {
+                        await linkArtifact(currentArtifact.id, 'inspirations', res.id);
+                    }
                 } catch (err) {
                     showToast(err.message || '保存失败', 'error');
                     btn.disabled = false;
@@ -582,6 +648,19 @@
                 previewEl.textContent = text + (artifact.content.length > 200 ? '...' : '');
             }
         };
+
+        // 辅助：将 artifact 关联到作品树实体
+        async function linkArtifact(artifactId, entityType, entityId) {
+            if (!artifactId || !entityType || !entityId) return;
+            try {
+                await apiPost(`/ai/artifacts/${artifactId}/link`, {
+                    linkedEntityType: entityType,
+                    linkedEntityId: entityId,
+                });
+            } catch (err) {
+                console.warn('[composer] artifact 关联失败:', err);
+            }
+        }
 
         // 插话发送
         const sendInject = async () => {

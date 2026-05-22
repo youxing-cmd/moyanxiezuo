@@ -918,6 +918,29 @@ aiRouter.delete('/artifacts/:id', async (c) => {
   return c.json({ ok: true });
 });
 
+// POST /api/ai/artifacts/:id/link — 关联 artifact 到作品树实体（Agent 交付时用）
+aiRouter.post('/artifacts/:id/link', async (c) => {
+  const userId = c.get('userId');
+  const id = parseInt(c.req.param('id'));
+  const body = await c.req.json();
+
+  const [existing] = await db.select().from(aiArtifacts)
+    .where(and(eq(aiArtifacts.id, id), eq(aiArtifacts.userId, userId)))
+    .limit(1);
+  if (!existing) return c.json({ error: '不存在' }, 404);
+
+  const updateData: Record<string, unknown> = { updatedAt: new Date() };
+  if (body.linkedEntityType !== undefined) updateData.linkedEntityType = body.linkedEntityType;
+  if (body.linkedEntityId !== undefined) updateData.linkedEntityId = body.linkedEntityId;
+
+  const [updated] = await db.update(aiArtifacts)
+    .set(updateData)
+    .where(eq(aiArtifacts.id, id))
+    .returning();
+
+  return c.json(updated);
+});
+
 // POST /api/ai/continue — AI续写
 aiRouter.post('/continue', async (c) => {
   const body = await c.req.json();
