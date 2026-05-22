@@ -65,11 +65,7 @@
                 </div>
                 <div class="plan-deliver" style="display:none;" data-deliver-panel>
                     <div class="plan-deliver-preview" data-deliver-preview></div>
-                    <div class="plan-deliver-actions">
-                        <button class="plan-btn plan-btn-primary" data-action="adopt-chapter">📄 采纳为新章节</button>
-                        <button class="plan-btn" data-action="save-draft">📝 保存草稿</button>
-                        <button class="plan-btn" data-action="copy-content">📋 复制内容</button>
-                    </div>
+                    <div class="plan-deliver-actions" data-deliver-actions></div>
                 </div>
             </div>
         `;
@@ -432,6 +428,102 @@
                 });
                 return;
             }
+
+            // ===== P3 新增交付动作 =====
+            if (action === 'overwrite-chapter') {
+                if (!currentArtifact?.content || !currentWorkId || !currentChapterId) {
+                    showToast('没有可用的产物或当前章节', 'error');
+                    return;
+                }
+                if (!confirm('确定要覆盖当前章节草稿吗？原内容将保存为版本。')) return;
+                btn.disabled = true;
+                try {
+                    // 先保存版本
+                    await apiPost(`/works/${currentWorkId}/chapters/${currentChapterId}/versions`, {
+                        content: window.jzEditor?.getContent?.() || '',
+                        source: 'auto',
+                    });
+                    // 再覆盖内容
+                    await apiPost(`/works/${currentWorkId}/chapters/${currentChapterId}`, {
+                        title: currentArtifact.title || document.getElementById('writingChapterTitle')?.textContent || '章节',
+                        content: currentArtifact.content,
+                    });
+                    showToast('已覆盖当前章节草稿，原内容已保存为版本', 'success');
+                    options.onOverwrite?.(jobId);
+                } catch (err) {
+                    showToast(err.message || '覆盖失败', 'error');
+                    btn.disabled = false;
+                }
+                return;
+            }
+
+            if (action === 'update-outline') {
+                if (!currentArtifact?.content || !currentWorkId) {
+                    showToast('没有可用的产物内容', 'error');
+                    return;
+                }
+                btn.disabled = true;
+                try {
+                    await apiPost(`/metadata/${currentWorkId}/outlines`, {
+                        title: currentArtifact.title || '总纲',
+                        content: currentArtifact.content,
+                    });
+                    showToast('已更新总纲', 'success');
+                } catch (err) {
+                    showToast(err.message || '更新失败', 'error');
+                    btn.disabled = false;
+                }
+                return;
+            }
+
+            if (action === 'view-report') {
+                if (!currentArtifact?.content) {
+                    showToast('没有可用的报告内容', 'error');
+                    return;
+                }
+                showModal('审稿报告', `<div style="max-height:60vh;overflow:auto;line-height:1.7;font-size:13px;">${escapeHtml(currentArtifact.content).replace(/\n/g, '<br>')}</div>`);
+                return;
+            }
+
+            if (action === 'update-setting') {
+                if (!currentArtifact?.content || !currentWorkId) {
+                    showToast('没有可用的产物内容', 'error');
+                    return;
+                }
+                btn.disabled = true;
+                try {
+                    await apiPost(`/metadata/${currentWorkId}/settings`, {
+                        name: currentArtifact.title || '新设定',
+                        type: 'background',
+                        content: currentArtifact.content,
+                    });
+                    showToast('已更新设定', 'success');
+                } catch (err) {
+                    showToast(err.message || '更新失败', 'error');
+                    btn.disabled = false;
+                }
+                return;
+            }
+
+            if (action === 'save-inspiration') {
+                if (!currentArtifact?.content) {
+                    showToast('没有可用的产物内容', 'error');
+                    return;
+                }
+                btn.disabled = true;
+                try {
+                    await apiPost('/inspirations', {
+                        title: currentArtifact.title || 'Agent 灵感',
+                        content: currentArtifact.content,
+                        source: 'agent',
+                    });
+                    showToast('已保存到灵感库', 'success');
+                } catch (err) {
+                    showToast(err.message || '保存失败', 'error');
+                    btn.disabled = false;
+                }
+                return;
+            }
         });
 
         // 暴露 setArtifact 供外部更新
@@ -578,6 +670,38 @@
         }
     }
 
+    // 根据 artifact 类型渲染交付按钮
+    function renderDeliverActions(artifactType) {
+        const type = artifactType || 'note';
+        const actions = {
+            chapter_draft: `
+                <button class="plan-btn plan-btn-primary" data-action="adopt-chapter">📄 采纳为新章节</button>
+                <button class="plan-btn" data-action="overwrite-chapter">🔄 覆盖当前草稿</button>
+                <button class="plan-btn" data-action="save-draft">📝 保存草稿</button>
+                <button class="plan-btn" data-action="copy-content">📋 复制内容</button>
+            `,
+            outline: `
+                <button class="plan-btn plan-btn-primary" data-action="update-outline">📋 更新总纲</button>
+                <button class="plan-btn" data-action="save-version">💾 保存为版本</button>
+                <button class="plan-btn" data-action="copy-content">📋 复制内容</button>
+            `,
+            review_report: `
+                <button class="plan-btn plan-btn-primary" data-action="view-report">📊 查看报告</button>
+                <button class="plan-btn" data-action="copy-content">📋 复制内容</button>
+            `,
+            setting: `
+                <button class="plan-btn plan-btn-primary" data-action="update-setting">⚙️ 更新设定</button>
+                <button class="plan-btn" data-action="save-alternative">💾 保存为备选</button>
+                <button class="plan-btn" data-action="copy-content">📋 复制内容</button>
+            `,
+            inspiration: `
+                <button class="plan-btn plan-btn-primary" data-action="save-inspiration">💡 保存灵感</button>
+                <button class="plan-btn" data-action="copy-content">📋 复制内容</button>
+            `,
+        };
+        return actions[type] || actions.chapter_draft;
+    }
+
     // ===== 更新 Plan 卡片（增量刷新） =====
     function updatePlanCard(card, data) {
         // 更新状态
@@ -638,6 +762,11 @@
                 const workId = data.workId || card.dataset.workId;
                 if (card._setArtifact) {
                     card._setArtifact(artifact, workId);
+                }
+                // 根据 artifact 类型渲染交付按钮
+                const actionsEl = deliverEl.querySelector('[data-deliver-actions]');
+                if (actionsEl) {
+                    actionsEl.innerHTML = renderDeliverActions(artifact.type);
                 }
             }
         }

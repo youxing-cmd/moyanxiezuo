@@ -75,7 +75,14 @@ function buildPlannerPrompt(query: string, workContext?: string | null): string 
 - write_chunk: 生成正文段
 - self_review: 反思自检
 - polish: 优化
-- create_artifact: 落到工作树
+- create_artifact: 落到工作树（必须指定 input.type）
+
+【create_artifact 的 type 规范】
+- 如果产物是小说正文/章节内容 → input.type = "chapter_draft"
+- 如果产物是大纲/总纲/章纲 → input.type = "outline"
+- 如果产物是审稿报告/分析报告 → input.type = "review_report"
+- 如果产物是角色设定/世界观设定 → input.type = "setting"
+- 如果产物是灵感/选题/素材 → input.type = "inspiration"
 
 【输出 JSON】
 {
@@ -86,7 +93,8 @@ function buildPlannerPrompt(query: string, workContext?: string | null): string 
     {"id": "1", "type": "read_context", "title": "读取作品上下文", "dependsOn": []},
     {"id": "2", "type": "web_research", "title": "研究参考作品", "dependsOn": []},
     {"id": "3", "type": "generate_ideas", "title": "生成题材方向", "dependsOn": ["1", "2"]},
-    ...
+    ...,
+    {"id": "10", "type": "create_artifact", "title": "保存正文草稿", "dependsOn": ["9"], "input": {"type": "chapter_draft"}}
   ]
 }`;
 
