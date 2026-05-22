@@ -331,7 +331,7 @@
                                 <button class="agent-entry-btn" data-agent-query="帮我写一章正文，延续当前剧情" title="AI 分析上下文后自动续写一章">
                                     ✍️ 写一章
                                 </button>
-                                <button class="agent-entry-btn" data-agent-query="对当前章节进行全文审稿，检查剧情、人物、节奏、爽点、设定、文风" title="AI 对当前章节进行全面审稿">
+                                <button class="agent-entry-btn" data-action="review" title="AI 对当前章节进行全面审稿">
                                     🔍 审稿全文
                                 </button>
                                 <button class="agent-entry-btn" data-agent-query="参考当前热门爆款作品，给我写一篇同风格短篇" title="AI 研究爆款后模仿创作">

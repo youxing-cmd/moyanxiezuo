@@ -2449,6 +2449,15 @@ async function initPageInteractions(page) {
         // Agent 高频入口按钮绑定
         workspace.querySelectorAll('.agent-entry-btn').forEach((btn) => {
             btn.addEventListener('click', () => {
+                // 审稿全文：直接调用 chapter-review API，不走聊天流程
+                if (btn.dataset.action === 'review') {
+                    if (!currentWorkId || !currentChapterId) {
+                        showToast('请先选择一个章节', 'warning');
+                        return;
+                    }
+                    runChapterReview(currentWorkId, currentChapterId);
+                    return;
+                }
                 const query = btn.dataset.agentQuery;
                 if (query && chatInput) {
                     chatInput.value = query;
@@ -3160,5 +3169,56 @@ function injectDiffPanel(resultId, originalText) {
     // 在编辑器中展示 diff
     showDiffPreview(originalText, resultText);
     showToast('已生成差异对比，请查看编辑器下方', 'info');
+}
+
+// ===== 章节审稿 =====
+async function runChapterReview(workId, chapterId) {
+    if (!window.jzReviewPanel) {
+        showToast('审稿组件未加载', 'error');
+        return;
+    }
+
+    showToast('正在审稿，请稍候...', 'info');
+    try {
+        const token = localStorage.getItem('jz_token');
+        const res = await fetch(`${API_BASE}/ai/chapter-review`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ workId, chapterId }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.error || `审稿失败 ${res.status}`);
+        }
+
+        window.jzReviewPanel.open(data, {
+            onReReview: () => runChapterReview(workId, chapterId),
+            onAdopt: (detail) => {
+                showToast(`已采纳：${detail.title?.slice(0, 20) || '建议'}`, 'success');
+                // TODO: 调用 AI 生成修改后的文本并展示差异对比
+            },
+            onLocate: (detail) => {
+                if (!detail.evidence) return;
+                // 在编辑器中查找并高亮证据文本
+                const editor = document.getElementById('editorArea');
+                if (!editor) return;
+                const text = editor.innerText || '';
+                const idx = text.indexOf(detail.evidence.slice(0, 30));
+                if (idx >= 0) {
+                    // 简单滚动定位（后续可升级为精确高亮）
+                    editor.focus();
+                    showToast('已定位到原文区域', 'success');
+                } else {
+                    showToast('未找到对应原文片段', 'warning');
+                }
+            },
+        });
+    } catch (err) {
+        console.error('[chapter-review] 失败:', err);
+        showToast(err.message || '审稿请求失败', 'error');
+    }
 }
 

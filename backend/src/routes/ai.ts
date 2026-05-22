@@ -1780,7 +1780,7 @@ aiRouter.post('/chapter-review', async (c) => {
   });
 
   const modelConfig = await resolveModelConfig(userId);
-  const agents = ['plot', 'character', 'continuity', 'market'] as const;
+  const agents = ['plot', 'character', 'pacing', 'hook', 'continuity', 'style'] as const;
 
   // 并行调用 4 个审查 Agent
   const results = await Promise.allSettled(
