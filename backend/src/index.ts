@@ -22,6 +22,7 @@ import presetModelsRoutes from './routes/preset-models.js';
 import { initScheduler } from './jobs/scheduler.js';
 import { initAgentWorker } from './jobs/agentWorker.js';
 import agentJobsRouter from './routes/agent-jobs.js';
+import agentTemplatesRouter from './routes/agent-templates.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '3000');
@@ -66,12 +67,13 @@ app.route('/api/works', metaRoutes);
 app.route('/api/ai', aiRoutes);
 app.route('/api/ai', agentChatRoutes);
 app.route('/api/ai', agentJobsRouter);
+app.route('/api/agent', agentTemplatesRouter);
 app.route('/api/stats', statsRoutes);
 app.route('/api/inspirations', inspirationsRoutes);
 app.route('/api/trends', trendsRoutes);
 app.route('/api/points', pointsRouter);
 app.route('/api/preset-models', presetModelsRoutes);
-// 已废弃：app.route('/api/model-configs', modelConfigRoutes);
+app.route('/api/model-configs', modelConfigRoutes);
 
 // 静态文件托管（前端）
 const frontendPath = join(__dirname, '../../frontend');

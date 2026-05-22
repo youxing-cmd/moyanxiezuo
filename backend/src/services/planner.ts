@@ -227,8 +227,18 @@ async function callPlannerOnce(query: string, workContext: string | null): Promi
 }
 
 export async function planJob(query: string, ctx: PlanContext): Promise<PlanResult> {
-  const workContext = ctx.workId ? await buildWorkContextPrompt(ctx.workId, ctx.userId) : null;
+  // 1. 先尝试匹配模板
+  const { matchTemplate, incrementTemplateUse } = await import('./agentTemplates.js');
+  const tmpl = await matchTemplate(ctx.userId, query);
+  if (tmpl?.plan) {
+    console.log(`[planner] 命中模板: ${tmpl.name}`);
+    await incrementTemplateUse(tmpl.id);
+    const plan = tmpl.plan as Record<string, unknown>;
+    return validatePlan(plan, query);
+  }
 
+  // 2. 无模板匹配，调用 LLM 生成
+  const workContext = ctx.workId ? await buildWorkContextPrompt(ctx.workId, ctx.userId) : null;
   try {
     return await callPlannerOnce(query, workContext);
   } catch (err) {
