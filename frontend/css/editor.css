@@ -2428,6 +2428,32 @@
     opacity: 0.85;
 }
 
+.review-issue-edit {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+}
+
+.review-issue-textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 1.6;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.review-issue-edit-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
 .review-empty {
     text-align: center;
     padding: 40px 20px;

@@ -153,9 +153,16 @@
                             <div class="review-issue-suggestion">${escapeHtml(issue.suggestion || '无')}</div>
                         </div>
                         <div class="review-issue-actions">
-                            <button class="review-issue-btn review-issue-btn-primary" data-adopt data-title="${escapeHtml(issue.title)}" data-suggestion="${escapeHtml(issue.suggestion || '')}">采纳建议</button>
+                            <button class="review-issue-btn review-issue-btn-primary" data-adopt data-evidence="${escapeHtml(issue.evidence || '')}" data-suggestion="${escapeHtml(issue.suggestion || '')}">采纳建议</button>
                             <button class="review-issue-btn" data-locate data-evidence="${escapeHtml(issue.evidence || '')}">定位原文</button>
                             <button class="review-issue-btn review-issue-btn-muted" data-ignore>忽略</button>
+                        </div>
+                        <div class="review-issue-edit" style="display:none;" data-edit-area>
+                            <textarea class="review-issue-textarea" data-edit-input placeholder="在此编辑修改内容...">${escapeHtml(issue.suggestion || '')}</textarea>
+                            <div class="review-issue-edit-actions">
+                                <button class="review-issue-btn review-issue-btn-primary" data-apply>应用修改</button>
+                                <button class="review-issue-btn review-issue-btn-muted" data-cancel-edit>取消</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -199,12 +206,40 @@
         panel.querySelectorAll('[data-adopt]').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const title = btn.dataset.title || '';
-                const suggestion = btn.dataset.suggestion || '';
-                panel.dispatchEvent(new CustomEvent('issue-adopt', {
+                const detailEl = btn.closest('.review-issue-detail');
+                const editArea = detailEl?.querySelector('[data-edit-area]');
+                if (editArea) {
+                    editArea.style.display = 'block';
+                    const input = editArea.querySelector('[data-edit-input]');
+                    if (input) input.focus();
+                }
+            });
+        });
+
+        panel.querySelectorAll('[data-apply]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const detailEl = btn.closest('.review-issue-detail');
+                const input = detailEl?.querySelector('[data-edit-input]');
+                const evidence = detailEl?.closest('.review-issue-item')?.querySelector('[data-adopt]')?.dataset.evidence || '';
+                const revised = input?.value?.trim() || '';
+                if (!revised) {
+                    showToast('修改内容不能为空', 'warning');
+                    return;
+                }
+                panel.dispatchEvent(new CustomEvent('issue-apply', {
                     bubbles: true,
-                    detail: { title, suggestion },
+                    detail: { evidence, revised },
                 }));
+            });
+        });
+
+        panel.querySelectorAll('[data-cancel-edit]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const detailEl = btn.closest('.review-issue-detail');
+                const editArea = detailEl?.querySelector('[data-edit-area]');
+                if (editArea) editArea.style.display = 'none';
             });
         });
 
@@ -251,8 +286,8 @@
         if (options.onReReview) {
             currentPanel.addEventListener('re-review', options.onReReview);
         }
-        if (options.onAdopt) {
-            currentPanel.addEventListener('issue-adopt', (e) => options.onAdopt(e.detail));
+        if (options.onApply) {
+            currentPanel.addEventListener('issue-apply', (e) => options.onApply(e.detail));
         }
         if (options.onLocate) {
             currentPanel.addEventListener('issue-locate', (e) => options.onLocate(e.detail));

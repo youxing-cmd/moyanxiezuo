@@ -3196,19 +3196,47 @@ async function runChapterReview(workId, chapterId) {
 
         window.jzReviewPanel.open(data, {
             onReReview: () => runChapterReview(workId, chapterId),
-            onAdopt: (detail) => {
-                showToast(`已采纳：${detail.title?.slice(0, 20) || '建议'}`, 'success');
-                // TODO: 调用 AI 生成修改后的文本并展示差异对比
+            onApply: (detail) => {
+                const { evidence, revised } = detail;
+                if (!evidence || !revised) {
+                    showToast('缺少原文或修改内容', 'warning');
+                    return;
+                }
+                // 在编辑器中查找 evidence 并替换为 revised
+                const editor = document.getElementById('editorArea');
+                if (!editor) {
+                    showToast('编辑器未找到', 'error');
+                    return;
+                }
+                const html = editor.innerHTML;
+                // 优先按纯文本匹配，若找不到则尝试简化匹配
+                let searchText = evidence.trim();
+                let replaced = false;
+                if (html.includes(searchText)) {
+                    editor.innerHTML = html.replace(searchText, escapeHtml(revised));
+                    replaced = true;
+                } else if (searchText.length > 20) {
+                    // 尝试用前 20 字匹配
+                    const short = searchText.slice(0, 20);
+                    if (html.includes(short)) {
+                        editor.innerHTML = html.replace(short, escapeHtml(revised));
+                        replaced = true;
+                    }
+                }
+                if (replaced) {
+                    editor.dispatchEvent(new Event('input', { bubbles: true }));
+                    showToast('已应用修改', 'success');
+                } else {
+                    showToast('未找到对应原文片段，请手动替换', 'warning');
+                }
             },
             onLocate: (detail) => {
                 if (!detail.evidence) return;
-                // 在编辑器中查找并高亮证据文本
                 const editor = document.getElementById('editorArea');
                 if (!editor) return;
                 const text = editor.innerText || '';
                 const idx = text.indexOf(detail.evidence.slice(0, 30));
                 if (idx >= 0) {
-                    // 简单滚动定位（后续可升级为精确高亮）
                     editor.focus();
                     showToast('已定位到原文区域', 'success');
                 } else {
