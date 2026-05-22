@@ -3171,8 +3171,21 @@ function injectDiffPanel(resultId, originalText) {
     showToast('已生成差异对比，请查看编辑器下方', 'info');
 }
 
+// 从写作页左栏触发审稿
+function runChapterReviewFromTree(preset) {
+    if (!currentWorkId || !currentChapterId) {
+        showToast('请先选择一个章节', 'warning');
+        return;
+    }
+    const labels = { short: '短篇爆款', male: '男频爽点', female: '女频情感线' };
+    const label = labels[preset] || '标准六维度';
+    showToast(`开始${label}审稿...`, 'info');
+    // 目前所有方案都调用同一 API，后续可扩展 preset 参数
+    runChapterReview(currentWorkId, currentChapterId, preset);
+}
+
 // ===== 章节审稿 =====
-async function runChapterReview(workId, chapterId) {
+async function runChapterReview(workId, chapterId, _preset) {
     if (!window.jzReviewPanel) {
         showToast('审稿组件未加载', 'error');
         return;

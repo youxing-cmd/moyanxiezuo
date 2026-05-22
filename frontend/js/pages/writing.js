@@ -227,6 +227,32 @@
                                     </div>
                                 </div>
 
+                                <!-- 编辑工作台 -->
+                                <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('review')">
+                                    <span class="vol-arrow" id="treeToggle-review">▶</span>
+                                    <span class="tree-icon">📋</span>
+                                    <span style="flex:1">编辑工作台</span>
+                                </div>
+                                <div class="tree-section-body tree-section-sub-body" id="treeBody-review" style="display:none;">
+                                    <div style="padding:6px 8px;">
+                                        <div style="display:flex; flex-direction:column; gap:4px;">
+                                            <button class="btn btn-primary btn-sm" style="padding:4px 8px; font-size:11px; justify-content:center;" onclick="runChapterReviewFromTree()">
+                                                🔍 标准六维度审稿
+                                            </button>
+                                            <button class="btn btn-ghost btn-sm" style="padding:4px 8px; font-size:11px; justify-content:center;" onclick="runChapterReviewFromTree('short')">
+                                                ⚡ 短篇爆款检查
+                                            </button>
+                                            <button class="btn btn-ghost btn-sm" style="padding:4px 8px; font-size:11px; justify-content:center;" onclick="runChapterReviewFromTree('male')">
+                                                🔥 男频爽点检查
+                                            </button>
+                                            <button class="btn btn-ghost btn-sm" style="padding:4px 8px; font-size:11px; justify-content:center;" onclick="runChapterReviewFromTree('female')">
+                                                💕 女频情感线检查
+                                            </button>
+                                        </div>
+                                        <div id="reviewSummary" style="margin-top:8px; font-size:11px; color:var(--text-muted);"></div>
+                                    </div>
+                                </div>
+
                             </div>
 
                         </div>
