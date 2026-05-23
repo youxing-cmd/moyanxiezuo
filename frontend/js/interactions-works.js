@@ -484,12 +484,44 @@ async function loadDashboardStats() {
         // === Agent 建议 ===
         const suggestionsEl = document.getElementById('pendingSuggestionsList');
         if (suggestionsEl && stats.pendingSuggestions) {
+            // 一次性绑定事件委托
+            if (!suggestionsEl._hasEventDelegate) {
+                suggestionsEl._hasEventDelegate = true;
+                suggestionsEl.addEventListener('click', (e) => {
+                    const btn = e.target.closest('button[data-action]');
+                    if (btn) {
+                        const action = btn.dataset.action;
+                        const id = parseInt(btn.dataset.id, 10);
+                        const workId = btn.dataset.workId ? parseInt(btn.dataset.workId, 10) : null;
+                        const content = btn.dataset.content || '';
+                        e.stopPropagation();
+                        if (action === 'accept') {
+                            acceptSuggestion(id, content, workId);
+                        } else if (action === 'ignore') {
+                            ignoreSuggestion(id);
+                            loadDashboard();
+                        }
+                        return;
+                    }
+                    const link = e.target.closest('a[data-action="history"]');
+                    if (link) {
+                        e.preventDefault();
+                        showSuggestionHistory();
+                        return;
+                    }
+                    const row = e.target.closest('.suggestion-row');
+                    if (row && row.dataset.workId) {
+                        enterWriting(parseInt(row.dataset.workId, 10));
+                    }
+                });
+            }
+
             if (stats.pendingSuggestions.length === 0) {
                 suggestionsEl.innerHTML = `
                     <div style="padding:16px; text-align:center; color:var(--text-muted); font-size:13px;">
                         暂无新建议
                         <div style="margin-top:4px;">
-                            <a href="javascript:void(0)" onclick="showSuggestionHistory()" style="font-size:12px; color:var(--accent);">查看历史</a>
+                            <a href="javascript:void(0)" data-action="history" style="font-size:12px; color:var(--accent);">查看历史</a>
                         </div>
                     </div>
                 `;
@@ -503,20 +535,20 @@ async function loadDashboardStats() {
                 suggestionsEl.innerHTML = stats.pendingSuggestions.map(s => {
                     const safeContent = s.content ? escapeHtml(s.content.slice(0, 60)) + '...' : '点击查看详情';
                     return `
-                    <div class="list-item" style="padding:10px 14px; background:var(--accent-soft, rgba(99,102,241,0.08)); border-left:3px solid var(--accent);">
-                        <div class="list-content" style="cursor:pointer;" onclick="enterWriting(${s.workId})">
+                    <div class="list-item suggestion-row" data-work-id="${s.workId}" style="padding:10px 14px; background:var(--accent-soft, rgba(99,102,241,0.08)); border-left:3px solid var(--accent); cursor:pointer;">
+                        <div class="list-content">
                             <div class="list-title" style="font-size:13px;">${triggerLabels[s.triggerType] || 'Agent 建议'}</div>
                             <div class="list-meta">${safeContent}</div>
                         </div>
                         <div style="display:flex; gap:6px; flex-shrink:0;">
-                            <button class="btn btn-primary btn-sm" onclick="acceptSuggestion(${s.id}, '${(s.content || '').replace(/'/g, "\\'")}', ${s.workId}); event.stopPropagation();">采纳</button>
-                            <button class="btn btn-ghost btn-sm" onclick="ignoreSuggestion(${s.id}); loadDashboard(); event.stopPropagation();">忽略</button>
+                            <button class="btn btn-primary btn-sm" data-action="accept" data-id="${s.id}" data-work-id="${s.workId || ''}" data-content="${escapeHtml(s.content || '').replace(/"/g, '&quot;')}">采纳</button>
+                            <button class="btn btn-ghost btn-sm" data-action="ignore" data-id="${s.id}">忽略</button>
                         </div>
                     </div>
                     `;
                 }).join('') + `
                     <div style="padding:8px 14px; text-align:center;">
-                        <a href="javascript:void(0)" onclick="showSuggestionHistory()" style="font-size:12px; color:var(--accent);">查看历史</a>
+                        <a href="javascript:void(0)" data-action="history" style="font-size:12px; color:var(--accent);">查看历史</a>
                     </div>
                 `;
             }
