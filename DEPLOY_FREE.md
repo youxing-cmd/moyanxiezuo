@@ -27,6 +27,8 @@ postgresql://user:password/host/dbname?sslmode=require
 
 ## 2. 同步数据库表
 
+### 首次部署
+
 在本机项目根目录执行：
 
 ```bash
@@ -35,7 +37,18 @@ npm ci
 DATABASE_URL='把 Neon 连接串粘到这里' npm run db:push
 ```
 
-如果已经安装过依赖，可以跳过 `npm ci`。
+`db:push` 会直接把当前 schema 推送到数据库，适合空库首次初始化。
+
+### 后续升级（已有数据）
+
+**不要用 `db:push`**，否则可能丢失数据或造成 schema 不一致。应该执行已生成的迁移文件：
+
+```bash
+cd backend
+DATABASE_URL='把 Neon 连接串粘到这里' npm run db:migrate
+```
+
+升级前建议先备份数据库。Neon 控制台支持一键创建分支/快照。
 
 ## 3. 创建 Hugging Face Space
 
@@ -100,6 +113,30 @@ https://你的用户名-你的space名.hf.space
 ```text
 https://你的用户名-你的space名.hf.space/health
 ```
+
+## L8 主动 Agent 升级说明（2025-05-23）
+
+如果数据库在 2025-05-23 之前已初始化，需要执行 migration 0001 添加 L8 表和字段：
+
+```bash
+cd backend
+DATABASE_URL='你的连接串' npm run db:migrate
+```
+
+Migration 0001 包含以下变更：
+
+| 变更 | 说明 |
+|------|------|
+| `CREATE TABLE agent_suggestions` | 主动建议记录 |
+| `CREATE TABLE creation_activities` | 创作活动日志 |
+| `CREATE TABLE user_proactive_settings` | 用户主动层设置 |
+| `agent_jobs.trigger_type` | 触发类型标记 |
+| `agent_jobs.suggestion_id` | 关联建议 ID |
+| `users.daily_goal` | 每日写作目标 |
+| `users.weekly_goal_days` | 每周写作天数目标 |
+| `users.writing_memory` | 个人写作记忆（JSON） |
+
+所有 ALTER TABLE 都带默认值，不会破坏已有数据。
 
 ## 6. 常见问题
 
