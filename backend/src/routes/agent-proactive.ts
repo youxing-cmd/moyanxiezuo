@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { userProactiveSettings } from '../db/schema.js';
+import { userProactiveSettings, agentSuggestions } from '../db/schema.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { eq } from 'drizzle-orm';
-import { updateSession, reportIdle, reportParagraph } from '../jobs/proactiveScanner.js';
+import { eq, desc, and, or, gt } from 'drizzle-orm';
+import { updateSession, reportIdle, reportParagraph, getActiveSessions } from '../jobs/proactiveScanner.js';
+import { shouldSuppress } from '../services/agentFatigue.js';
+import { getProactiveSettings } from '../services/agentTriggers.js';
 
 const proactiveRouter = new Hono();
 proactiveRouter.use('*', authMiddleware);
@@ -84,6 +86,59 @@ proactiveRouter.post('/events/paragraph', async (c) => {
   const { wordCount, chapterId } = body;
   reportParagraph(userId, wordCount || 0, chapterId);
   return c.json({ success: true });
+});
+
+// GET /api/proactive/debug — 开发态调试（仅 ?debug=1 时前端调用）
+proactiveRouter.get('/debug', async (c) => {
+  const userId = c.get('userId');
+
+  const session = getActiveSessions().get(userId);
+  const settings = await getProactiveSettings(userId);
+  const suppressed = await shouldSuppress(userId);
+
+  const recentSuggestions = await db.select().from(agentSuggestions)
+    .where(eq(agentSuggestions.userId, userId))
+    .orderBy(desc(agentSuggestions.createdAt))
+    .limit(10);
+
+  const cooldownMs = settings.fatigueCooldownMinutes * 60000;
+  const recentIgnored = await db.select().from(agentSuggestions)
+    .where(and(
+      eq(agentSuggestions.userId, userId),
+      or(eq(agentSuggestions.status, 'ignored'), eq(agentSuggestions.status, 'dismissed')),
+      gt(agentSuggestions.createdAt, new Date(Date.now() - cooldownMs))
+    ));
+
+  return c.json({
+    session: session ? {
+      workId: session.workId,
+      chapterId: session.chapterId,
+      lastTypingAt: session.lastTypingAt,
+      currentWordCount: session.currentWordCount,
+      lastConflictWordCount: session.lastConflictWordCount,
+      idleSeconds: Math.round((Date.now() - session.lastTypingAt.getTime()) / 1000),
+    } : null,
+    settings: {
+      enabled: settings.enabled,
+      idleTimeoutSeconds: settings.idleTimeoutSeconds,
+      stagnationWordCount: settings.stagnationWordCount,
+      fatigueThreshold: settings.fatigueThreshold,
+      fatigueCooldownMinutes: settings.fatigueCooldownMinutes,
+    },
+    fatigue: {
+      suppressed,
+      threshold: settings.fatigueThreshold,
+      cooldownMinutes: settings.fatigueCooldownMinutes,
+      recentIgnoredCount: recentIgnored.length,
+    },
+    recentSuggestions: recentSuggestions.map(s => ({
+      id: s.id,
+      triggerType: s.triggerType,
+      status: s.status,
+      content: s.content ? s.content.slice(0, 200) : null,
+      createdAt: s.createdAt,
+    })),
+  });
 });
 
 export default proactiveRouter;

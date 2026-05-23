@@ -2955,15 +2955,18 @@ function setupDebugPanel() {
     btn.onclick = async () => {
         if (!currentWorkId) { showToast('请先选择作品', 'warning'); return; }
         try {
-            const res = await api('/ai/debug/preview-context', {
-                method: 'POST',
-                body: {
-                    workId: Number(currentWorkId),
-                    chapterId: currentChapterId ? Number(currentChapterId) : undefined,
-                    taskType: 'continue',
-                    currentText: document.getElementById('editorArea')?.textContent?.slice(-500) || '',
-                }
-            });
+            const [res, l8] = await Promise.all([
+                api('/ai/debug/preview-context', {
+                    method: 'POST',
+                    body: {
+                        workId: Number(currentWorkId),
+                        chapterId: currentChapterId ? Number(currentChapterId) : undefined,
+                        taskType: 'continue',
+                        currentText: document.getElementById('editorArea')?.textContent?.slice(-500) || '',
+                    }
+                }),
+                api('/proactive/debug').catch(() => null)
+            ]);
             let html = '<div style="max-height:60vh; overflow-y:auto; font-size:12px; line-height:1.6;">';
             // L3 风格 DNA（独立卡片）
             html += `<div style="margin-bottom:12px; padding:10px; background:rgba(168,85,247,0.08); border-radius:var(--radius-sm); border-left:3px solid #a855f7;">`;
@@ -3025,8 +3028,49 @@ function setupDebugPanel() {
             html += `<div style="margin-top:6px; color:var(--text-secondary); white-space:pre-wrap; font-size:11px;">${escapeHtml(res.userContext || '')}</div>`;
             html += `</details></div>`;
             html += `<div style="font-size:11px; color:var(--text-muted);">usedTables: ${(res.usedTables || []).join(', ')}</div>`;
+
+            // L8 主动 Agent 调试
+            if (l8) {
+                html += `<div style="margin-top:16px; padding:10px; background:rgba(236,72,153,0.06); border-radius:var(--radius-sm); border-left:3px solid #ec4899;">`;
+                html += `<div style="font-weight:600; color:#ec4899; margin-bottom:8px;">🤖 L8 主动 Agent</div>`;
+                // Session
+                if (l8.session) {
+                    html += `<div style="font-size:11px; margin-bottom:8px;">`;
+                    html += `<div>workId: ${l8.session.workId}, chapterId: ${l8.session.chapterId}</div>`;
+                    html += `<div>字数: ${l8.session.currentWordCount}, idle: ${l8.session.idleSeconds}s / ${l8.settings?.idleTimeoutSeconds}s</div>`;
+                    html += `<div>lastTyping: ${new Date(l8.session.lastTypingAt).toLocaleTimeString()}</div>`;
+                    html += `</div>`;
+                } else {
+                    html += `<div style="font-size:11px; color:var(--text-muted); margin-bottom:8px;">⚠️ 无活跃 session（未上报 typing）</div>`;
+                }
+                // Settings
+                html += `<div style="font-size:11px; margin-bottom:8px;">`;
+                html += `<span style="color:var(--text-muted);">设置:</span> enabled=${l8.settings?.enabled}, stagnation=${l8.settings?.stagnationWordCount}, threshold=${l8.settings?.fatigueThreshold}, cooldown=${l8.settings?.fatigueCooldownMinutes}min`;
+                html += `</div>`;
+                // Fatigue
+                html += `<div style="font-size:11px; margin-bottom:8px; color:${l8.fatigue?.suppressed ? 'var(--danger)' : 'var(--success)'}">`;
+                html += `疲劳: ${l8.fatigue?.suppressed ? '🚫 已抑制' : '✅ 正常'} (${l8.fatigue?.recentIgnoredCount}/${l8.fatigue?.threshold} 忽略)`;
+                html += `</div>`;
+                // Recent suggestions
+                html += `<div style="font-size:11px;">`;
+                html += `<div style="color:var(--text-muted); margin-bottom:4px;">最近建议 (${l8.recentSuggestions?.length || 0}):</div>`;
+                if (l8.recentSuggestions?.length) {
+                    l8.recentSuggestions.forEach(s => {
+                        const statusColor = s.status === 'accepted' ? 'var(--success)' : s.status === 'ignored' ? 'var(--danger)' : 'var(--warning)';
+                        html += `<div style="padding:4px 6px; background:var(--bg-tertiary); border-radius:4px; margin-bottom:4px;">`;
+                        html += `<span style="color:${statusColor}; font-weight:500;">[${s.triggerType}]</span> <span style="color:var(--text-muted);">${s.status}</span>`;
+                        if (s.content) html += `<div style="color:var(--text-secondary); margin-top:2px;">${escapeHtml(s.content)}</div>`;
+                        html += `</div>`;
+                    });
+                } else {
+                    html += `<div style="color:var(--text-muted);">无</div>`;
+                }
+                html += `</div>`;
+                html += `</div>`;
+            }
+
             html += '</div>';
-            showModal('ContextBuilder 记忆分层预览', html);
+            showModal('ContextBuilder + L8 调试面板', html);
         } catch (err) {
             showToast('调试请求失败: ' + (err.message || '未知错误'), 'danger');
         }
