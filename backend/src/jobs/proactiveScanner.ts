@@ -175,9 +175,12 @@ export async function runProactiveScan() {
       ));
     if (recentSameType.length > 0) continue;
 
+    const idleSeconds = session.lastTypingAt.getTime() === 0
+      ? 300 // 使用默认 idleTimeout，与 checkTriggers 保持一致
+      : (now - session.lastTypingAt.getTime()) / 1000;
     const jobId = await createSuggestionJob(userId, session.workId, trigger, {
       wordCount: session.currentWordCount,
-      idleSeconds: (now - session.lastTypingAt.getTime()) / 1000,
+      idleSeconds,
     });
     if (jobId) {
       session.lastTriggeredAt[trigger] = now;

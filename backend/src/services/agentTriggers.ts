@@ -32,7 +32,10 @@ export async function checkTriggers(ctx: TriggerContext): Promise<TriggerType | 
   if (!settings.enabled) return null;
 
   // 1. idle_timeout
-  const idleSeconds = (Date.now() - ctx.lastTypingAt.getTime()) / 1000;
+  // reportIdle 会把 lastTypingAt 回拨到 1970，此时应视为刚好达到超时阈值
+  const idleSeconds = ctx.lastTypingAt.getTime() === 0
+    ? settings.idleTimeoutSeconds
+    : (Date.now() - ctx.lastTypingAt.getTime()) / 1000;
   if (idleSeconds >= settings.idleTimeoutSeconds) {
     return 'idle_timeout';
   }

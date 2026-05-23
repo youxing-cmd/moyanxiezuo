@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { db } from '../db/index.js';
 import { works, chapters, chapterVersions, creationActivities, users, agentSuggestions } from '../db/schema.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { eq, desc, isNull, and, inArray, asc, gte, lt } from 'drizzle-orm';
+import { eq, desc, isNull, isNotNull, and, inArray, asc, gte, lt } from 'drizzle-orm';
 
 // 返回本地时区 YYYY-MM-DD（避免 toISOString 用 UTC 日期导致时区偏差）
 function formatLocalDate(d: Date): string {
@@ -39,18 +39,14 @@ statsRouter.get('/', async (c) => {
     updatedAt: w.updatedAt,
   }));
 
-  // 章节活跃日期（用于连续天数和7天打卡）
-  const workIds = workList.map(w => w.id);
-  const chapterList = workIds.length > 0
-    ? await db.select({ updatedAt: chapters.updatedAt })
-        .from(chapters)
-        .where(inArray(chapters.workId, workIds))
-    : [];
-
+  // 创作活跃日期（用于连续天数和7天打卡）——统一基于 creation_activities，口径与今日推进一致
   const dateSet = new Set<string>();
-  for (const c of chapterList) {
-    if (c.updatedAt) {
-      dateSet.add(formatLocalDate(new Date(c.updatedAt)));
+  const allActivityDates = await db.select({ createdAt: creationActivities.createdAt })
+    .from(creationActivities)
+    .where(eq(creationActivities.userId, userId));
+  for (const a of allActivityDates) {
+    if (a.createdAt) {
+      dateSet.add(formatLocalDate(new Date(a.createdAt)));
     }
   }
 
@@ -76,47 +72,29 @@ statsRouter.get('/', async (c) => {
     last7Days.push({ date: ds, hasWriting: dateSet.has(ds) });
   }
 
-  // 今日新增字数（基于 chapter_versions）
+  // 今日新增字数（基于 creation_activities，与今日推进口径一致）
+  const now = new Date();
   let todayWords = 0;
-  const chapterIdList = workIds.length > 0
-    ? await db.select({ id: chapters.id })
-        .from(chapters)
-        .where(inArray(chapters.workId, workIds))
-    : [];
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const chapterIds = chapterIdList.map(c => c.id);
-  if (chapterIds.length > 0) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+  const todayWriteActivities = await db.select({ metadata: creationActivities.metadata })
+    .from(creationActivities)
+    .where(
+      and(
+        eq(creationActivities.userId, userId),
+        eq(creationActivities.type, 'write'),
+        gte(creationActivities.createdAt, today),
+        lt(creationActivities.createdAt, tomorrow)
+      )
+    );
 
-    const allVersions = await db.select({
-      chapterId: chapterVersions.chapterId,
-      wordCount: chapterVersions.wordCount,
-      createdAt: chapterVersions.createdAt,
-    })
-      .from(chapterVersions)
-      .where(inArray(chapterVersions.chapterId, chapterIds))
-      .orderBy(asc(chapterVersions.createdAt));
-
-    // 按章节分组（过滤掉 createdAt 为 null 的情况）
-    const byChapter: Record<number, Array<{ wordCount: number; createdAt: Date }>> = {};
-    for (const v of allVersions) {
-      if (!v.createdAt) continue;
-      if (!byChapter[v.chapterId]) byChapter[v.chapterId] = [];
-      byChapter[v.chapterId].push({ wordCount: v.wordCount, createdAt: v.createdAt });
-    }
-
-    for (const cidStr in byChapter) {
-      const versions = byChapter[Number(cidStr)];
-      const todayVersions = versions.filter(v => v.createdAt >= today && v.createdAt < tomorrow);
-      if (todayVersions.length === 0) continue;
-      const todayLast = todayVersions[todayVersions.length - 1];
-      const prevVersions = versions.filter(v => v.createdAt < today);
-      const prevLast = prevVersions.length > 0 ? prevVersions[prevVersions.length - 1] : null;
-      todayWords += todayLast.wordCount - (prevLast?.wordCount || 0);
-    }
+  for (const a of todayWriteActivities) {
+    const meta = a.metadata as Record<string, unknown> | null;
+    // 优先取 addedWords，新建章节时 fallback 到 wordCount
+    const added = (meta?.addedWords as number) ?? (meta?.wordCount as number) ?? 0;
+    todayWords += Math.max(0, added);
   }
 
   // === primaryWork：最近编辑的作品及其最新章节 ===
@@ -283,11 +261,6 @@ statsRouter.get('/', async (c) => {
   const weeklyActiveDays = activeDaySet.size;
 
   // === 今日创作活动 ===
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
   const todayActivityList = await db.select()
     .from(creationActivities)
     .where(
@@ -310,13 +283,14 @@ statsRouter.get('/', async (c) => {
     createdAt: a.createdAt,
   }));
 
-  // 今日未处理的 Agent 建议
+  // 今日未处理的 Agent 建议（过滤内容未生成的）
   const pendingSuggestionsList = await db.select()
     .from(agentSuggestions)
     .where(
       and(
         eq(agentSuggestions.userId, userId),
         eq(agentSuggestions.status, 'pending'),
+        isNotNull(agentSuggestions.content),
         gte(agentSuggestions.createdAt, today)
       )
     )

@@ -3,6 +3,7 @@ import { db } from '../db/index.js';
 import { creationActivities } from '../db/schema.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { eq, desc, and, gte, lt } from 'drizzle-orm';
+import { works, chapters } from '../db/schema.js';
 
 const activitiesRouter = new Hono();
 activitiesRouter.use('*', authMiddleware);
@@ -15,6 +16,29 @@ activitiesRouter.post('/', async (c) => {
   const { workId, chapterId, type, title, metadata } = body;
   if (!type || !title) {
     return c.json({ error: 'type 和 title 必填' }, 400);
+  }
+
+  // 归属校验
+  if (workId) {
+    const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+    if (!work || work.userId !== userId) {
+      return c.json({ error: '作品不存在或无权限' }, 403);
+    }
+  }
+  if (chapterId) {
+    const [chapter] = await db.select().from(chapters).where(eq(chapters.id, chapterId)).limit(1);
+    if (!chapter) {
+      return c.json({ error: '章节不存在' }, 403);
+    }
+    if (workId && chapter.workId !== workId) {
+      return c.json({ error: '章节不属于该作品' }, 403);
+    }
+    if (!workId) {
+      const [parentWork] = await db.select().from(works).where(eq(works.id, chapter.workId)).limit(1);
+      if (!parentWork || parentWork.userId !== userId) {
+        return c.json({ error: '章节不存在或无权限' }, 403);
+      }
+    }
   }
 
   const [result] = await db.insert(creationActivities).values({

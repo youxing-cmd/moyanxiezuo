@@ -528,12 +528,14 @@ worksRouter.post('/:id/chapters', async (c) => {
   const [maxOrder] = await db.select().from(chapters).where(eq(chapters.workId, workId)).orderBy(desc(chapters.orderIndex)).limit(1);
   const orderIndex = maxOrder ? maxOrder.orderIndex + 1 : 0;
 
+  const wordCount = content.length || 0;
   const [result] = await db.insert(chapters).values({
     workId,
     title,
     content,
     volume,
     orderIndex,
+    wordCount,
   }).returning();
 
   await db.update(works).set({
@@ -549,7 +551,7 @@ worksRouter.post('/:id/chapters', async (c) => {
     chapterId: result.id,
     type: 'write',
     title: `创建了章节「${title}」`,
-    metadata: { wordCount: content.length || 0, action: 'create_chapter' },
+    metadata: { wordCount, addedWords: wordCount, action: 'create_chapter' },
   });
 
   return c.json(result);
