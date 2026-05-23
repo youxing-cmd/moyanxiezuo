@@ -278,14 +278,15 @@ statsRouter.get('/', async (c) => {
 
   const activeDaySet = new Set<string>();
   for (const a of weekActivityList) {
-    if (a.createdAt) activeDaySet.add(a.createdAt.toISOString().split('T')[0]);
+    if (a.createdAt) activeDaySet.add(formatLocalDate(new Date(a.createdAt)));
   }
   const weeklyActiveDays = activeDaySet.size;
 
   // === 今日创作活动 ===
   const now = new Date();
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
 
   const todayActivityList = await db.select()
     .from(creationActivities)
