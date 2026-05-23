@@ -559,6 +559,38 @@ async function saveWritingGoals() {
     }
 }
 
+async function saveProactiveSetting(enabled) {
+    try {
+        await api('/proactive/settings', {
+            method: 'PUT',
+            body: { enabled }
+        });
+        showToast(enabled ? 'AI 主动建议已开启' : 'AI 主动建议已关闭', 'success');
+        updateProactiveToggleUI(enabled);
+    } catch (err) {
+        showToast(err.message || '保存失败', 'danger');
+    }
+}
+
+function updateProactiveToggleUI(enabled) {
+    const bg = document.getElementById('proactiveToggleBg');
+    const knob = document.getElementById('proactiveToggleKnob');
+    if (bg) bg.style.background = enabled ? 'var(--accent)' : 'var(--border)';
+    if (knob) knob.style.left = enabled ? '20px' : '2px';
+}
+
+async function loadProactiveSetting() {
+    try {
+        const settings = await api('/proactive/settings');
+        const enabled = settings.enabled !== false;
+        const toggle = document.getElementById('proactiveAgentToggle');
+        if (toggle) toggle.checked = enabled;
+        updateProactiveToggleUI(enabled);
+    } catch (err) {
+        // 静默失败，默认关闭
+    }
+}
+
 function showAvatarPicker() {
     const emojis = ['🧑','👩','🧙','🧛','🧟','🤖','👽','🐉','🦊','🐺','🦁','🐯','🐼','🐨','🐸','🐙','🦄','🦅','🦉','🐦','🌟','🔥','⚡','❄️','🌊','🌙','☀️','🌈'];
     const grid = emojis.map(e => `<div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-tertiary);transition:background 0.15s;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='var(--bg-tertiary)'" onclick="document.getElementById('editAvatar').value='${e}';saveProfile('avatar')">${e}</div>

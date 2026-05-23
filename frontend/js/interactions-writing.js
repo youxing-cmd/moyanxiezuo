@@ -533,6 +533,11 @@ async function switchChapter(chapterId, title, content, outline) {
     // 重新初始化自动保存 timer（指向新章节）
     setupAutoSave();
 
+    // 挂载 L8 主动建议层
+    if (typeof attachProactiveAgent === 'function') {
+        attachProactiveAgent(editorArea);
+    }
+
     // 初始化撤销栈
     initEditorUndoStack();
 

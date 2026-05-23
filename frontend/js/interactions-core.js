@@ -351,6 +351,7 @@ async function initPageInteractions(page) {
 
     if (page === 'profile') {
         loadProfileStats();
+        loadProactiveSetting();
     }
 
     if (page === 'works') {

@@ -22,8 +22,11 @@ import modelConfigRoutes from './routes/model-configs.js';
 import presetModelsRoutes from './routes/preset-models.js';
 import { initScheduler } from './jobs/scheduler.js';
 import { initAgentWorker } from './jobs/agentWorker.js';
+import { startProactiveScanner } from './jobs/proactiveScanner.js';
 import agentJobsRouter from './routes/agent-jobs.js';
 import agentTemplatesRouter from './routes/agent-templates.js';
+import proactiveRouter from './routes/agent-proactive.js';
+import suggestionsRouter from './routes/agent-suggestions.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '3000');
@@ -69,6 +72,8 @@ app.route('/api/ai', aiRoutes);
 app.route('/api/ai', agentChatRoutes);
 app.route('/api/ai', agentJobsRouter);
 app.route('/api/agent', agentTemplatesRouter);
+app.route('/api/proactive', proactiveRouter);
+app.route('/api/suggestions', suggestionsRouter);
 app.route('/api/stats', statsRoutes);
 app.route('/api/activities', activitiesRoutes);
 app.route('/api/inspirations', inspirationsRoutes);
@@ -116,6 +121,7 @@ if (process.env.NODE_ENV !== 'test') {
   initAgentWorker().catch((err) => {
     console.error('[index] Agent Worker 初始化失败:', err);
   });
+  startProactiveScanner();
 }
 
 // 未捕获异常上报 Sentry

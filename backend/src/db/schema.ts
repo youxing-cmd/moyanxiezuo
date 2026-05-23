@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, boolean, jsonb, real } from 'drizzle-orm/pg-core';
+import { pgTable, serial, integer, text, timestamp, boolean, jsonb, real, primaryKey } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
@@ -319,6 +319,8 @@ export const agentJobs = pgTable('agent_jobs', {
   planId: integer('plan_id'),
   progress: integer('progress').notNull().default(0),
   errorMsg: text('error_msg').notNull().default(''),
+  triggerType: text('trigger_type'),
+  suggestionId: integer('suggestion_id'),
   createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
   updatedAt: timestamp('updated_at', { mode: 'date' }).$defaultFn(() => new Date()),
   finishedAt: timestamp('finished_at', { mode: 'date' }),
@@ -361,6 +363,29 @@ export const agentPlanTemplates = pgTable('agent_plan_templates', {
   plan: jsonb('plan').$type<Record<string, unknown>>().notNull().default({}),
   useCount: integer('use_count').notNull().default(0),
   createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
+});
+
+export const agentSuggestions = pgTable('agent_suggestions', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull(),
+  workId: integer('work_id'),
+  triggerType: text('trigger_type').notNull(),
+  triggerData: jsonb('trigger_data').$type<Record<string, unknown>>().notNull().default({}),
+  jobId: integer('job_id'),
+  content: text('content'),
+  artifactId: integer('artifact_id'),
+  status: text('status').notNull().default('pending'),
+  createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
+});
+
+export const userProactiveSettings = pgTable('user_proactive_settings', {
+  userId: integer('user_id').notNull().unique().references(() => users.id, { onDelete: 'cascade' }),
+  enabled: boolean('enabled').notNull().default(true),
+  idleTimeoutSeconds: integer('idle_timeout_seconds').notNull().default(300),
+  stagnationWordCount: integer('stagnation_word_count').notNull().default(2000),
+  fatigueThreshold: integer('fatigue_threshold').notNull().default(3),
+  fatigueCooldownMinutes: integer('fatigue_cooldown_minutes').notNull().default(60),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).$defaultFn(() => new Date()),
 });
 
 export const creationActivities = pgTable('creation_activities', {

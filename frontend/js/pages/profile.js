@@ -165,6 +165,17 @@
                         </label>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border);">
+                        <div>
+                            <div style="font-size: 13px; color: var(--text-secondary);">AI 主动建议</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">写作时 Agent 主动检测卡文、剧情停滞并给出建议</div>
+                        </div>
+                        <label style="position: relative; display: inline-block; width: 40px; height: 22px; cursor: pointer; flex-shrink: 0;">
+                            <input type="checkbox" id="proactiveAgentToggle" style="opacity: 0; width: 0; height: 0;" onchange="saveProactiveSetting(this.checked)">
+                            <span id="proactiveToggleBg" style="position: absolute; inset: 0; background: var(--border); border-radius: 22px; transition: 0.2s;"></span>
+                            <span id="proactiveToggleKnob" style="position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: white; border-radius: 50%; transition: 0.2s;"></span>
+                        </label>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border);">
                         <span style="font-size: 13px; color: var(--text-secondary);">AI 模型管理</span>
                         <button class="btn btn-ghost btn-sm" onclick="switchPage('modelConfigs')">选择模型</button>
                     </div>
