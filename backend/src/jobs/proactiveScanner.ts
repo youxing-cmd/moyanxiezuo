@@ -4,6 +4,7 @@ import { eq, and, gt } from 'drizzle-orm';
 import { checkTriggers, type TriggerContext } from '../services/agentTriggers.js';
 import { shouldSuppress } from '../services/agentFatigue.js';
 import { createSuggestionJob } from '../services/agentSuggestionJob.js';
+import { checkLogicConflict, checkStyleDrift } from '../services/agentHighCostChecks.js';
 
 // 活跃会话内存映射：userId -> { workId, lastTypingAt, wordCount, lastConflictWordCount }
 const activeSessions = new Map<number, {
@@ -30,10 +31,61 @@ export function reportIdle(userId: number) {
   // idle 事件不改变 lastTypingAt，让扫描器自然检测
 }
 
+// 高成本检测频率限制：userId -> lastCheckTimestamp
+const highCostCheckCooldown = new Map<number, number>();
+const HIGH_COST_COOLDOWN_MS = 5 * 60 * 1000; // 5 分钟
+
 export function reportParagraph(userId: number, wordCount: number) {
   const existing = activeSessions.get(userId);
   if (existing) {
     existing.currentWordCount = wordCount;
+  }
+
+  // 异步触发高成本检测（不阻塞）
+  runHighCostChecks(userId).catch(() => {});
+}
+
+async function runHighCostChecks(userId: number) {
+  const session = activeSessions.get(userId);
+  if (!session) return;
+
+  // 频率限制
+  const lastCheck = highCostCheckCooldown.get(userId) || 0;
+  if (Date.now() - lastCheck < HIGH_COST_COOLDOWN_MS) return;
+
+  // 疲劳检测
+  const suppressed = await shouldSuppress(userId);
+  if (suppressed) return;
+
+  highCostCheckCooldown.set(userId, Date.now());
+
+  // 1. 逻辑矛盾检测
+  try {
+    const conflict = await checkLogicConflict(session.workId);
+    if (conflict.hasConflict && conflict.description) {
+      await createSuggestionJob(userId, session.workId, 'logic_conflict', {
+        description: conflict.description,
+        wordCount: session.currentWordCount,
+      });
+      console.log(`[proactive] logic_conflict detected for user ${userId}`);
+      return; // 一次只触发一种
+    }
+  } catch (err) {
+    console.error('[proactive] logic_conflict check error:', err);
+  }
+
+  // 2. 风格偏移检测
+  try {
+    const drift = await checkStyleDrift(session.workId, session.workId);
+    if (drift.hasDrift && drift.description) {
+      await createSuggestionJob(userId, session.workId, 'style_drift', {
+        description: drift.description,
+        wordCount: session.currentWordCount,
+      });
+      console.log(`[proactive] style_drift detected for user ${userId}`);
+    }
+  } catch (err) {
+    console.error('[proactive] style_drift check error:', err);
   }
 }
 

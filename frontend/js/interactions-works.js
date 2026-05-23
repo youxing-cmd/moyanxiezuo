@@ -443,6 +443,9 @@ async function loadDashboardStats() {
             }
         }
 
+        // === Profile 页：写作记忆 ===
+        loadProfileWritingMemory();
+
         // === 今日推进 ===
         const todayActivitiesEl = document.getElementById('todayActivitiesList');
         if (todayActivitiesEl && stats.todayActivities) {
@@ -477,8 +480,175 @@ async function loadDashboardStats() {
                 }).join('');
             }
         }
+
+        // === Agent 建议 ===
+        const suggestionsEl = document.getElementById('pendingSuggestionsList');
+        if (suggestionsEl && stats.pendingSuggestions) {
+            if (stats.pendingSuggestions.length === 0) {
+                suggestionsEl.innerHTML = '';
+            } else {
+                const triggerLabels = {
+                    idle_timeout: '卡文提示',
+                    plot_stagnation: '剧情停滞',
+                    logic_conflict: '逻辑矛盾',
+                    style_drift: '风格偏移',
+                };
+                suggestionsEl.innerHTML = stats.pendingSuggestions.map(s => `
+                    <div class="list-item" style="cursor:default; padding:10px 14px; background:var(--accent-soft, rgba(99,102,241,0.08)); border-left:3px solid var(--accent);"
+                         onclick="enterWriting(${s.workId})"
+                    >
+                        <div class="list-content">
+                            <div class="list-title" style="font-size:13px;">${triggerLabels[s.triggerType] || 'Agent 建议'}</div>
+                            <div class="list-meta">${s.content ? escapeHtml(s.content.slice(0, 40)) + '...' : '点击查看详情'}</div>
+                        </div>
+                        <button class="btn btn-primary btn-sm">查看</button>
+                    </div>
+                `).join('');
+            }
+        }
     } catch (err) {
         console.log('统计加载失败:', err.message);
+    }
+}
+
+// ========== 个人写作记忆 ==========
+async function loadProfileWritingMemory() {
+    const container = document.getElementById('profileWritingMemory');
+    if (!container) return;
+
+    const user = currentUser || {};
+    const memory = user.writingMemory || {};
+
+    // 如果没有数据，提示重新分析
+    if (!memory.aiPreferenceSummary) {
+        container.innerHTML = `
+            <div style="color:var(--text-muted); font-size:13px; margin-bottom:12px;">
+                还没有写作记忆。创建作品并保存章节后，系统会自动分析你的写作偏好。
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="refreshWritingMemory()">立即分析</button>
+        `;
+        return;
+    }
+
+    const dna = memory.aggregatedStyleDNA || {};
+    const banned = memory.bannedExpressions || [];
+
+    let html = `
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <div style="font-size:12px; color:var(--text-secondary);">
+                <div style="margin-bottom:4px;">题材：${(memory.genrePreferences || []).join('、') || '—'}</div>
+                <div style="margin-bottom:4px;">视角：${memory.perspectivePreference === 'first' ? '第一人称' : memory.perspectivePreference === 'third' ? '第三人称' : '—'}</div>
+            </div>
+    `;
+
+    if (dna.avgSentenceLength || dna.dialogueRatio) {
+        html += `
+            <div style="font-size:12px; color:var(--text-secondary);">
+                文风：平均句长 ${dna.avgSentenceLength || 0} 字 · 对话占比 ${Math.round((dna.dialogueRatio || 0) * 100)}%
+            </div>
+        `;
+    }
+
+    if (dna.signatureWords && dna.signatureWords.length > 0) {
+        html += `
+            <div style="font-size:12px; color:var(--text-secondary);">
+                标志性用词：${dna.signatureWords.slice(0, 6).join('、')}
+            </div>
+        `;
+    }
+
+    html += `
+            <div style="font-size:12px; color:var(--text-secondary); margin-top:4px;">
+                <div style="margin-bottom:6px;">禁用表达：</div>
+                <div style="display:flex; flex-wrap:wrap; gap:6px;" id="bannedExpressionsTags">
+    `;
+
+    if (banned.length === 0) {
+        html += `<span style="font-size:11px; color:var(--text-muted);">暂无</span>`;
+    } else {
+        banned.forEach((expr, idx) => {
+            html += `
+                <span style="display:inline-flex; align-items:center; gap:4px; padding:3px 10px; background:var(--bg-tertiary); border-radius:20px; font-size:11px; color:var(--text-secondary); border:1px solid var(--border);">
+                    ${escapeHtml(expr)}
+                    <span style="cursor:pointer; color:var(--text-muted);" onclick="removeBannedExpression(${idx})">×</span>
+                </span>
+            `;
+        });
+    }
+
+    html += `
+                </div>
+                <div style="display:flex; gap:6px; margin-top:8px;">
+                    <input type="text" class="form-input" id="newBannedExpression" placeholder="添加禁用表达" style="flex:1; font-size:12px; padding:6px 10px;">
+                    <button class="btn btn-ghost btn-sm" onclick="addBannedExpression()">添加</button>
+                </div>
+            </div>
+
+            <div style="display:flex; gap:8px; margin-top:8px;">
+                <button class="btn btn-primary btn-sm" onclick="refreshWritingMemory()">重新分析</button>
+                <button class="btn btn-ghost btn-sm" onclick="saveWritingMemory()">保存偏好</button>
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+async function refreshWritingMemory() {
+    try {
+        showToast('正在分析写作偏好...', 'info');
+        const res = await api('/auth/me/memory/refresh', { method: 'POST' });
+        if (res.success) {
+            // 更新 currentUser 缓存
+            if (currentUser) currentUser.writingMemory = res.memory;
+            loadProfileWritingMemory();
+            showToast('分析完成', 'success');
+        }
+    } catch (err) {
+        showToast('分析失败: ' + err.message, 'error');
+    }
+}
+
+function addBannedExpression() {
+    const input = document.getElementById('newBannedExpression');
+    const val = input?.value.trim();
+    if (!val) return;
+
+    const user = currentUser || {};
+    const memory = user.writingMemory || {};
+    const banned = [...(memory.bannedExpressions || [])];
+    if (banned.includes(val)) {
+        showToast('该表达已存在', 'warning');
+        return;
+    }
+    banned.push(val);
+    user.writingMemory = { ...memory, bannedExpressions: banned };
+    loadProfileWritingMemory();
+    if (input) input.value = '';
+}
+
+function removeBannedExpression(index) {
+    const user = currentUser || {};
+    const memory = user.writingMemory || {};
+    const banned = [...(memory.bannedExpressions || [])];
+    banned.splice(index, 1);
+    user.writingMemory = { ...memory, bannedExpressions: banned };
+    loadProfileWritingMemory();
+}
+
+async function saveWritingMemory() {
+    try {
+        const user = currentUser || {};
+        const memory = user.writingMemory || {};
+        await api('/auth/me/memory', {
+            method: 'PUT',
+            body: JSON.stringify({
+                bannedExpressions: memory.bannedExpressions || [],
+            }),
+        });
+        showToast('偏好已保存', 'success');
+    } catch (err) {
+        showToast('保存失败: ' + err.message, 'error');
     }
 }
 

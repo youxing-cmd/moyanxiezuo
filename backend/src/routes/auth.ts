@@ -150,8 +150,54 @@ auth.get('/me', authMiddleware, async (c) => {
     subscriptionExpireAt: user.subscriptionExpireAt,
     dailyGoal: user.dailyGoal,
     weeklyGoalDays: user.weeklyGoalDays,
+    writingMemory: user.writingMemory || {},
     createdAt: user.createdAt,
   });
+});
+
+// PUT /api/auth/me/memory — 更新写作记忆
+auth.put('/me/memory', authMiddleware, async (c) => {
+  const userId = c.get('userId');
+  const body = await c.req.json();
+
+  const allowedFields = [
+    'genrePreferences',
+    'perspectivePreference',
+    'pacingPreference',
+    'protagonistTypes',
+    'bannedExpressions',
+    'narrativeHabits',
+    'aiPreferenceSummary',
+    'aggregatedStyleDNA',
+  ];
+
+  const updateData: Record<string, unknown> = {};
+  for (const key of allowedFields) {
+    if (body[key] !== undefined) {
+      updateData[key] = body[key];
+    }
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return c.json({ error: '参数错误' }, 400);
+  }
+
+  const [user] = await db.select({ writingMemory: users.writingMemory }).from(users).where(eq(users.id, userId)).limit(1);
+  const existing = (user?.writingMemory || {}) as Record<string, unknown>;
+
+  await db.update(users).set({
+    writingMemory: { ...existing, ...updateData } as any,
+  }).where(eq(users.id, userId));
+
+  return c.json({ success: true });
+});
+
+// POST /api/auth/me/memory/refresh — 重新分析写作记忆
+auth.post('/me/memory/refresh', authMiddleware, async (c) => {
+  const userId = c.get('userId');
+  const { refreshUserWritingMemory } = await import('../services/writingMemory.js');
+  const memory = await refreshUserWritingMemory(userId);
+  return c.json({ success: true, memory });
 });
 
 // PUT /api/auth/me/goals — 更新创作目标

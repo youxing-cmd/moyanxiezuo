@@ -19,6 +19,21 @@ export const users = pgTable('users', {
   feishuUnionId: text('feishu_union_id').unique(),
   dailyGoal: integer('daily_goal').notNull().default(0),
   weeklyGoalDays: integer('weekly_goal_days').notNull().default(0),
+  writingMemory: jsonb('writing_memory').$type<{
+    genrePreferences?: string[];
+    perspectivePreference?: string;
+    pacingPreference?: string;
+    protagonistTypes?: string[];
+    bannedExpressions?: string[];
+    narrativeHabits?: string[];
+    aiPreferenceSummary?: string;
+    aggregatedStyleDNA?: {
+      avgSentenceLength?: number;
+      dialogueRatio?: number;
+      signatureWords?: string[];
+      sampleSize?: number;
+    };
+  }>().notNull().default({}),
   createdAt: timestamp('created_at', { mode: 'date' }).$defaultFn(() => new Date()),
 });
 

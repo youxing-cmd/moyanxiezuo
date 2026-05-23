@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { works, chapters, chapterVersions, creationActivities, users } from '../db/schema.js';
+import { works, chapters, chapterVersions, creationActivities, users, agentSuggestions } from '../db/schema.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { eq, desc, isNull, and, inArray, asc, gte, lt } from 'drizzle-orm';
 
@@ -301,6 +301,27 @@ statsRouter.get('/', async (c) => {
     createdAt: a.createdAt,
   }));
 
+  // 今日未处理的 Agent 建议
+  const pendingSuggestionsList = await db.select()
+    .from(agentSuggestions)
+    .where(
+      and(
+        eq(agentSuggestions.userId, userId),
+        eq(agentSuggestions.status, 'pending'),
+        gte(agentSuggestions.createdAt, today)
+      )
+    )
+    .orderBy(desc(agentSuggestions.createdAt))
+    .limit(3);
+
+  const pendingSuggestions = pendingSuggestionsList.map(s => ({
+    id: s.id,
+    triggerType: s.triggerType,
+    content: s.content,
+    workId: s.workId,
+    createdAt: s.createdAt,
+  }));
+
   return c.json({
     workCount,
     totalWords,
@@ -315,6 +336,7 @@ statsRouter.get('/', async (c) => {
     dailyGoal,
     weeklyGoalDays,
     weeklyActiveDays,
+    pendingSuggestions,
   });
 });
 

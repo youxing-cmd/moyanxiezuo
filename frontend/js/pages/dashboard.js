@@ -70,6 +70,18 @@
                 </div>
             </div>
 
+            <!-- Agent 建议 -->
+            <div class="card" style="margin-bottom: 24px;">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Agent 建议</div>
+                        <div class="card-subtitle">等待你查看的主动建议</div>
+                    </div>
+                </div>
+                <div id="pendingSuggestionsList">
+                </div>
+            </div>
+
             <!-- 近7天打卡 + 最近编辑 -->
             <div class="grid-2" style="margin-bottom: 24px;">
                 <div class="card">
