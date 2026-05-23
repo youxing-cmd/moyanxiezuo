@@ -8,6 +8,13 @@
       "when": 1779434677223,
       "tag": "0000_flowery_sharon_carter",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779504314649,
+      "tag": "0001_talented_norrin_radd",
+      "breakpoints": true
     }
   ]
 }
