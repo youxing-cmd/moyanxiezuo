@@ -716,16 +716,16 @@ async function saveWritingMemory() {
 
 // ========== 目标设置 ==========
 function showGoalSettings() {
-    const dailyGoal = localStorage.getItem('jz_daily_goal_words') || '300';
-    const weeklyGoal = localStorage.getItem('jz_weekly_goal_days') || '5';
+    const dailyGoal = currentUser?.dailyGoal ?? 0;
+    const weeklyGoal = currentUser?.weeklyGoalDays ?? 0;
     showModal('创作目标', `
         <div style="display:flex; flex-direction:column; gap:16px;">
             <div>
                 <label style="display:block; font-size:13px; color:var(--text-secondary); margin-bottom:6px;">每日目标字数</label>
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
                     ${[100, 300, 500, 1000].map(v => `
-                        <button class="btn ${v === parseInt(dailyGoal) ? 'btn-primary' : 'btn-ghost'}"
-                            onclick="saveGoalSettings(${v}, null); showGoalSettings();"
+                        <button class="btn ${v === dailyGoal ? 'btn-primary' : 'btn-ghost'}"
+                            onclick="saveGoalSettings(${v}, null)"
                             style="flex:1; min-width:60px;">${v}</button>
                     `).join('')}
                 </div>
@@ -734,8 +734,8 @@ function showGoalSettings() {
                 <label style="display:block; font-size:13px; color:var(--text-secondary); margin-bottom:6px;">每周目标天数</label>
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
                     ${[3, 5, 6, 7].map(v => `
-                        <button class="btn ${v === parseInt(weeklyGoal) ? 'btn-primary' : 'btn-ghost'}"
-                            onclick="saveGoalSettings(null, ${v}); showGoalSettings();"
+                        <button class="btn ${v === weeklyGoal ? 'btn-primary' : 'btn-ghost'}"
+                            onclick="saveGoalSettings(null, ${v})"
                             style="flex:1; min-width:60px;">${v}</button>
                     `).join('')}
                 </div>
@@ -745,11 +745,20 @@ function showGoalSettings() {
     `);
 }
 
-function saveGoalSettings(dailyGoal, weeklyGoal) {
-    if (dailyGoal !== null) localStorage.setItem('jz_daily_goal_words', String(dailyGoal));
-    if (weeklyGoal !== null) localStorage.setItem('jz_weekly_goal_days', String(weeklyGoal));
-    // 刷新当前页面数据
-    loadDashboardStats();
+async function saveGoalSettings(dailyGoal, weeklyGoal) {
+    const body = {};
+    if (dailyGoal !== null) body.dailyGoal = dailyGoal;
+    if (weeklyGoal !== null) body.weeklyGoalDays = weeklyGoal;
+    try {
+        await api('/auth/me/goals', { method: 'PUT', body });
+        if (dailyGoal !== null) currentUser.dailyGoal = dailyGoal;
+        if (weeklyGoal !== null) currentUser.weeklyGoalDays = weeklyGoal;
+        showToast('创作目标已保存', 'success');
+        loadDashboardStats();
+        showGoalSettings();
+    } catch (err) {
+        showToast(err.message || '保存失败', 'danger');
+    }
 }
 
 async function loadProfileStats() {
