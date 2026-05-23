@@ -112,6 +112,13 @@
             </div>
 
             <div class="card" style="margin-bottom: 20px;">
+                <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 16px;">我的写作记忆</div>
+                <div id="profileWritingMemory">
+                    <div style="color:var(--text-muted); font-size:13px;">加载中...</div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom: 20px;">
                 <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 16px;">创作目标</div>
                 <div style="display: flex; flex-direction: column; gap: 16px;">
                     <div>

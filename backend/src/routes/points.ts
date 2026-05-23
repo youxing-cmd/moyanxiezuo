@@ -148,29 +148,22 @@ const DAILY_EARN_LIMITS: Record<string, number> = {
   save_chapter: 20,
 };
 
-// POST /api/points/earn — 完成任务获得积分
-const earnSchema = z.object({
-  task: z.enum(['create_work', 'save_chapter']),
-  relatedId: z.number().optional(),
-});
+const REWARDS: Record<string, { amount: number; description: string }> = {
+  create_work: { amount: 50, description: '创建作品' },
+  save_chapter: { amount: 20, description: '完成章节' },
+};
 
-pointsRouter.post('/earn', async (c) => {
-  const userId = c.get('userId');
-  const body = await c.req.json();
-  const parsed = earnSchema.safeParse(body);
-  if (!parsed.success) return c.json({ error: '参数错误' }, 400);
-
-  const { task, relatedId } = parsed.data;
+// 内部发放积分（绑定真实业务动作，带每日上限检查）
+export async function awardPointsForAction(
+  userId: number,
+  task: 'create_work' | 'save_chapter',
+  relatedId?: number
+): Promise<boolean> {
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  if (!user) return c.json({ error: '用户不存在' }, 404);
-
-  const REWARDS: Record<string, { amount: number; description: string }> = {
-    create_work: { amount: 50, description: '创建作品' },
-    save_chapter: { amount: 20, description: '完成章节' },
-  };
+  if (!user) return false;
 
   const reward = REWARDS[task];
-  if (!reward) return c.json({ error: '未知任务类型' }, 400);
+  if (!reward) return false;
 
   // 校验每日上限
   const dailyLimit = DAILY_EARN_LIMITS[task];
@@ -179,6 +172,25 @@ pointsRouter.post('/earn', async (c) => {
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // 同一 relatedId 同一天同一任务只发一次（防重复保存刷分）
+    if (relatedId !== undefined) {
+      const [{ dupCount }] = await db.select({ dupCount: sql<number>`count(*)` })
+        .from(pointTransactions)
+        .where(
+          and(
+            eq(pointTransactions.userId, userId),
+            eq(pointTransactions.type, 'earn'),
+            eq(pointTransactions.description, reward.description),
+            eq(pointTransactions.relatedId, relatedId),
+            gte(pointTransactions.createdAt, today),
+            lt(pointTransactions.createdAt, tomorrow)
+          )
+        );
+      if ((dupCount ?? 0) > 0) {
+        return false;
+      }
+    }
 
     const [{ count }] = await db.select({ count: sql<number>`count(*)` })
       .from(pointTransactions)
@@ -193,7 +205,7 @@ pointsRouter.post('/earn', async (c) => {
       );
 
     if ((count ?? 0) >= dailyLimit) {
-      return c.json({ error: `今日${reward.description}奖励已达上限（${dailyLimit}次）` }, 429);
+      return false;
     }
   }
 
@@ -205,12 +217,12 @@ pointsRouter.post('/earn', async (c) => {
     .where(eq(users.id, userId));
 
   await recordPointTransaction(userId, 'earn', reward.amount, reward.description, relatedId);
+  return true;
+}
 
-  return c.json({
-    amount: reward.amount,
-    points: user.points + reward.amount,
-    description: reward.description,
-  });
+// POST /api/points/earn — 已废弃，积分由业务动作自动发放
+pointsRouter.post('/earn', async (c) => {
+  return c.json({ error: '该接口已废弃，积分由业务动作自动发放' }, 410);
 });
 
 // POST /api/points/spend — 消费积分（AI调用等）

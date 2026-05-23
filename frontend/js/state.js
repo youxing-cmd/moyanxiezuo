@@ -7,6 +7,7 @@ let currentWorkId = null;
 let currentChapterId = null;
 let currentWorkData = null;
 let currentChapterTitle = '';
+let pendingWritingAction = null;
 let isCrossChapterScrollEnabled = false;
 let isScrollingToNextChapter = false;
 let isContentDirty = false;

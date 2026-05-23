@@ -3,7 +3,7 @@
 // 不处理：模型选择、积分扣减、流式响应、上下文截断（由调用方按模型预算执行）
 
 import { db } from '../db/index.js';
-import { works, chapters, outlines, characters, chapterSummaries, workStyleDNA, aiArtifacts } from '../db/schema.js';
+import { works, chapters, outlines, characters, chapterSummaries, workStyleDNA, aiArtifacts, users } from '../db/schema.js';
 import { eq, and, desc, lt } from 'drizzle-orm';
 import { formatStyleDNAPrompt } from './styleDNA.js';
 
@@ -93,6 +93,17 @@ async function buildBaseContext(workId: number, userId: number): Promise<string>
       pacingPattern: dna.pacingPattern ?? [],
       sampleSize: dna.sampleSize,
     });
+  }
+
+  // 注入个人写作记忆
+  const [user] = await db.select({ writingMemory: users.writingMemory }).from(users).where(eq(users.id, userId)).limit(1);
+  const memory = user?.writingMemory as Record<string, unknown> | null;
+  if (memory?.aiPreferenceSummary) {
+    prompt += `\n【个人写作记忆】以下是从该作者所有作品中总结的写作偏好，AI 生成时必须匹配这些特征。\n${memory.aiPreferenceSummary}\n`;
+  }
+  const banned = memory?.bannedExpressions as string[] | undefined;
+  if (banned && banned.length > 0) {
+    prompt += `【禁用表达】禁止在输出中出现以下表达：${banned.join('、')}。\n`;
   }
 
   // 注入已采纳的 AI 生成文件（artifacts）

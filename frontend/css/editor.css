@@ -524,6 +524,11 @@
     outline: none;
 }
 
+/* 定位原文高亮：不修改 DOM，只改 ::selection 颜色 */
+.editor-highlighting ::selection {
+    background: rgba(245, 158, 11, 0.5) !important;
+}
+
 #editorArea p {
     margin: 0 0 0.8em;
     text-indent: 2em;
@@ -2480,5 +2485,4 @@
     font-size: 11px;
     font-weight: 500;
     flex-shrink: 0;
-}
 }

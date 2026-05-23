@@ -144,7 +144,7 @@ window.jzEditor = {
     },
 
     // ===== 查找替换（文本级别） =====
-    findReplace(args) {
+    findAndReplace(args) {
         const el = this._getEl();
         if (!el) return JSON.stringify({ ok: false, error: '编辑器未挂载' });
         const pattern = (args && typeof args.pattern === 'string') ? args.pattern : '';
