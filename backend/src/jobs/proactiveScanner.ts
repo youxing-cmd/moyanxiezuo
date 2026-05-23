@@ -138,8 +138,9 @@ export async function runProactiveScan() {
   const now = Date.now();
 
   for (const [userId, session] of activeSessions) {
-    // 清理超过 30 分钟无活动的会话
-    if (now - session.lastTypingAt.getTime() > 30 * 60 * 1000) {
+    // 清理超过 30 分钟无活动的会话（排除 reportIdle 人为回拨的 1970）
+    const idleMs = now - session.lastTypingAt.getTime();
+    if (idleMs > 30 * 60 * 1000 && session.lastTypingAt.getTime() > 0) {
       activeSessions.delete(userId);
       continue;
     }
