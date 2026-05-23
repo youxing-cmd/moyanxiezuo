@@ -6,9 +6,10 @@ import { shouldSuppress } from '../services/agentFatigue.js';
 import { createSuggestionJob } from '../services/agentSuggestionJob.js';
 import { checkLogicConflict, checkStyleDrift } from '../services/agentHighCostChecks.js';
 
-// 活跃会话内存映射：userId -> { workId, lastTypingAt, wordCount, lastConflictWordCount }
+// 活跃会话内存映射：userId -> { workId, chapterId, lastTypingAt, wordCount, lastConflictWordCount }
 const activeSessions = new Map<number, {
   workId: number;
+  chapterId: number;
   lastTypingAt: Date;
   currentWordCount: number;
   lastConflictWordCount: number;
@@ -16,11 +17,13 @@ const activeSessions = new Map<number, {
 
 export function updateSession(userId: number, data: {
   workId: number;
+  chapterId?: number;
   wordCount?: number;
 }) {
   const existing = activeSessions.get(userId);
   activeSessions.set(userId, {
     workId: data.workId,
+    chapterId: data.chapterId ?? existing?.chapterId ?? 0,
     lastTypingAt: new Date(),
     currentWordCount: data.wordCount ?? existing?.currentWordCount ?? 0,
     lastConflictWordCount: existing?.lastConflictWordCount ?? 0,
@@ -28,17 +31,22 @@ export function updateSession(userId: number, data: {
 }
 
 export function reportIdle(userId: number) {
-  // idle 事件不改变 lastTypingAt，让扫描器自然检测
+  // 把 lastTypingAt 回拨到 idleTimeout 之前，让 scanner 立即检测到 idle
+  const session = activeSessions.get(userId);
+  if (session) {
+    session.lastTypingAt = new Date(0);
+  }
 }
 
 // 高成本检测频率限制：userId -> lastCheckTimestamp
 const highCostCheckCooldown = new Map<number, number>();
 const HIGH_COST_COOLDOWN_MS = 5 * 60 * 1000; // 5 分钟
 
-export function reportParagraph(userId: number, wordCount: number) {
+export function reportParagraph(userId: number, wordCount: number, chapterId?: number) {
   const existing = activeSessions.get(userId);
   if (existing) {
     existing.currentWordCount = wordCount;
+    if (chapterId) existing.chapterId = chapterId;
   }
 
   // 异步触发高成本检测（不阻塞）
@@ -48,6 +56,10 @@ export function reportParagraph(userId: number, wordCount: number) {
 async function runHighCostChecks(userId: number) {
   const session = activeSessions.get(userId);
   if (!session) return;
+  if (!session.chapterId) {
+    console.log(`[proactive] user ${userId} 无 chapterId，跳过高成本检测`);
+    return;
+  }
 
   // 频率限制
   const lastCheck = highCostCheckCooldown.get(userId) || 0;
@@ -61,7 +73,7 @@ async function runHighCostChecks(userId: number) {
 
   // 1. 逻辑矛盾检测
   try {
-    const conflict = await checkLogicConflict(session.workId);
+    const conflict = await checkLogicConflict(session.chapterId);
     if (conflict.hasConflict && conflict.description) {
       await createSuggestionJob(userId, session.workId, 'logic_conflict', {
         description: conflict.description,
@@ -76,7 +88,7 @@ async function runHighCostChecks(userId: number) {
 
   // 2. 风格偏移检测
   try {
-    const drift = await checkStyleDrift(session.workId, session.workId);
+    const drift = await checkStyleDrift(session.chapterId, session.workId);
     if (drift.hasDrift && drift.description) {
       await createSuggestionJob(userId, session.workId, 'style_drift', {
         description: drift.description,

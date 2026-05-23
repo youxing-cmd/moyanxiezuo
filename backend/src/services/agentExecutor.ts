@@ -1,5 +1,5 @@
 import { db } from '../db/index.js';
-import { agentJobs, agentPlanSteps, agentStepEvents, aiArtifacts } from '../db/schema.js';
+import { agentJobs, agentPlanSteps, agentStepEvents, aiArtifacts, agentSuggestions } from '../db/schema.js';
 import { eq, asc } from 'drizzle-orm';
 import { buildWorkContextPrompt } from './contextBuilder.js';
 import { callLLM } from './llm.js';
@@ -13,6 +13,7 @@ interface LoadedJob {
   workId: number | null;
   query: string;
   status: string;
+  suggestionId: number | null;
 }
 
 interface LoadedStep {
@@ -47,6 +48,7 @@ async function loadJob(jobId: number): Promise<{ job: LoadedJob; steps: LoadedSt
       workId: job.workId,
       query: job.query,
       status: job.status,
+      suggestionId: job.suggestionId ?? null,
     },
     steps: steps.map((s) => ({
       id: s.id,
@@ -361,6 +363,17 @@ export async function executeJob(jobId: number): Promise<void> {
           .set({ status: 'done', progress: 100, updatedAt: new Date(), finishedAt: new Date() })
           .where(eq(agentJobs.id, jobId));
         await emitEvent(jobId, null, 'done', {});
+
+        // 如果是 suggestion job，把最终产出回写到 agentSuggestions.content
+        if (job.suggestionId) {
+          const ideaStep = steps.find((s) => s.taskType === 'generate_ideas' && s.status === 'done');
+          const content = ideaStep?.output?.content as string | undefined;
+          if (content) {
+            await db.update(agentSuggestions)
+              .set({ content })
+              .where(eq(agentSuggestions.id, job.suggestionId));
+          }
+        }
       } else {
         // 有 pending 步骤但因依赖阻塞（上游有 failed），标记 job 为 user_blocked，等待用户决定
         const hasFailed = steps.some((s) => s.status === 'failed');

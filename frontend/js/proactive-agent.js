@@ -19,7 +19,7 @@
         if (!currentWorkId || !currentChapterId) return;
         api('/proactive/events/typing', {
             method: 'POST',
-            body: { workId: currentWorkId, wordCount }
+            body: { workId: currentWorkId, chapterId: currentChapterId, wordCount }
         }).catch(() => {});
     }
 
@@ -32,7 +32,7 @@
         if (!currentWorkId || !currentChapterId) return;
         api('/proactive/events/paragraph', {
             method: 'POST',
-            body: { wordCount }
+            body: { wordCount, chapterId: currentChapterId }
         }).catch(() => {});
     }
 

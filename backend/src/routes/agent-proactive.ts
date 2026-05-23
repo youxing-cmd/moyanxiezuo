@@ -63,10 +63,10 @@ proactiveRouter.put('/settings', async (c) => {
 proactiveRouter.post('/events/typing', async (c) => {
   const userId = c.get('userId');
   const body = await c.req.json();
-  const { workId, wordCount } = body;
+  const { workId, chapterId, wordCount } = body;
   if (!workId) return c.json({ error: 'workId required' }, 400);
 
-  updateSession(userId, { workId, wordCount });
+  updateSession(userId, { workId, chapterId, wordCount });
   return c.json({ success: true });
 });
 
@@ -81,8 +81,8 @@ proactiveRouter.post('/events/idle', async (c) => {
 proactiveRouter.post('/events/paragraph', async (c) => {
   const userId = c.get('userId');
   const body = await c.req.json();
-  const { wordCount } = body;
-  reportParagraph(userId, wordCount || 0);
+  const { wordCount, chapterId } = body;
+  reportParagraph(userId, wordCount || 0, chapterId);
   return c.json({ success: true });
 });
 

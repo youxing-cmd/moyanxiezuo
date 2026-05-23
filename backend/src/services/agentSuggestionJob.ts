@@ -1,6 +1,8 @@
 import { db } from '../db/index.js';
 import { agentJobs, agentSuggestions, agentPlanSteps } from '../db/schema.js';
 import type { TriggerType } from './agentTriggers.js';
+import { sendAgentJob } from '../jobs/agentWorker.js';
+import { eq } from 'drizzle-orm';
 
 export async function createSuggestionJob(
   userId: number,
@@ -23,7 +25,7 @@ export async function createSuggestionJob(
     userId,
     workId,
     query: `[proactive] ${triggerType}`,
-    status: 'ready',
+    status: 'planning',
     triggerType,
     suggestionId: suggestion.id,
   }).returning();
@@ -43,6 +45,13 @@ export async function createSuggestionJob(
 
   // 4. 更新 suggestion 关联 job
   await db.update(agentSuggestions).set({ jobId: job.id }).where(eq(agentSuggestions.id, suggestion.id));
+
+  // 5. 推入 worker 队列
+  try {
+    await sendAgentJob(job.id);
+  } catch (err) {
+    console.error('[suggestion-job] 推入 worker 队列失败:', err);
+  }
 
   return job.id;
 }
@@ -76,5 +85,3 @@ function buildSuggestionPlan(triggerType: TriggerType) {
       ];
   }
 }
-
-import { eq } from 'drizzle-orm';
