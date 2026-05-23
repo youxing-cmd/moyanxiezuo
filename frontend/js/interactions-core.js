@@ -363,7 +363,12 @@ async function initPageInteractions(page) {
     }
 
     if (page === 'workDetail') {
-        initWorkDetailForm();
+        const activeTab = document.querySelector('#workDetailTabs .tab.active')?.dataset.tab || 'info';
+        if (activeTab === 'info') {
+            initWorkDetailForm();
+        } else if (activeTab === 'dashboard') {
+            initWorkDashboard();
+        }
     }
 
     if (page === 'inspiration') {

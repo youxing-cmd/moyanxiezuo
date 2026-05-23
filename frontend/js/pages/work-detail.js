@@ -1,10 +1,17 @@
     pages.workDetail = () => `
         <div class="page-section" style="max-width:760px; margin:0 auto;">
-            <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
-                <div style="margin-bottom:20px;">
-                    <span id="workDetailModeLabel" style="display:inline-block; padding:3px 10px; border-radius:12px; background:var(--bg-tertiary); color:var(--text-muted); font-size:11px;">新建作品</span>
-                </div>
-                <div class="form-group">
+            <div class="tabs" id="workDetailTabs" style="margin-bottom:16px;">
+                <button class="tab active" data-tab="info" onclick="switchWorkDetailTab('info')">作品信息</button>
+                <button class="tab" data-tab="dashboard" onclick="switchWorkDetailTab('dashboard')">成长仪表盘</button>
+            </div>
+
+            <!-- 作品信息 Tab -->
+            <div id="workDetailInfoTab">
+                <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius-md); padding:24px;">
+                    <div style="margin-bottom:20px;">
+                        <span id="workDetailModeLabel" style="display:inline-block; padding:3px 10px; border-radius:12px; background:var(--bg-tertiary); color:var(--text-muted); font-size:11px;">新建作品</span>
+                    </div>
+                    <div class="form-group">
                     <label class="form-label">作品名称 <span style="color:var(--danger);">*</span></label>
                     <input type="text" class="form-input" id="wdTitle" maxlength="200" placeholder="给你的作品起个名字" />
                 </div>
@@ -50,6 +57,14 @@
                 <div class="form-actions" style="margin-top:24px;">
                     <button class="btn btn-ghost" onclick="cancelWorkDetail()">取消</button>
                     <button class="btn btn-primary" onclick="saveWorkDetail()">保存</button>
+                </div>
+            </div>
+            </div>
+
+            <!-- 成长仪表盘 Tab -->
+            <div id="workDetailDashboardTab" style="display:none;">
+                <div id="workDashboardContent">
+                    <div style="text-align:center; padding:60px; color:var(--text-muted);">加载中...</div>
                 </div>
             </div>
         </div>

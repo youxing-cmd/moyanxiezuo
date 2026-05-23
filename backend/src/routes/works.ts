@@ -246,6 +246,115 @@ worksRouter.get('/:id/style-dna', async (c) => {
   });
 });
 
+// GET /api/works/:id/dashboard — 作品成长仪表盘聚合数据
+worksRouter.get('/:id/dashboard', async (c) => {
+  const userId = c.get('userId');
+  const workId = parseInt(c.req.param('id'));
+
+  const [work] = await db.select().from(works).where(eq(works.id, workId)).limit(1);
+  if (!work || work.userId !== userId) {
+    return c.json({ error: '作品不存在' }, 404);
+  }
+
+  // 章节列表
+  const chapterList = await db.select({
+    id: chapters.id,
+    title: chapters.title,
+    wordCount: chapters.wordCount,
+    orderIndex: chapters.orderIndex,
+    updatedAt: chapters.updatedAt,
+  }).from(chapters).where(eq(chapters.workId, workId)).orderBy(chapters.orderIndex);
+
+  // 风格 DNA
+  const [dna] = await db.select().from(workStyleDNA).where(eq(workStyleDNA.workId, workId)).limit(1);
+
+  // 章节摘要（最近 5 章）
+  const summaryList = await db.select({
+    chapterId: chapterSummaries.chapterId,
+    summary: chapterSummaries.summary,
+    keyEvents: chapterSummaries.keyEvents,
+  }).from(chapterSummaries)
+    .where(inArray(chapterSummaries.chapterId, chapterList.map(c => c.id)))
+    .orderBy(desc(chapterSummaries.createdAt))
+    .limit(5);
+
+  const summaryWithTitle = summaryList.map(s => {
+    const ch = chapterList.find(c => c.id === s.chapterId);
+    return { ...s, title: ch?.title || '' };
+  });
+
+  // 创作活动日期（近30天）
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const activityList = await db.select({ createdAt: creationActivities.createdAt })
+    .from(creationActivities)
+    .where(
+      and(
+        eq(creationActivities.userId, userId),
+        eq(creationActivities.workId, workId),
+      )
+    );
+
+  const activityDates: string[] = [];
+  const seen = new Set<string>();
+  for (const a of activityList) {
+    if (a.createdAt) {
+      const d = new Date(a.createdAt);
+      const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (!seen.has(ds)) {
+        seen.add(ds);
+        activityDates.push(ds);
+      }
+    }
+  }
+
+  // 最近保存版本（各章最近一条，汇总后取前 5）
+  const chapterIds = chapterList.map(c => c.id);
+  let recentVersions: Array<{ chapterTitle: string; wordCount: number; createdAt: Date | null }> = [];
+  if (chapterIds.length > 0) {
+    const versionList = await db.select({
+      chapterId: chapterVersions.chapterId,
+      wordCount: chapterVersions.wordCount,
+      createdAt: chapterVersions.createdAt,
+    }).from(chapterVersions)
+      .where(inArray(chapterVersions.chapterId, chapterIds))
+      .orderBy(desc(chapterVersions.createdAt))
+      .limit(20);
+
+    recentVersions = versionList.map(v => {
+      const ch = chapterList.find(c => c.id === v.chapterId);
+      return { chapterTitle: ch?.title || '', wordCount: v.wordCount, createdAt: v.createdAt };
+    }).slice(0, 5);
+  }
+
+  return c.json({
+    work: {
+      id: work.id,
+      title: work.title,
+      wordCount: work.wordCount,
+      chapterCount: work.chapterCount,
+      genre: work.genre,
+      status: work.status,
+      updatedAt: work.updatedAt,
+    },
+    chapters: chapterList,
+    styleDNA: dna ? {
+      avgSentenceLength: dna.avgSentenceLength,
+      shortSentenceRatio: dna.shortSentenceRatio,
+      longSentenceRatio: dna.longSentenceRatio,
+      dialogueRatio: dna.dialogueRatio,
+      avgParagraphLength: dna.avgParagraphLength,
+      commonPhrases: dna.commonPhrases,
+      signatureWords: dna.signatureWords,
+      sampleSize: dna.sampleSize,
+      updatedAt: dna.updatedAt,
+    } : null,
+    chapterSummaries: summaryWithTitle,
+    activityDates,
+    recentVersions,
+  });
+});
+
 // GET /api/works/:id/chapters/:cid/summary — 读取单个章节摘要
 worksRouter.get('/:id/chapters/:cid/summary', async (c) => {
   const userId = c.get('userId');

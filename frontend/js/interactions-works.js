@@ -1058,6 +1058,202 @@ function initWorkDetailForm() {
     renderWorkDetailTags();
 }
 
+// ========== 作品详情页 Tab 切换 ==========
+function switchWorkDetailTab(tab) {
+    document.querySelectorAll('#workDetailTabs .tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === tab);
+    });
+    const infoEl = document.getElementById('workDetailInfoTab');
+    const dashEl = document.getElementById('workDetailDashboardTab');
+    if (infoEl) infoEl.style.display = tab === 'info' ? '' : 'none';
+    if (dashEl) dashEl.style.display = tab === 'dashboard' ? '' : 'none';
+    if (tab === 'info') {
+        initWorkDetailForm();
+    } else if (tab === 'dashboard') {
+        initWorkDashboard();
+    }
+}
+
+// ========== 作品成长仪表盘 ==========
+async function initWorkDashboard() {
+    const container = document.getElementById('workDashboardContent');
+    if (!container) return;
+    const workId = workDetailState.workId;
+    if (!workId) {
+        container.innerHTML = `<div style="text-align:center; padding:60px; color:var(--text-muted);">请先保存作品信息</div>`;
+        return;
+    }
+
+    container.innerHTML = `<div style="text-align:center; padding:60px; color:var(--text-muted);">加载中...</div>`;
+
+    try {
+        const data = await api(`/works/${workId}/dashboard`);
+        renderWorkDashboard(data);
+    } catch (err) {
+        container.innerHTML = `<div style="text-align:center; padding:60px; color:var(--danger);">加载失败: ${err.message}</div>`;
+    }
+}
+
+function renderWorkDashboard(data) {
+    const container = document.getElementById('workDashboardContent');
+    if (!container) return;
+
+    const work = data.work || {};
+    const chapterList = data.chapters || [];
+    const dna = data.styleDNA;
+    const summaries = data.chapterSummaries || [];
+    const activityDates = new Set(data.activityDates || []);
+    const versions = data.recentVersions || [];
+
+    const totalWords = work.wordCount || 0;
+    const chapterCount = work.chapterCount || 0;
+    const avgWords = chapterCount > 0 ? Math.round(totalWords / chapterCount) : 0;
+    const daysSinceUpdate = work.updatedAt
+        ? Math.floor((Date.now() - new Date(work.updatedAt).getTime()) / 86400000)
+        : '-';
+
+    // 章节字数分布：取前 20 章，计算最大字数用于比例
+    const maxWords = chapterList.length > 0 ? Math.max(...chapterList.map(c => c.wordCount || 0)) : 0;
+    const chapterBars = chapterList.slice(0, 20).map((c, i) => {
+        const h = maxWords > 0 ? Math.round(((c.wordCount || 0) / maxWords) * 100) : 0;
+        return `<div title="${escapeHtml(c.title || '')}: ${c.wordCount || 0}字" style="flex:1; min-width:8px; display:flex; flex-direction:column; align-items:center; gap:2px;">
+            <div style="width:100%; height:80px; display:flex; align-items:flex-end;">
+                <div style="width:100%; height:${h}%; background:linear-gradient(180deg, var(--accent), var(--accent-dark)); border-radius:3px 3px 0 0; opacity:0.85;"></div>
+            </div>
+            <span style="font-size:9px; color:var(--text-muted);">${i + 1}</span>
+        </div>`;
+    }).join('');
+
+    // 30天写作活跃度：6列×5行的格子
+    const heatmapCells = [];
+    for (let i = 0; i < 30; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - (29 - i));
+        const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const active = activityDates.has(ds);
+        heatmapCells.push(`<div title="${ds}" style="width:100%; aspect-ratio:1; border-radius:3px; background:${active ? 'var(--success)' : 'var(--bg-tertiary)'}; border:1px solid var(--border);"></div>`);
+    }
+
+    // 风格 DNA
+    let dnaHtml = '';
+    if (dna) {
+        const sigWords = (dna.signatureWords || []).slice(0, 5).join('、') || '—';
+        dnaHtml = `
+            <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:12px; margin-bottom:12px;">
+                <div style="padding:12px; background:var(--bg-tertiary); border-radius:var(--radius); border:1px solid var(--border);">
+                    <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">平均句长</div>
+                    <div style="font-size:18px; font-weight:700; color:var(--text-primary);">${dna.avgSentenceLength ?? '—'}</div>
+                </div>
+                <div style="padding:12px; background:var(--bg-tertiary); border-radius:var(--radius); border:1px solid var(--border);">
+                    <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">对话占比</div>
+                    <div style="font-size:18px; font-weight:700; color:var(--text-primary);">${dna.dialogueRatio != null ? Math.round(dna.dialogueRatio * 100) + '%' : '—'}</div>
+                </div>
+            </div>
+            <div style="padding:12px; background:var(--bg-tertiary); border-radius:var(--radius); border:1px solid var(--border); margin-bottom:12px;">
+                <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">标志性用词</div>
+                <div style="font-size:13px; color:var(--text-primary);">${sigWords}</div>
+            </div>
+            <div style="font-size:11px; color:var(--text-muted);">样本量: ${dna.sampleSize || 0} 章</div>
+        `;
+    } else {
+        dnaHtml = `<div style="text-align:center; padding:24px; color:var(--text-muted); font-size:13px;">暂无风格 DNA，保存章节后自动生成</div>`;
+    }
+
+    // 章节摘要时间线
+    const summaryHtml = summaries.length > 0
+        ? summaries.map(s => `
+            <div style="padding:12px; background:var(--bg-tertiary); border-radius:var(--radius); border:1px solid var(--border); margin-bottom:8px;">
+                <div style="font-size:12px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">${escapeHtml(s.title || '')}</div>
+                <div style="font-size:12px; color:var(--text-secondary); margin-bottom:4px;">${escapeHtml(s.summary || '').slice(0, 80)}${(s.summary || '').length > 80 ? '...' : ''}</div>
+                ${(s.keyEvents || []).length > 0 ? `<div style="font-size:11px; color:var(--text-muted);">关键事件: ${s.keyEvents.join('、')}</div>` : ''}
+            </div>
+        `).join('')
+        : `<div style="text-align:center; padding:24px; color:var(--text-muted); font-size:13px;">暂无章节摘要</div>`;
+
+    // 最近保存记录
+    const versionHtml = versions.length > 0
+        ? versions.map(v => `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);">
+                <div>
+                    <div style="font-size:12px; color:var(--text-primary);">${escapeHtml(v.chapterTitle || '')}</div>
+                    <div style="font-size:11px; color:var(--text-muted);">${formatTimeAgo(v.createdAt)}</div>
+                </div>
+                <div style="font-size:12px; color:var(--text-secondary); font-weight:600;">${v.wordCount || 0} 字</div>
+            </div>
+        `).join('')
+        : `<div style="text-align:center; padding:24px; color:var(--text-muted); font-size:13px;">暂无保存记录</div>`;
+
+    container.innerHTML = `
+        <div class="grid-2" style="gap:16px;">
+            <!-- 左列 -->
+            <div style="display:flex; flex-direction:column; gap:16px;">
+                <!-- 作品概览 -->
+                <div class="card">
+                    <div class="card-header"><div class="card-title">作品概览</div></div>
+                    <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:12px; padding:0 16px 16px;">
+                        <div style="text-align:center; padding:14px; background:var(--bg-tertiary); border-radius:var(--radius); border:1px solid var(--border);">
+                            <div style="font-size:22px; font-weight:700; color:var(--accent-light);">${totalWords.toLocaleString()}</div>
+                            <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">总字数</div>
+                        </div>
+                        <div style="text-align:center; padding:14px; background:var(--bg-tertiary); border-radius:var(--radius); border:1px solid var(--border);">
+                            <div style="font-size:22px; font-weight:700; color:var(--success);">${chapterCount}</div>
+                            <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">章节数</div>
+                        </div>
+                        <div style="text-align:center; padding:14px; background:var(--bg-tertiary); border-radius:var(--radius); border:1px solid var(--border);">
+                            <div style="font-size:22px; font-weight:700; color:var(--warning);">${avgWords}</div>
+                            <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">平均章字数</div>
+                        </div>
+                        <div style="text-align:center; padding:14px; background:var(--bg-tertiary); border-radius:var(--radius); border:1px solid var(--border);">
+                            <div style="font-size:22px; font-weight:700; color:var(--info);">${daysSinceUpdate}</div>
+                            <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">距更新(天)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 章节字数分布 -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">章节字数分布</div>
+                        ${chapterList.length > 20 ? `<div class="card-subtitle">前20章</div>` : ''}
+                    </div>
+                    <div style="padding:0 16px 16px;">
+                        <div style="display:flex; align-items:flex-end; gap:3px; height:100px; padding-top:8px;">${chapterBars}</div>
+                    </div>
+                </div>
+
+                <!-- 30天活跃度 -->
+                <div class="card">
+                    <div class="card-header"><div class="card-title">近30天写作活跃度</div></div>
+                    <div style="padding:0 16px 16px;">
+                        <div style="display:grid; grid-template-columns: repeat(6, 1fr); gap:4px;">${heatmapCells.join('')}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右列 -->
+            <div style="display:flex; flex-direction:column; gap:16px;">
+                <!-- 风格 DNA -->
+                <div class="card">
+                    <div class="card-header"><div class="card-title">风格 DNA</div></div>
+                    <div style="padding:0 16px 16px;">${dnaHtml}</div>
+                </div>
+
+                <!-- 章节摘要 -->
+                <div class="card">
+                    <div class="card-header"><div class="card-title">章节摘要</div></div>
+                    <div style="padding:0 16px 16px;">${summaryHtml}</div>
+                </div>
+
+                <!-- 最近保存 -->
+                <div class="card">
+                    <div class="card-header"><div class="card-title">最近保存记录</div></div>
+                    <div style="padding:0 16px 16px;">${versionHtml}</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 // 频道→标签映射（按计划简化版）
 const CHANNEL_TAGS = {
     male: ['玄幻', '都市', '修真', '科幻', '历史', '军事', '游戏', '体育', '灵异', '轻小说'],
