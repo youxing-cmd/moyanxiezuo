@@ -73,9 +73,12 @@
         if (!bubble) {
             bubble = document.createElement('div');
             bubble.id = 'proactiveSuggestionBubble';
-            bubble.style.cssText = 'position:fixed; bottom:20px; right:20px; width:320px; max-width:90vw; background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius); padding:16px; z-index:1000; box-shadow:0 8px 24px rgba(0,0,0,0.2); animation:slideIn 0.3s ease;';
+            bubble.style.cssText = 'position:fixed; bottom:20px; right:20px; width:320px; max-width:90vw; background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius); padding:16px; z-index:1000; box-shadow:0 8px 24px rgba(0,0,0,0.2); animation:slideIn 0.3s ease; transition:all 0.3s ease;';
             document.body.appendChild(bubble);
         }
+        bubble.classList.remove('minimized');
+        bubble.style.width = '320px';
+        bubble.style.padding = '16px';
 
         const triggerLabels = {
             idle_timeout: '💡 卡文了吗？',
@@ -87,26 +90,48 @@
         const title = triggerLabels[data.triggerType] || '💡 Agent 建议';
         const content = data.content || 'Agent 为你生成了一个建议';
 
+        const safeContent = escapeHtml(content).replace(/'/g, "\\'");
+
         bubble.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px;">
+            <div id="suggestionBubbleHeader" style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px;">
                 <span style="font-size:14px; font-weight:600; color:var(--text-primary);">${title}</span>
-                <button style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:16px; padding:0;" onclick="dismissSuggestion(${data.id || 0})">✕</button>
+                <div style="display:flex; gap:4px;">
+                    <button style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:14px; padding:0 4px;" onclick="minimizeSuggestionBubble()" title="收起">−</button>
+                    <button style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:14px; padding:0 4px;" onclick="dismissSuggestion(${data.id || 0})" title="关闭">✕</button>
+                </div>
             </div>
-            <div style="font-size:13px; color:var(--text-secondary); line-height:1.5; margin-bottom:12px;">${escapeHtml(content)}</div>
-            <div style="display:flex; gap:8px;">
-                <button class="btn btn-primary btn-sm" style="flex:1;" onclick="acceptSuggestion(${data.id || 0}, '${escapeHtml(content).replace(/'/g, "\\'")}')">采纳</button>
+            <div id="suggestionBubbleBody" style="font-size:13px; color:var(--text-secondary); line-height:1.5; margin-bottom:12px;">${escapeHtml(content)}</div>
+            <div id="suggestionBubbleActions" style="display:flex; gap:8px;">
+                <button class="btn btn-primary btn-sm" style="flex:1;" onclick="acceptSuggestion(${data.id || 0}, '${safeContent}')">采纳</button>
                 <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="ignoreSuggestion(${data.id || 0})">忽略</button>
             </div>
         `;
 
-        // 10 秒后自动淡出
-        setTimeout(() => {
-            if (bubble) {
-                bubble.style.opacity = '0';
-                bubble.style.transition = 'opacity 0.5s';
-                setTimeout(() => bubble.remove(), 500);
+        // 15 秒后自动最小化（不是关闭）
+        clearTimeout(bubble._autoMinimizeTimer);
+        bubble._autoMinimizeTimer = setTimeout(() => {
+            if (bubble && !bubble.classList.contains('minimized')) {
+                minimizeSuggestionBubble();
             }
         }, 15000);
+    };
+
+    window.minimizeSuggestionBubble = function() {
+        const bubble = document.getElementById('proactiveSuggestionBubble');
+        if (!bubble) return;
+        bubble.classList.add('minimized');
+        bubble.style.width = '48px';
+        bubble.style.padding = '12px';
+        bubble.innerHTML = `<div style="cursor:pointer; font-size:20px; text-align:center;" onclick="restoreSuggestionBubble()" title="展开建议">💡</div>`;
+    };
+
+    window.restoreSuggestionBubble = function() {
+        const bubble = document.getElementById('proactiveSuggestionBubble');
+        if (!bubble) return;
+        bubble.classList.remove('minimized');
+        // 重新触发 showSuggestionBubble 需要原始数据，这里简单关闭让用户去 Dashboard 查看
+        bubble.remove();
+        showToast('建议已收起，可在 Dashboard 查看', 'info');
     };
 
     window.dismissSuggestion = function(id) {
@@ -117,7 +142,7 @@
         }
     };
 
-    window.acceptSuggestion = function(id, content) {
+    window.acceptSuggestion = function(id, content, workId) {
         const bubble = document.getElementById('proactiveSuggestionBubble');
         if (bubble) bubble.remove();
         if (id) {
@@ -128,6 +153,10 @@
         if (input) {
             input.value = content;
             input.focus();
+        }
+        // 如果有 workId，跳转到写作页
+        if (workId) {
+            enterWriting(workId);
         }
     };
 

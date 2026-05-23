@@ -485,7 +485,14 @@ async function loadDashboardStats() {
         const suggestionsEl = document.getElementById('pendingSuggestionsList');
         if (suggestionsEl && stats.pendingSuggestions) {
             if (stats.pendingSuggestions.length === 0) {
-                suggestionsEl.innerHTML = '';
+                suggestionsEl.innerHTML = `
+                    <div style="padding:16px; text-align:center; color:var(--text-muted); font-size:13px;">
+                        暂无新建议
+                        <div style="margin-top:4px;">
+                            <a href="javascript:void(0)" onclick="showSuggestionHistory()" style="font-size:12px; color:var(--accent);">查看历史</a>
+                        </div>
+                    </div>
+                `;
             } else {
                 const triggerLabels = {
                     idle_timeout: '卡文提示',
@@ -493,21 +500,76 @@ async function loadDashboardStats() {
                     logic_conflict: '逻辑矛盾',
                     style_drift: '风格偏移',
                 };
-                suggestionsEl.innerHTML = stats.pendingSuggestions.map(s => `
-                    <div class="list-item" style="cursor:default; padding:10px 14px; background:var(--accent-soft, rgba(99,102,241,0.08)); border-left:3px solid var(--accent);"
-                         onclick="enterWriting(${s.workId})"
-                    >
-                        <div class="list-content">
+                suggestionsEl.innerHTML = stats.pendingSuggestions.map(s => {
+                    const safeContent = s.content ? escapeHtml(s.content.slice(0, 60)) + '...' : '点击查看详情';
+                    return `
+                    <div class="list-item" style="padding:10px 14px; background:var(--accent-soft, rgba(99,102,241,0.08)); border-left:3px solid var(--accent);">
+                        <div class="list-content" style="cursor:pointer;" onclick="enterWriting(${s.workId})">
                             <div class="list-title" style="font-size:13px;">${triggerLabels[s.triggerType] || 'Agent 建议'}</div>
-                            <div class="list-meta">${s.content ? escapeHtml(s.content.slice(0, 40)) + '...' : '点击查看详情'}</div>
+                            <div class="list-meta">${safeContent}</div>
                         </div>
-                        <button class="btn btn-primary btn-sm">查看</button>
+                        <div style="display:flex; gap:6px; flex-shrink:0;">
+                            <button class="btn btn-primary btn-sm" onclick="acceptSuggestion(${s.id}, '${(s.content || '').replace(/'/g, "\\'")}', ${s.workId}); event.stopPropagation();">采纳</button>
+                            <button class="btn btn-ghost btn-sm" onclick="ignoreSuggestion(${s.id}); loadDashboard(); event.stopPropagation();">忽略</button>
+                        </div>
                     </div>
-                `).join('');
+                    `;
+                }).join('') + `
+                    <div style="padding:8px 14px; text-align:center;">
+                        <a href="javascript:void(0)" onclick="showSuggestionHistory()" style="font-size:12px; color:var(--accent);">查看历史</a>
+                    </div>
+                `;
             }
         }
     } catch (err) {
         console.log('统计加载失败:', err.message);
+    }
+}
+
+// ========== 建议历史 ==========
+async function showSuggestionHistory() {
+    try {
+        const list = await api('/suggestions?limit=50');
+        if (!list || list.length === 0) {
+            showToast('还没有建议记录', 'info');
+            return;
+        }
+        const triggerLabels = {
+            idle_timeout: '卡文提示',
+            plot_stagnation: '剧情停滞',
+            logic_conflict: '逻辑矛盾',
+            style_drift: '风格偏移',
+        };
+        const statusLabels = {
+            pending: '待处理',
+            accepted: '已采纳',
+            ignored: '已忽略',
+            dismissed: '已关闭',
+        };
+        const statusColor = {
+            pending: 'var(--warning)',
+            accepted: 'var(--success)',
+            ignored: 'var(--text-muted)',
+            dismissed: 'var(--text-muted)',
+        };
+        let html = '<div style="max-height:60vh; overflow-y:auto;">';
+        list.forEach(s => {
+            const st = s.status || 'pending';
+            html += `
+                <div style="padding:10px 12px; border-bottom:1px solid var(--border); font-size:13px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <span style="font-weight:500;">${triggerLabels[s.triggerType] || 'Agent 建议'}</span>
+                        <span style="font-size:11px; color:${statusColor[st] || 'var(--text-muted)'};">${statusLabels[st] || st}</span>
+                    </div>
+                    <div style="color:var(--text-secondary); font-size:12px; line-height:1.5; margin-bottom:6px;">${s.content ? escapeHtml(s.content.slice(0, 120)) + '...' : '无内容'}</div>
+                    <div style="font-size:11px; color:var(--text-muted);">${new Date(s.createdAt).toLocaleString('zh-CN')}</div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        showModal('建议历史', html);
+    } catch (err) {
+        showToast('加载建议历史失败', 'danger');
     }
 }
 

@@ -174,7 +174,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border);">
                         <div>
                             <div style="font-size: 13px; color: var(--text-secondary);">AI 主动建议</div>
-                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">写作时 Agent 主动检测卡文、剧情停滞并给出建议</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">在你写作停顿时自动出现，提示卡文、剧情停滞或逻辑问题</div>
                         </div>
                         <label style="position: relative; display: inline-block; width: 40px; height: 22px; cursor: pointer; flex-shrink: 0;">
                             <input type="checkbox" id="proactiveAgentToggle" style="opacity: 0; width: 0; height: 0;" onchange="saveProactiveSetting(this.checked)">
