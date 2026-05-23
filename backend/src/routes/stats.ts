@@ -4,6 +4,14 @@ import { works, chapters, chapterVersions, creationActivities, users, agentSugge
 import { authMiddleware } from '../middleware/auth.js';
 import { eq, desc, isNull, and, inArray, asc, gte, lt } from 'drizzle-orm';
 
+// 返回本地时区 YYYY-MM-DD（避免 toISOString 用 UTC 日期导致时区偏差）
+function formatLocalDate(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 const statsRouter = new Hono();
 statsRouter.use('*', authMiddleware);
 
@@ -42,7 +50,7 @@ statsRouter.get('/', async (c) => {
   const dateSet = new Set<string>();
   for (const c of chapterList) {
     if (c.updatedAt) {
-      dateSet.add(new Date(c.updatedAt).toISOString().split('T')[0]);
+      dateSet.add(formatLocalDate(new Date(c.updatedAt)));
     }
   }
 
@@ -51,7 +59,7 @@ statsRouter.get('/', async (c) => {
   for (let i = 0; i < 365; i++) {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    const ds = d.toISOString().split('T')[0];
+    const ds = formatLocalDate(d);
     if (dateSet.has(ds)) {
       consecutiveDays++;
     } else {
@@ -64,7 +72,7 @@ statsRouter.get('/', async (c) => {
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    const ds = d.toISOString().split('T')[0];
+    const ds = formatLocalDate(d);
     last7Days.push({ date: ds, hasWriting: dateSet.has(ds) });
   }
 
