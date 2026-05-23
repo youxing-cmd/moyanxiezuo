@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { db } from '../db/index.js';
 import { characters, outlines, settings } from '../db/schema.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { eq, and, asc, desc } from 'drizzle-orm';
+import { eq, and, asc, desc, inArray } from 'drizzle-orm';
 
 const metaRouter = new Hono();
 metaRouter.use('*', authMiddleware);
@@ -413,11 +413,16 @@ metaRouter.put('/:id/characters/reorder', async (c) => {
     return c.json({ error: '参数错误' }, 400);
   }
 
-  await Promise.all(body.ids.map((id: number, index: number) =>
-    db.update(characters)
+  const validChars = await db.select({ id: characters.id }).from(characters)
+    .where(and(eq(characters.workId, workId), inArray(characters.id, body.ids)));
+  const validIdSet = new Set(validChars.map(r => r.id));
+
+  await Promise.all(body.ids.map((id: number, index: number) => {
+    if (!validIdSet.has(id)) return Promise.resolve();
+    return db.update(characters)
       .set({ sort: index })
-      .where(eq(characters.id, id))
-  ));
+      .where(eq(characters.id, id));
+  }));
 
   return c.json({ success: true });
 });
@@ -436,11 +441,16 @@ metaRouter.put('/:id/settings/reorder', async (c) => {
     return c.json({ error: '参数错误' }, 400);
   }
 
-  await Promise.all(body.ids.map((id: number, index: number) =>
-    db.update(settings)
+  const validSettings = await db.select({ id: settings.id }).from(settings)
+    .where(and(eq(settings.workId, workId), inArray(settings.id, body.ids)));
+  const validIdSet = new Set(validSettings.map(r => r.id));
+
+  await Promise.all(body.ids.map((id: number, index: number) => {
+    if (!validIdSet.has(id)) return Promise.resolve();
+    return db.update(settings)
       .set({ sort: index })
-      .where(eq(settings.id, id))
-  ));
+      .where(eq(settings.id, id));
+  }));
 
   return c.json({ success: true });
 });

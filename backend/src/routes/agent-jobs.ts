@@ -155,7 +155,8 @@ agentJobsRouter.put('/agent-jobs/:id/plan', async (c) => {
   try {
     const plan = validatePlan(body, job.query);
 
-    // 删除旧 steps
+    // 清理旧事件和旧 steps
+    await db.delete(agentStepEvents).where(eq(agentStepEvents.jobId, jobId));
     await db.delete(agentPlanSteps).where(eq(agentPlanSteps.jobId, jobId));
 
     // 插入新 steps

@@ -1,7 +1,10 @@
 import { createMiddleware } from 'hono/factory';
 import { jwtVerify, SignJWT } from 'jose';
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'jiuzhang-writing-secret-key-2025');
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('JWT_SECRET 环境变量必须设置，否则无法安全验证 token');
+}
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'jiuzhang-dev-secret-key');
 
 export async function signToken(payload: Record<string, unknown>): Promise<string> {
   return new SignJWT(payload)
