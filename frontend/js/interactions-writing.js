@@ -505,6 +505,8 @@ async function switchChapter(chapterId, title, content, outline) {
     const editorTitle = document.getElementById('editorTitle');
     const placeholder = document.getElementById('editorPlaceholder');
 
+    if (!editorArea) return;
+
     if (editorTitle) editorTitle.textContent = title || '未命名章节';
     if (placeholder) placeholder.style.display = 'none';
 
