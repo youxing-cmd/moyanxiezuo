@@ -16,16 +16,18 @@
     <link rel="stylesheet" href="css/responsive.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Sentry 错误监控（免费版） -->
-    <script src="https://browser.sentry-cdn.com/8.54.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
+    <script src="https://browser.sentry-cdn.com/8.54.0/bundle.tracing.min.js" crossorigin="anonymous" async></script>
     <script>
         window.SENTRY_DSN = 'https://f601b4cf1686790f941dabb362a2f206@o4511369746972672.ingest.us.sentry.io/4511369773187072';
-        if (window.SENTRY_DSN && typeof Sentry !== 'undefined') {
-            Sentry.init({
-                dsn: window.SENTRY_DSN,
-                tracesSampleRate: 0.2,
-                environment: 'production',
-            });
-        }
+        window.addEventListener('load', function() {
+            if (window.SENTRY_DSN && typeof Sentry !== 'undefined') {
+                Sentry.init({
+                    dsn: window.SENTRY_DSN,
+                    tracesSampleRate: 0.2,
+                    environment: 'production',
+                });
+            }
+        });
     </script>
 </head>
 <body>
