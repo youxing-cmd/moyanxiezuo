@@ -203,7 +203,7 @@ async function runCreateArtifact(step: LoadedStep, job: LoadedJob, allSteps: Loa
   let content = input.content ?? '';
   if (!content) {
     for (const depId of step.dependsOn) {
-      const dep = allSteps.find((s) => String(s.id) === depId);
+      const dep = allSteps.find((s) => String(s.idx) === depId);
       if (dep?.output) {
         const out = dep.output as Record<string, unknown>;
         if (typeof out.content === 'string' && out.content) {
