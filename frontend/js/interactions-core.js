@@ -1137,7 +1137,7 @@ async function initPageInteractions(page) {
                     window.jzComposer.updatePlanCard(planCard, data);
                 },
                 onDone: () => {
-                    showToast('Agent 任务已完成', 'success');
+                    showToast('协作任务已完成', 'success');
                 },
                 onError: (err) => {
                     console.warn('[composer poll] 错误:', err);
@@ -1172,7 +1172,7 @@ async function initPageInteractions(page) {
 
                     const planData = {
                         id: job.id,
-                        title: job.query?.slice(0, 30) || 'Agent 任务',
+                        title: job.query?.slice(0, 30) || '协作任务',
                         status: fullJob.job?.status || job.status,
                         progress: fullJob.job?.progress || 0,
                         workId: fullJob.job?.workId || workId,
@@ -2938,7 +2938,7 @@ function updateAgentModeUI() {
         btn.style.color = isAuto ? 'var(--accent)' : 'var(--text-secondary)';
         btn.style.borderColor = isAuto ? 'var(--accent)' : 'var(--border)';
     }
-    if (hint) hint.textContent = '复杂任务交给 Agent，预计 3-10 分钟完成';
+    if (hint) hint.textContent = '复杂任务交给协作助手，预计 3-10 分钟完成';
     if (modelPicker) modelPicker.style.display = isAuto ? 'none' : '';
     if (toolPicker) toolPicker.style.display = isAuto ? 'none' : '';
 }
@@ -3093,10 +3093,10 @@ function switchChatTab(tab) {
     const input = document.getElementById('aiChatInput');
     if (!input) return;
     const placeholders = {
-        chat: '输入指令，用 @ 引用文件...',
-        continue: '输入续写方向或留空自动续写...',
-        polish: '输入需要润色的内容或要求...',
-        check: '输入要检查的内容或留空检查全文...'
+        chat: '输入写作指令，可用 @ 引用正文、角色或大纲...',
+        continue: '输入续写方向，或留空让九章根据当前章继续写...',
+        polish: '输入润色要求，例如更紧张、更口语、更有画面感...',
+        check: '输入审校重点，或留空检查当前章节...'
     };
     input.placeholder = placeholders[tab] || placeholders.chat;
 }
@@ -3108,12 +3108,12 @@ function toggleDiffPreview() {
     diffPreviewActive = !diffPreviewActive;
     if (diffPreviewActive) {
         btn.classList.add('active');
-        btn.textContent = '✕ 关闭Diff';
-        showToast('Diff 预览已开启', 'info');
+        btn.textContent = '关闭差异';
+        showToast('差异预览已开启', 'info');
     } else {
         btn.classList.remove('active');
-        btn.textContent = '⚡ Diff预览';
-        showToast('Diff 预览已关闭', 'info');
+        btn.textContent = '差异预览';
+        showToast('差异预览已关闭', 'info');
         // 移除所有 diff 预览
         document.querySelectorAll('.diff-preview').forEach(el => el.remove());
     }
@@ -3207,7 +3207,7 @@ function rejectDiff() {
     const btn = document.getElementById('btnToggleDiff');
     if (btn) {
         btn.classList.remove('active');
-        btn.textContent = '⚡ Diff预览';
+        btn.textContent = '差异预览';
         diffPreviewActive = false;
     }
 }
@@ -3410,4 +3410,3 @@ async function runChapterReview(workId, chapterId, _preset) {
         isReviewing = false;
     }
 }
-

@@ -92,15 +92,16 @@ async function checkPaused(jobId: number): Promise<boolean> {
 
 function pickNextStep(steps: LoadedStep[]): LoadedStep | null {
   // done + skipped 都视为依赖已满足
-  const doneIds = new Set(
-    steps.filter((s) => s.status === 'done' || s.status === 'skipped').map((s) => String(s.id)),
+  // dependsOn 存的是 idx（如 '1', '2'），不是数据库 id
+  const doneIdxs = new Set(
+    steps.filter((s) => s.status === 'done' || s.status === 'skipped').map((s) => String(s.idx)),
   );
 
   const candidates = steps
     .filter((s) => s.status === 'pending')
     .filter((s) => {
       for (const dep of s.dependsOn) {
-        if (!doneIds.has(dep)) return false;
+        if (!doneIdxs.has(dep)) return false;
       }
       return true;
     })

@@ -6,38 +6,35 @@
                     <span class="writing-topbar-logo">九章</span>
                     <span id="writingWorkTitle" class="writing-topbar-title">加载中...</span>
                     <div class="writing-topbar-sep"></div>
-                    <button class="topbar-btn" onclick="focusTreeSection('analysis')">本章分析</button>
+                    <button class="topbar-btn" onclick="focusTreeSection('review')">审稿</button>
+                    <button class="topbar-btn" onclick="focusTreeSection('analysis')">拆书</button>
                     <button class="topbar-btn" onclick="focusTreeSection('characters')">人物</button>
                     <button class="topbar-btn" onclick="focusTreeSection('outline')">大纲</button>
                     <button class="topbar-btn" onclick="focusTreeSection('locations')">设定</button>
-                    <div class="writing-topbar-sep"></div>
-                    <button class="topbar-btn" onclick="showToast('字体设置功能开发中','info')">Aa</button>
-                    <button class="topbar-btn" onclick="showToast('缩放功能开发中','info')">100%</button>
                 </div>
                 <div class="writing-topbar-right">
-                    <button class="topbar-btn" id="btnToggleDiff" onclick="toggleDiffPreview()">⚡ Diff预览</button>
-                    <button class="topbar-btn" onclick="showToast('预览模式功能开发中','info')">预览</button>
+                    <button class="topbar-btn" id="btnToggleDiff" onclick="toggleDiffPreview()">差异预览</button>
                     <button class="topbar-btn-save" id="btnSaveChapter" onclick="saveCurrentChapter()">保存</button>
                 </div>
             </div>
 
             <!-- 三栏主体 -->
             <div class="editor-three-col">
-                <!-- 左栏：工作树（Manuscript + Global Information + AI 产物） -->
+                <!-- 左栏：创作资料树 -->
                 <div id="writeColLeft" class="col-left">
                     <div class="chapter-tree">
                         <div class="chapter-tree-header">
-                            <span>Writing Workspace</span>
-                            <button onclick="showCreateChapterModal()" title="新建章节">+</button>
+                            <span>创作工作台</span>
+                            <button onclick="showCreateChapterModal()" title="新建章节">新章</button>
                         </div>
                         <div class="chapter-tree-body" id="leftPanel">
 
-                            <!-- ========== Manuscript（手稿） ========== -->
+                            <!-- ========== 正文目录 ========== -->
                             <div class="tree-section-header tree-section-root" onclick="toggleTreeNode('manuscript')">
                                 <span class="vol-arrow open" id="treeToggle-manuscript">▶</span>
                                 <span class="tree-dot" style="background:var(--accent)"></span>
-                                <span style="flex:1; font-weight:600;">Manuscript</span>
-                                <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); showCreateChapterModal()">+</button>
+                                <span style="flex:1; font-weight:600;">正文目录</span>
+                                <button class="btn btn-ghost btn-sm" style="padding:1px 6px; font-size:10px;" onclick="event.stopPropagation(); showCreateChapterModal()">新建</button>
                             </div>
                             <div class="tree-section-body" id="treeBody-manuscript">
                                 <div id="chapterList">
@@ -45,19 +42,19 @@
                                 </div>
                             </div>
 
-                            <!-- ========== Global Information（全局信息） ========== -->
+                            <!-- ========== 作品资料 ========== -->
                             <div class="tree-section-header tree-section-root" onclick="toggleTreeNode('global')">
                                 <span class="vol-arrow open" id="treeToggle-global">▶</span>
                                 <span class="tree-dot" style="background:var(--accent-light)"></span>
-                                <span style="flex:1; font-weight:600;">Global Information</span>
+                                <span style="flex:1; font-weight:600;">作品资料</span>
                             </div>
                             <div class="tree-section-body" id="treeBody-global">
 
-                                <!-- Outline 大纲 -->
+                                <!-- 大纲 -->
                                 <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('outline')">
                                     <span class="vol-arrow" id="treeToggle-outline">▶</span>
                                     <span class="tree-icon">📋</span>
-                                    <span style="flex:1">Outline</span>
+                                    <span style="flex:1">故事大纲</span>
                                     <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); showOutlineForm()">+</button>
                                 </div>
                                 <div class="tree-section-body tree-section-sub-body" id="treeBody-outline" style="display:none;">
@@ -66,11 +63,11 @@
                                     </div>
                                 </div>
 
-                                <!-- Characters 角色 -->
+                                <!-- 角色 -->
                                 <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('characters')">
                                     <span class="vol-arrow" id="treeToggle-characters">▶</span>
                                     <span class="tree-icon">👤</span>
-                                    <span style="flex:1">Characters</span>
+                                    <span style="flex:1">人物角色</span>
                                     <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); showCharacterForm()">+</button>
                                 </div>
                                 <div class="tree-section-body tree-section-sub-body" id="treeBody-characters" style="display:none;">
@@ -79,11 +76,11 @@
                                     </div>
                                 </div>
 
-                                <!-- Locations 地点 -->
+                                <!-- 地点 -->
                                 <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('locations')">
                                     <span class="vol-arrow" id="treeToggle-locations">▶</span>
                                     <span class="tree-icon">📍</span>
-                                    <span style="flex:1">Locations</span>
+                                    <span style="flex:1">地点场景</span>
                                     <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); showSettingForm(null, 'location')">+</button>
                                 </div>
                                 <div class="tree-section-body tree-section-sub-body" id="treeBody-locations" style="display:none;">
@@ -92,11 +89,11 @@
                                     </div>
                                 </div>
 
-                                <!-- Style 创作要求 -->
+                                <!-- 创作要求 -->
                                 <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('style')">
                                     <span class="vol-arrow" id="treeToggle-style">▶</span>
                                     <span class="tree-icon">🎨</span>
-                                    <span style="flex:1">Style</span>
+                                    <span style="flex:1">文风要求</span>
                                     <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); switchToolTab('memory');" title="查看风格 DNA 详情">详情</button>
                                 </div>
                                 <div class="tree-section-body tree-section-sub-body" id="treeBody-style" style="display:none;">
@@ -105,11 +102,11 @@
                                     </div>
                                 </div>
 
-                                <!-- Timeline 时间线 -->
+                                <!-- 时间线 -->
                                 <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('timeline')">
                                     <span class="vol-arrow" id="treeToggle-timeline">▶</span>
                                     <span class="tree-icon">📅</span>
-                                    <span style="flex:1">Timeline</span>
+                                    <span style="flex:1">剧情时间线</span>
                                     <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); showSettingForm(null, 'timeline')">+</button>
                                 </div>
                                 <div class="tree-section-body tree-section-sub-body" id="treeBody-timeline" style="display:none;">
@@ -118,11 +115,11 @@
                                     </div>
                                 </div>
 
-                                <!-- State 状态 -->
+                                <!-- 角色状态 -->
                                 <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('state')">
                                     <span class="vol-arrow" id="treeToggle-state">▶</span>
                                     <span class="tree-icon">✅</span>
-                                    <span style="flex:1">State</span>
+                                    <span style="flex:1">角色状态</span>
                                     <button class="btn btn-ghost btn-sm" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); showSettingForm(null, 'state')">+</button>
                                 </div>
                                 <div class="tree-section-body tree-section-sub-body" id="treeBody-state" style="display:none;">
@@ -131,11 +128,11 @@
                                     </div>
                                 </div>
 
-                                <!-- Analysis 素材 -->
+                                <!-- 分析素材 -->
                                 <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('analysis-src')">
                                     <span class="vol-arrow" id="treeToggle-analysis-src">▶</span>
                                     <span class="tree-icon">🔍</span>
-                                    <span style="flex:1">Analysis</span>
+                                    <span style="flex:1">分析素材</span>
                                 </div>
                                 <div class="tree-section-body tree-section-sub-body" id="treeBody-analysis-src" style="display:none;">
                                     <div id="globalAnalysisList">
@@ -171,11 +168,11 @@
 
                             </div>
 
-                            <!-- ========== AI 产物 ========== -->
+                            <!-- ========== AI 文件与审稿 ========== -->
                             <div class="tree-section-header tree-section-root" onclick="toggleTreeNode('aiproduct')">
                                 <span class="vol-arrow" id="treeToggle-aiproduct">▶</span>
                                 <span class="tree-dot" style="background:var(--warning)"></span>
-                                <span style="flex:1; font-weight:600;">AI 产物</span>
+                                <span style="flex:1; font-weight:600;">AI 文件与审稿</span>
                             </div>
                             <div class="tree-section-body" id="treeBody-aiproduct" style="display:none;">
 
@@ -183,11 +180,11 @@
                                 <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('artifacts')">
                                     <span class="vol-arrow" id="treeToggle-artifacts">▶</span>
                                     <span class="tree-icon">📄</span>
-                                    <span style="flex:1">AI 文件</span>
+                                    <span style="flex:1">生成文件</span>
                                 </div>
                                 <div class="tree-section-body tree-section-sub-body" id="treeBody-artifacts" style="display:none;">
                                     <div id="artifactsList">
-                                        <div class="tree-empty">对话中生成的内容会显示在这里</div>
+                                        <div class="tree-empty">对话中生成的大纲、设定、分析会显示在这里</div>
                                     </div>
                                 </div>
 
@@ -195,7 +192,7 @@
                                 <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('analysis')">
                                     <span class="vol-arrow" id="treeToggle-analysis">▶</span>
                                     <span class="tree-icon">📊</span>
-                                    <span style="flex:1">AI 分析</span>
+                                    <span style="flex:1">拆书分析</span>
                                     <button class="btn btn-ghost btn-sm" id="btnAIAnalysis" style="padding:1px 4px; font-size:10px;" onclick="event.stopPropagation(); generateAIAnalysis()">拆书</button>
                                 </div>
                                 <div class="tree-section-body tree-section-sub-body" id="treeBody-analysis" style="display:none;">
@@ -231,22 +228,22 @@
                                 <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('review')">
                                     <span class="vol-arrow" id="treeToggle-review">▶</span>
                                     <span class="tree-icon">📋</span>
-                                    <span style="flex:1">编辑工作台</span>
+                                    <span style="flex:1">审稿工作台</span>
                                 </div>
                                 <div class="tree-section-body tree-section-sub-body" id="treeBody-review" style="display:none;">
                                     <div style="padding:6px 8px;">
                                         <div style="display:flex; flex-direction:column; gap:4px;">
                                             <button class="btn btn-primary btn-sm" style="padding:4px 8px; font-size:11px; justify-content:center;" onclick="runChapterReviewFromTree()">
-                                                🔍 标准六维度审稿
+                                                标准六维度审稿
                                             </button>
                                             <button class="btn btn-ghost btn-sm" style="padding:4px 8px; font-size:11px; justify-content:center;" onclick="runChapterReviewFromTree('short')">
-                                                ⚡ 短篇爆款检查
+                                                短篇爆款检查
                                             </button>
                                             <button class="btn btn-ghost btn-sm" style="padding:4px 8px; font-size:11px; justify-content:center;" onclick="runChapterReviewFromTree('male')">
-                                                🔥 男频爽点检查
+                                                男频爽点检查
                                             </button>
                                             <button class="btn btn-ghost btn-sm" style="padding:4px 8px; font-size:11px; justify-content:center;" onclick="runChapterReviewFromTree('female')">
-                                                💕 女频情感线检查
+                                                女频情感线检查
                                             </button>
                                         </div>
                                         <div id="reviewSummary" style="margin-top:8px; font-size:11px; color:var(--text-muted);"></div>
@@ -269,7 +266,7 @@
                         <div class="editor-ai-bar">
                             <div class="ai-bar-left">
                                 <button class="ai-tool-btn" id="btnAiContinue" onclick="handleContinueText()">
-                                    <span style="margin-right:4px;">✦</span>AI续写
+                                    <span style="margin-right:4px;">✦</span>续写正文
                                 </button>
                             </div>
                             <div class="ai-bar-right">
@@ -340,10 +337,10 @@
                                 <span class="arrow">▼</span>
                             </div>
                             <div class="chat-tabs">
-                                <button class="chat-tab active" data-tab="chat" onclick="switchChatTab('chat')">Chat</button>
-                                <button class="chat-tab" data-tab="continue" onclick="switchChatTab('continue')">Continue</button>
-                                <button class="chat-tab" data-tab="polish" onclick="switchChatTab('polish')">Polish</button>
-                                <button class="chat-tab" data-tab="check" onclick="switchChatTab('check')">Check</button>
+                                <button class="chat-tab active" data-tab="chat" onclick="switchChatTab('chat')">对话</button>
+                                <button class="chat-tab" data-tab="continue" onclick="switchChatTab('continue')">续写</button>
+                                <button class="chat-tab" data-tab="polish" onclick="switchChatTab('polish')">润色</button>
+                                <button class="chat-tab" data-tab="check" onclick="switchChatTab('check')">审校</button>
                             </div>
                         </div>
 
@@ -353,7 +350,7 @@
 
                             <!-- Agent 高频入口 -->
                             <div class="agent-entry-bar" id="agentEntryBar">
-                                <span class="agent-entry-label">Agent 任务</span>
+                                <span class="agent-entry-label">快捷任务</span>
                                 <button class="agent-entry-btn" data-agent-query="帮我写一章正文，延续当前剧情" title="AI 分析上下文后自动续写一章">
                                     ✍️ 写一章
                                 </button>
@@ -368,7 +365,7 @@
                             <!-- 输入区 -->
                             <div class="chat-input-area">
                                 <div class="chat-composer">
-                                    <textarea id="aiChatInput" class="chat-composer-input" rows="3" placeholder="输入指令，用 @ 引用文件..."></textarea>
+                                    <textarea id="aiChatInput" class="chat-composer-input" rows="3" placeholder="输入写作指令，可用 @ 引用正文、角色或大纲..."></textarea>
                                     <button class="chat-composer-send" id="aiChatSend">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                                     </button>
@@ -389,7 +386,7 @@
                                     </div>
                                 </div>
                                 <div class="chat-composer-hint">
-                                    <span id="agentModeHint">复杂任务交给 Agent，预计 3-10 分钟完成</span>
+                                    <span id="agentModeHint">复杂任务交给协作助手，预计 3-10 分钟完成</span>
                                     <span>·</span>
                                     <span>Enter 发送 · Shift+Enter 换行</span>
                                 </div>
@@ -539,4 +536,3 @@
             </div>
         </div>
     `
-
