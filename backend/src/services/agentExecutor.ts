@@ -144,7 +144,7 @@ function collectContextFromDeps(step: LoadedStep, allSteps: LoadedStep[]): strin
   }
 
   for (const depId of step.dependsOn) {
-    const dep = allSteps.find((s) => String(s.id) === depId);
+    const dep = allSteps.find((s) => String(s.idx) === depId);
     if (dep && dep.output) {
       const out = dep.output as Record<string, unknown>;
       if (out.content) {

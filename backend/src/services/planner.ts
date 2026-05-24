@@ -261,39 +261,18 @@ export async function planJob(query: string, ctx: PlanContext): Promise<PlanResu
 }
 
 export async function savePlanToSteps(jobId: number, plan: PlanResult): Promise<void> {
-  // 1. 先插入所有步骤（dependsOn 暂时为空，避免引用尚未分配的数据库 id）
+  // dependsOn 统一为 planner step id（即 idx 字符串，如 "1", "2"），
+  // 不映射为数据库自增 id，确保 savePlanToSteps / pickNextStep / collectContextFromDeps 口径一致
+  // idx 从 1 开始，与 planner step id 保持一致（"1", "2", "3"）
   const values = plan.steps.map((step, idx) => ({
     jobId,
-    idx,
+    idx: idx + 1,
     taskType: step.type,
     title: step.title,
     description: step.description ?? '',
-    dependsOn: [] as string[],
+    dependsOn: step.dependsOn ?? ([] as string[]),
     status: 'pending' as const,
   }));
 
-  const inserted = await db.insert(agentPlanSteps).values(values).returning();
-
-  // 2. 建立 Planner id → 数据库 id 映射
-  const idMap = new Map<string, number>();
-  plan.steps.forEach((step, idx) => {
-    idMap.set(step.id, inserted[idx].id);
-  });
-
-  // 3. 更新 dependsOn 为实际数据库 id
-  for (let i = 0; i < plan.steps.length; i++) {
-    const step = plan.steps[i];
-    const dbId = inserted[i].id;
-    const realDependsOn = (step.dependsOn ?? [])
-      .map((depId) => idMap.get(depId))
-      .filter((id): id is number => id !== undefined)
-      .map(String);
-
-    if (realDependsOn.length > 0) {
-      await db
-        .update(agentPlanSteps)
-        .set({ dependsOn: realDependsOn })
-        .where(eq(agentPlanSteps.id, dbId));
-    }
-  }
+  await db.insert(agentPlanSteps).values(values);
 }
