@@ -115,13 +115,15 @@ if (process.env.NODE_ENV !== 'test') {
   })();
 }
 
-// 初始化定时任务（仅在非测试环境）
-if (process.env.NODE_ENV !== 'test') {
+// 初始化定时任务（仅在非测试环境，支持 DISABLE_SCHEDULER 关闭）
+if (process.env.NODE_ENV !== 'test' && !process.env.DISABLE_SCHEDULER) {
   initScheduler();
   initAgentWorker().catch((err) => {
     console.error('[index] Agent Worker 初始化失败:', err);
   });
   startProactiveScanner();
+} else if (process.env.DISABLE_SCHEDULER) {
+  console.log('[index] DISABLE_SCHEDULER=true，跳过 scheduler/agent-worker/proactive');
 }
 
 // 未捕获异常上报 Sentry

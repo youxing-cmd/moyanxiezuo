@@ -1153,15 +1153,18 @@ async function initPageInteractions(page) {
             try {
                 const data = await api('/ai/agent-jobs');
                 const jobs = data.jobs || [];
-                const activeStatuses = ['running', 'paused', 'waiting', 'user_blocked', 'ready'];
-                const activeJobs = jobs.filter((j) => activeStatuses.includes(j.status) && j.workId === workId);
+                // 只恢复 truly running 的 job，避免恢复全部历史任务导致 SSE 订阅风暴
+                // paused/waiting/user_blocked/ready 状态的 job 不自动启动轮询，用户可手动恢复
+                const runningJobs = jobs.filter((j) => j.status === 'running' && j.workId === workId);
+                // 最多恢复 3 个，防止旧任务堆积
+                const toRestore = runningJobs.slice(0, 3);
 
-                if (activeJobs.length === 0) return;
+                if (toRestore.length === 0) return;
 
                 const container = document.getElementById('aiChatMessages');
                 if (!container) return;
 
-                for (const job of activeJobs) {
+                for (const job of toRestore) {
                     // 获取完整状态
                     let fullJob;
                     try {

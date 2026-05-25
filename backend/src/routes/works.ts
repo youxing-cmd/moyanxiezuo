@@ -230,7 +230,8 @@ worksRouter.get('/:id/style-dna', async (c) => {
 
   const [dna] = await db.select().from(workStyleDNA).where(eq(workStyleDNA.workId, workId)).limit(1);
   if (!dna) {
-    return c.json({ error: '暂无风格 DNA，请先保存章节' }, 404);
+    // 返回 200 + 空对象，避免浏览器 console 报 404 噪声
+    return c.json({ sampleSize: 0 });
   }
 
   return c.json({

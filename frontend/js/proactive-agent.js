@@ -2,6 +2,10 @@
 (function() {
     let lastTyping = Date.now();
     let wordCount = 0;
+    // 建议轮询退避状态
+    let suggestionPollFailCount = 0;
+    const SUGGESTION_POLL_BASE_MS = 30000;
+    const SUGGESTION_POLL_MAX_MS = 300000; // 最长 5 分钟
 
     function throttle(fn, ms) {
         let last = 0;
@@ -42,6 +46,7 @@
         if (!currentWorkId) return;
         try {
             const list = await api('/suggestions?limit=5');
+            suggestionPollFailCount = 0; // 成功则重置退避
             if (!list || !list.length) return;
             const pending = list.filter(s => s.status === 'pending' && String(s.workId) === String(currentWorkId));
             for (const s of pending) {
@@ -52,8 +57,18 @@
                 }
             }
         } catch (e) {
-            // 静默失败，不影响写作
+            // 失败时递增退避计数，避免持续刷错误
+            suggestionPollFailCount++;
         }
+    }
+
+    function getSuggestionPollInterval() {
+        if (suggestionPollFailCount === 0) return SUGGESTION_POLL_BASE_MS;
+        // 指数退避：30s → 60s → 120s → 240s → 300s(max)
+        return Math.min(
+            SUGGESTION_POLL_BASE_MS * Math.pow(2, suggestionPollFailCount),
+            SUGGESTION_POLL_MAX_MS
+        );
     }
 
     window.attachProactiveAgent = function(editor) {
@@ -64,7 +79,7 @@
             clearInterval(editor._proactiveInterval);
         }
         if (editor._suggestionPoll) {
-            clearInterval(editor._suggestionPoll);
+            clearTimeout(editor._suggestionPoll);
         }
 
         // 每次挂载重置 typing 时间，避免切页后立即误报 idle
@@ -91,10 +106,14 @@
             }
         }, 10000);
 
-        // 每 30s 轮询一次 pending suggestions，弹出气泡
-        editor._suggestionPoll = setInterval(() => {
-            checkPendingSuggestions();
-        }, 30000);
+        // 建议轮询：使用 setTimeout 递归调度，支持失败退避
+        function scheduleSuggestionPoll() {
+            editor._suggestionPoll = setTimeout(async () => {
+                await checkPendingSuggestions();
+                scheduleSuggestionPoll(); // 递归调度，间隔根据失败次数动态调整
+            }, getSuggestionPollInterval());
+        }
+        scheduleSuggestionPoll();
 
         // 首次挂载也立即检查一次
         checkPendingSuggestions();
