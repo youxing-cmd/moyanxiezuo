@@ -555,6 +555,21 @@ async function loadDashboardStats() {
         }
     } catch (err) {
         console.log('统计加载失败:', err.message);
+        // API 失败时也要更新 UI，避免永远卡在"加载中"
+        const ids = ['heroTodayWords','heroConsecutiveDays','dashTodayWords','dashConsecutiveDays','statWorkCount','statTotalWords'];
+        ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (el && el.textContent.includes('--')) el.textContent = '加载失败';
+        });
+        const errorMsg = '<div class="list-meta" style="color:var(--danger);padding:12px;">加载失败，请刷新重试</div>';
+        const todayList = document.getElementById('todayActivitiesList');
+        if (todayList) todayList.innerHTML = errorMsg;
+        const weekStreak = document.getElementById('dashWeekStreak');
+        if (weekStreak) weekStreak.innerHTML = errorMsg;
+        const recentWorks = document.getElementById('recentWorksList');
+        if (recentWorks) recentWorks.innerHTML = errorMsg;
+        const nextActions = document.getElementById('nextActionsList');
+        if (nextActions) nextActions.innerHTML = errorMsg;
     }
 }
 

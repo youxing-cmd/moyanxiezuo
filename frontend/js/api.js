@@ -1,5 +1,8 @@
 async function api(path, options = {}) {
     const url = API_BASE + path;
+    // 30s 超时，防止请求永远挂起
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     const opts = {
         headers: {
             'Content-Type': 'application/json',
@@ -7,11 +10,22 @@ async function api(path, options = {}) {
             ...options.headers,
         },
         ...options,
+        signal: controller.signal,
     };
     if (opts.body && typeof opts.body === 'object') {
         opts.body = JSON.stringify(opts.body);
     }
-    const res = await fetch(url, opts);
+    let res;
+    try {
+        res = await fetch(url, opts);
+    } catch (err) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+            throw new Error('请求超时，请检查网络连接');
+        }
+        throw err;
+    }
+    clearTimeout(timeoutId);
     const data = await res.json().catch(() => null);
     if (!res.ok) {
         if (res.status === 401) {

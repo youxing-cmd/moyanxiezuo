@@ -607,7 +607,7 @@
 }
 
 .chat-tab {
-    padding: 4px 9px;
+    padding: 4px 8px;
     font-size: 12px;
     color: var(--text-muted);
     border: none;
@@ -616,6 +616,7 @@
     border-bottom: 2px solid transparent;
     transition: all 0.15s;
     font-family: var(--font-sans);
+    white-space: nowrap;
 }
 
 .chat-tab.active {
@@ -719,10 +720,23 @@
 
 /* 用户消息 */
 .msg-user {
-    display: flex;
-    gap: 8px;
-    align-items: flex-start;
     padding: 2px 0;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.msg-user-text {
+    font-size: 13px;
+    color: rgba(255,255,255,0.95);
+    line-height: 1.6;
+}
+
+.msg-user-text p {
+    margin-bottom: 0.5em;
+}
+
+.msg-user-text p:last-child {
+    margin-bottom: 0;
 }
 
 .mu-label {
@@ -750,7 +764,8 @@
     padding: 2px 0;
 }
 
-.ma-label {
+.ma-label,
+.msg-ai-label {
     font-size: 12px;
     color: var(--text-secondary);
     display: flex;
@@ -779,21 +794,29 @@
 }
 
 /* AI 回复文本 */
-.ma-text {
+.ma-text,
+.msg-ai-text,
+.ai-msg-content {
     font-size: 13px;
     color: var(--text-primary);
     line-height: 1.65;
 }
 
-.ma-text p {
+.ma-text p,
+.msg-ai-text p,
+.ai-msg-content p {
     margin-bottom: 0.5em;
 }
 
-.ma-text p:last-child {
+.ma-text p:last-child,
+.msg-ai-text p:last-child,
+.ai-msg-content p:last-child {
     margin-bottom: 0;
 }
 
-.ma-text strong {
+.ma-text strong,
+.msg-ai-text strong,
+.ai-msg-content strong {
     color: var(--text-primary);
     font-weight: 600;
 }
@@ -919,7 +942,7 @@
 .agent-entry-bar {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     padding: 8px 14px;
     border-top: 1px solid var(--border);
     background: var(--bg-secondary);
@@ -931,8 +954,7 @@
     font-size: 11px;
     color: var(--text-muted);
     white-space: nowrap;
-    width: 100%;
-    margin-right: 0;
+    margin-right: 2px;
 }
 
 .agent-entry-btn {
@@ -1023,6 +1045,15 @@
 .chat-composer-send:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+}
+
+.chat-composer-send.is-streaming {
+    width: auto;
+    border-radius: var(--radius);
+    padding: 4px 12px;
+    gap: 4px;
+    font-size: 12px;
+    font-family: var(--font-sans);
 }
 
 /* 底部工具栏 */
@@ -1585,6 +1616,20 @@
     font-size: 11px;
     color: var(--text-muted);
     font-style: italic;
+}
+
+.tree-count-badge {
+    font-size: 10px;
+    padding: 0 5px;
+    border-radius: 8px;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    margin-left: auto;
+    flex-shrink: 0;
+    font-weight: 500;
+    min-width: 14px;
+    text-align: center;
+    line-height: 16px;
 }
 
 /* ====== Agent Step UI ====== */

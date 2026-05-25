@@ -87,6 +87,36 @@ function runPendingWritingAction() {
     }
 }
 
+// 更新树节点计数徽章
+function updateTreeCount(nodeId, count) {
+    const toggle = document.getElementById('treeToggle-' + nodeId);
+    if (!toggle) return;
+    const header = toggle.closest('.tree-section-header');
+    if (!header) return;
+    let badge = header.querySelector('.tree-count-badge');
+    if (count > 0) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'tree-count-badge';
+            badge.style.cssText = 'font-size:10px; padding:0 5px; border-radius:8px; background:var(--bg-tertiary); color:var(--text-muted); margin-left:auto; flex-shrink:0;';
+            header.appendChild(badge);
+        }
+        badge.textContent = count;
+    } else if (badge) {
+        badge.remove();
+    }
+}
+
+// 自动展开有内容的树节点
+function autoExpandTreeNode(nodeId) {
+    const body = document.getElementById('treeBody-' + nodeId);
+    const toggle = document.getElementById('treeToggle-' + nodeId);
+    if (body && body.style.display === 'none') {
+        body.style.display = 'block';
+        if (toggle && toggle.classList) toggle.classList.add('open');
+    }
+}
+
 // ========== 作品元数据加载 ==========
 async function loadWorkMetadata(work) {
     if (!work) return;
@@ -268,8 +298,12 @@ function renderWorkCharacters(list) {
     if (!container) return;
     if (!list || list.length === 0) {
         container.innerHTML = '<div class="tree-empty">暂无角色</div>';
+        updateTreeCount('characters', 0);
         return;
     }
+    updateTreeCount('characters', list.length);
+    autoExpandTreeNode('characters');
+    autoExpandTreeNode('global');
     const roleMap = { protagonist: '主角', supporting: '配角', antagonist: '反派' };
     container.innerHTML = list.map(c => `
         <div class="tree-file" onclick="showCharacterForm(${c.id})">
@@ -286,14 +320,18 @@ function renderWorkSettings(list) {
         timeline: 'globalTimelineList',
         state: 'globalStateList',
     };
+    const treeNodeMap = { location: 'locations', timeline: 'timeline', state: 'state' };
     // Locations / Timeline / State 各自独立分区
     Object.entries(containerMap).forEach(([type, containerId]) => {
         const container = document.getElementById(containerId);
         if (!container) return;
         const items = (list || []).filter(s => s.type === type);
+        updateTreeCount(treeNodeMap[type], items.length);
         if (items.length === 0) {
             container.innerHTML = `<div class="tree-empty">暂无${typeMap[type]}</div>`;
         } else {
+            autoExpandTreeNode(treeNodeMap[type]);
+            autoExpandTreeNode('global');
             container.innerHTML = items.map(s => `
                 <div class="tree-file" onclick="showSettingForm(${s.id})">
                     <span class="tf-name">${escapeHtml(s.name || '未命名')}</span>
@@ -309,8 +347,12 @@ function renderWorkOutlines(list) {
     if (!container) return;
     if (!list || list.length === 0) {
         container.innerHTML = '<div class="tree-empty">暂无大纲</div>';
+        updateTreeCount('outline', 0);
         return;
     }
+    updateTreeCount('outline', list.length);
+    autoExpandTreeNode('outline');
+    autoExpandTreeNode('global');
     container.innerHTML = list.map(o => `
         <div class="tree-file" onclick="showOutlineForm(${o.id})">
             <span class="tf-name">${escapeHtml(o.title || '未命名')}</span>
@@ -356,8 +398,11 @@ function renderChapterList(chapters) {
 
     if (!chapters || chapters.length === 0) {
         container.innerHTML = '<div style="padding:8px; text-align:center; color:var(--text-muted); font-size:12px;">暂无章节</div>';
+        updateTreeCount('manuscript', 0);
         return;
     }
+    updateTreeCount('manuscript', chapters.length);
+    autoExpandTreeNode('manuscript');
 
     // 复制并排序
     const sorted = [...chapters];

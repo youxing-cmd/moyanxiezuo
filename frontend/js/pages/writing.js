@@ -48,7 +48,7 @@
                                 <span class="tree-dot" style="background:var(--accent-light)"></span>
                                 <span style="flex:1; font-weight:600;">作品资料</span>
                             </div>
-                            <div class="tree-section-body" id="treeBody-global">
+                            <div class="tree-section-body" id="treeBody-global" style="display:block;">
 
                                 <!-- 大纲 -->
                                 <div class="tree-section-header tree-section-sub" onclick="toggleTreeNode('outline')">
