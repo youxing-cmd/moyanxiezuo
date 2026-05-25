@@ -14,9 +14,11 @@
     <link rel="stylesheet" href="css/auth.css">
     <link rel="stylesheet" href="css/modals.css">
     <link rel="stylesheet" href="css/responsive.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Sentry 错误监控（免费版） -->
-    <script src="https://browser.sentry-cdn.com/8.54.0/bundle.tracing.min.js" crossorigin="anonymous" async></script>
+    <!-- Sentry 错误监控（本地化，避免 CDN 延迟） -->
+    <script src="js/lib/sentry.min.js" async></script>
     <script>
         window.SENTRY_DSN = 'https://f601b4cf1686790f941dabb362a2f206@o4511369746972672.ingest.us.sentry.io/4511369773187072';
         window.addEventListener('load', function() {
@@ -213,7 +215,7 @@
         </main>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+    <script src="js/lib/mammoth.min.js"></script>
     <script src="js/state.js"></script>
     <script src="js/config.js"></script>
     <script src="js/utils.js"></script>
