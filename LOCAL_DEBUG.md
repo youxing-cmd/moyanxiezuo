@@ -33,12 +33,18 @@ npm run dev > /private/tmp/jiuzhang-dev.log 2>&1 &
 
 ## 本地开发降噪
 
-`.env` 中设置 `DISABLE_SCHEDULER=true` 可关闭以下后台任务：
-- 定时热点数据拉取（每日 9:00/21:00）
-- Agent Worker 初始化
-- Proactive Scanner（每 30s 扫描一次）
+`.env` 中支持细粒度开关：
 
-如果需要测试热点功能，临时改为 `DISABLE_SCHEDULER=false` 或注释掉该行。
+| 开关 | 关闭什么 | 默认 |
+|------|---------|------|
+| `DISABLE_TREND_SCHEDULER=true` | 趋势热点定时拉取（每日 9:00/21:00） | 开 |
+| `DISABLE_AGENT_WORKER=true` | Agent job 自动执行 | 关（保留） |
+| `DISABLE_PROACTIVE_SCANNER=true` | 主动建议扫描器（每 30s） | 开 |
+| `DISABLE_SCHEDULER=true` | 以上全部（向后兼容，优先级最高） | 关 |
+
+**测试 L8 主动建议时**：把 `DISABLE_PROACTIVE_SCANNER` 注释掉或删掉。
+**测试 Agent job 自动执行时**：把 `DISABLE_AGENT_WORKER` 注释掉或删掉。
+**测试热点功能时**：把 `DISABLE_TREND_SCHEDULER` 注释掉或删掉。
 
 ## 已知非致命噪声
 

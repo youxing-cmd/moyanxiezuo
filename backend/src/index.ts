@@ -115,15 +115,31 @@ if (process.env.NODE_ENV !== 'test') {
   })();
 }
 
-// 初始化定时任务（仅在非测试环境，支持 DISABLE_SCHEDULER 关闭）
-if (process.env.NODE_ENV !== 'test' && !process.env.DISABLE_SCHEDULER) {
-  initScheduler();
-  initAgentWorker().catch((err) => {
-    console.error('[index] Agent Worker 初始化失败:', err);
-  });
-  startProactiveScanner();
-} else if (process.env.DISABLE_SCHEDULER) {
-  console.log('[index] DISABLE_SCHEDULER=true，跳过 scheduler/agent-worker/proactive');
+// 初始化定时任务（仅在非测试环境，支持细粒度开关）
+// DISABLE_SCHEDULER=true 全部关闭（向后兼容）
+// 也可单独关闭：DISABLE_TREND_SCHEDULER / DISABLE_AGENT_WORKER / DISABLE_PROACTIVE_SCANNER
+const disableAll = !!process.env.DISABLE_SCHEDULER;
+
+if (process.env.NODE_ENV !== 'test') {
+  if (disableAll || process.env.DISABLE_TREND_SCHEDULER) {
+    console.log('[index] 趋势调度已关闭 (trend scheduler disabled)');
+  } else {
+    initScheduler();
+  }
+
+  if (disableAll || process.env.DISABLE_AGENT_WORKER) {
+    console.log('[index] Agent Worker 已关闭');
+  } else {
+    initAgentWorker().catch((err) => {
+      console.error('[index] Agent Worker 初始化失败:', err);
+    });
+  }
+
+  if (disableAll || process.env.DISABLE_PROACTIVE_SCANNER) {
+    console.log('[index] Proactive Scanner 已关闭');
+  } else {
+    startProactiveScanner();
+  }
 }
 
 // 未捕获异常上报 Sentry
