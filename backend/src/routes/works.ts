@@ -26,7 +26,7 @@ const createSchema = z.object({
   inspiration: z.string().default(''),
   analysis: z.string().default(''),
   lengthType: z.enum(['long', 'short']).default('long'),
-  source: z.enum(['original', 'analysis']).default('original'),
+  source: z.enum(['original', 'analysis', 'trend-plan', 'trend-item']).default('original'),
 });
 
 // GET /api/works

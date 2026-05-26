@@ -766,11 +766,11 @@ function renderTrends(data) {
                                 ${item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener" style="color:var(--text-primary); text-decoration:none; word-break:break-all;">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
                             </div>
                             <div style="display:flex; gap:4px; margin-top:6px; flex-wrap:wrap;">
-                                <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="analyzeHotTitle('${safeTitle}', '${trendsCurrentPlatform}', '${item.heat || ''}')">🔍 拆解</button>
-                                <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="generateCreationPlan('hot', '${safeTitle}', '${trendsCurrentPlatform}', '${trendsCurrentCategory}', '')">💡 生成创作方案</button>
-                                <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="saveTrendsItemToInspiration('hot', '${safeTitle}', '${trendsCurrentPlatform}', '${trendsCurrentCategory}', '')">⭐ 收藏</button>
-                                <button class="btn btn-primary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="createWorkFromTrendsItem('hot', '${safeTitle}', '${trendsCurrentPlatform}', '${trendsCurrentCategory}', '')">📝 创建作品</button>
-                                <button class="btn btn-primary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="bringTrendsItemIntoCurrentWork('hot', '${safeTitle}', '${trendsCurrentPlatform}', '${trendsCurrentCategory}', '')">📥 带入当前作品</button>
+                                <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); analyzeHotTitle('${safeTitle}', '${trendsCurrentPlatform}', '${item.heat || ''}')">🔍 拆解</button>
+                                <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); generateCreationPlan('hot', '${safeTitle}', '${trendsCurrentPlatform}', '${trendsCurrentCategory}', '')">💡 生成创作方案</button>
+                                <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); saveTrendsItemToInspiration('hot', '${safeTitle}', '${trendsCurrentPlatform}', '${trendsCurrentCategory}', '')">⭐ 收藏</button>
+                                <button class="btn btn-primary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); createWorkFromTrendsItem('hot', '${safeTitle}', '${trendsCurrentPlatform}', '${trendsCurrentCategory}', '')">📝 创建作品</button>
+                                <button class="btn btn-primary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); bringTrendsItemIntoCurrentWork('hot', '${safeTitle}', '${trendsCurrentPlatform}', '${trendsCurrentCategory}', '')">📥 带入当前作品</button>
                             </div>
                         </div>
                         <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
@@ -819,11 +819,11 @@ function renderTrends(data) {
                         <div class="rank-meta">${escapeHtml(item.author)} · ${escapeHtml(item.genre)} · ${item.readers}在读</div>
                         ${(item.tags || []).length > 0 ? `<div style="display:flex; gap:4px; margin-top:4px; flex-wrap:wrap;">${item.tags.map((t) => `<span style="padding:2px 6px; border-radius:4px; background:var(--bg-tertiary); color:var(--text-muted); font-size:11px;">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
                         <div style="display:flex; gap:4px; margin-top:8px; flex-wrap:wrap;">
-                            <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="analyzeHotTitle('${safeTitle}', '', '')">🔍 拆解</button>
-                            <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="generateCreationPlan('book', '${safeTitle}', '', '${trendsCurrentCategory}', '${safeContext}')">💡 生成创作方案</button>
-                            <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="saveTrendsItemToInspiration('book', '${safeTitle}', '', '${trendsCurrentCategory}', '${safeContext}')">⭐ 收藏</button>
-                            <button class="btn btn-primary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="createWorkFromTrendsItem('book', '${safeTitle}', '', '${trendsCurrentCategory}', '${safeContext}')">📝 创建作品</button>
-                            <button class="btn btn-primary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="bringTrendsItemIntoCurrentWork('book', '${safeTitle}', '', '${trendsCurrentCategory}', '${safeContext}')">📥 带入当前作品</button>
+                            <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); analyzeHotTitle('${safeTitle}', '', '')">🔍 拆解</button>
+                            <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); generateCreationPlan('book', '${safeTitle}', '', '${trendsCurrentCategory}', '${safeContext}')">💡 生成创作方案</button>
+                            <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); saveTrendsItemToInspiration('book', '${safeTitle}', '', '${trendsCurrentCategory}', '${safeContext}')">⭐ 收藏</button>
+                            <button class="btn btn-primary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); createWorkFromTrendsItem('book', '${safeTitle}', '', '${trendsCurrentCategory}', '${safeContext}')">📝 创建作品</button>
+                            <button class="btn btn-primary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); bringTrendsItemIntoCurrentWork('book', '${safeTitle}', '', '${trendsCurrentCategory}', '${safeContext}')">📥 带入当前作品</button>
                         </div>
                     </div>
                 </div>
@@ -2079,7 +2079,7 @@ async function generateCreationPlan(source, title, platform, category, context) 
                     <div style="color:var(--text-muted); font-size:11px; margin-top:6px;">预计 10-30 秒，请稍候...</div>
                 </div>
             </div>
-            <div id="creationPlanActions" style="display:none; margin-top:16px; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+            <div id="creationPlanActions" style="display:none; margin-top:16px; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
                 <button class="btn btn-ghost btn-sm" onclick="saveCurrentPlanToInspiration()">⭐ 收藏到灵感库</button>
                 <button class="btn btn-primary btn-sm" onclick="createWorkFromCurrentPlan()">📝 创建作品</button>
                 <button class="btn btn-primary btn-sm" onclick="bringCurrentPlanIntoWork()">📥 带入当前作品</button>
@@ -2132,8 +2132,13 @@ async function generateCreationPlan(source, title, platform, category, context) 
             }
             const actionsEl = document.getElementById('creationPlanActions');
             if (actionsEl) actionsEl.style.display = 'flex';
-            // 将当前方案挂载到全局，供按钮调用
-            window._currentCreationPlan = parsedPlan || { raw: fullText, title };
+            // 将当前方案挂载到全局，供按钮调用（确保带上来源标题和分类）
+            window._currentCreationPlan = {
+                ...(parsedPlan || { raw: fullText }),
+                title,
+                source,
+                category,
+            };
         },
         (err) => {
             if (contentEl) {

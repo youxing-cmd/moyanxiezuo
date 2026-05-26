@@ -7,7 +7,7 @@ import { callLLM } from '../services/llm.js';
 import { getBookRankings, hasTodayBookRankings } from '../services/bookCrawler.js';
 import { db } from '../db/index.js';
 import { users, pointTransactions } from '../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 const trendsRouter = new Hono();
 
@@ -1057,6 +1057,9 @@ ${hotStr}
 
 // POST /api/trends/generate-plan — 基于热点/书籍生成原创创作方案
 trendsRouter.post('/generate-plan', authMiddleware, async (c) => {
+  const userId = c.get('userId');
+  const cost = 1;
+
   try {
     const body = await c.req.json();
     const { source, title, platform: hotPlatform, category, context } = body;
@@ -1065,15 +1068,19 @@ trendsRouter.post('/generate-plan', authMiddleware, async (c) => {
       return c.json({ error: '缺少标题' }, 400);
     }
 
-    // 扣积分
-    const userId = c.get('userId');
-    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-    if (!user) return c.json({ error: '用户不存在' }, 404);
-    const cost = 1;
-    if (user.points < cost) {
-      return c.json({ error: '积分不足', need: cost, have: user.points, code: 'INSUFFICIENT_POINTS' }, 403);
+    // 扣积分（原子条件更新，防止并发和失败扣费）
+
+    // 原子扣减：只有 points >= cost 时才成功
+    const updateResult = await db
+      .update(users)
+      .set({ points: sql`${users.points} - ${cost}` })
+      .where(and(eq(users.id, userId), sql`${users.points} >= ${cost}`));
+
+    if (updateResult.rowCount === 0) {
+      const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      return c.json({ error: '积分不足', need: cost, have: user?.points || 0, code: 'INSUFFICIENT_POINTS' }, 403);
     }
-    await db.update(users).set({ points: user.points - cost }).where(eq(users.id, userId));
+
     await db.insert(pointTransactions).values({
       userId,
       type: 'spend',
@@ -1135,6 +1142,18 @@ ${context ? `- 上下文：${context}` : ''}
     });
   } catch (err: any) {
     console.error('[trends] 创作方案生成失败:', err);
+    // 补偿退款：LLM 调用失败时把积分退还给用户
+    try {
+      await db.update(users).set({ points: sql`${users.points} + ${cost}` }).where(eq(users.id, userId));
+      await db.insert(pointTransactions).values({
+        userId,
+        type: 'refund',
+        amount: cost,
+        description: '创作方案生成失败退款',
+      });
+    } catch (refundErr) {
+      console.error('[trends] 积分补偿退款失败:', refundErr);
+    }
     return c.json({ error: err.message || '生成失败' }, 500);
   }
 });

@@ -27,7 +27,9 @@ function resolveAvatar(val, fallback) {
 
 function renderMarkdown(md) {
     if (!md) return '';
-    return md
+    // 先 escape 原始文本，防止 LLM 输出或外部内容中的 HTML/event handler 造成 XSS
+    const safe = escapeHtml(md);
+    return safe
         .replace(/^### (.*$)/gim, '<h3 style="font-size:14px;font-weight:600;margin:12px 0 6px;color:var(--text-primary);">$1</h3>')
         .replace(/^## (.*$)/gim, '<h2 style="font-size:15px;font-weight:600;margin:14px 0 8px;color:var(--text-primary);">$1</h2>')
         .replace(/^# (.*$)/gim, '<h1 style="font-size:16px;font-weight:600;margin:16px 0 10px;color:var(--text-primary);">$1</h1>')
