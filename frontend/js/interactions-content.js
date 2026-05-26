@@ -678,14 +678,17 @@ function renderTrends(data) {
             </div>
             ${bookAnalysis.map((book, idx) => {
                 const fullText = `《${book.title}》拆书分析\n\n🔥 热点：${book.hotSpot}\n\n⚡ 金手指：${book.goldenFinger}\n\n🎯 核心爽点：${book.coreHook}\n\n👤 核心人设：${book.character}\n\n🪝 第一章钩子：${book.firstChapter}`;
+                const safeTitle = escapeHtml(book.title).replace(/'/g, "\\'");
                 return `
                 <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden; margin-bottom:12px;" data-analysis-text="${escapeHtml(fullText)}">
-                    <div style="padding:12px 16px; background:var(--bg-tertiary); display:flex; justify-content:space-between; align-items:center;">
+                    <div style="padding:12px 16px; background:var(--bg-tertiary); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                         <div style="font-size:14px; font-weight:600; color:var(--text-primary);">《${escapeHtml(book.title)}》</div>
-                        <div style="display:flex; gap:6px; align-items:center;">
-                            <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="copyBookAnalysis(${idx})">📋 复制</button>
-                            <button class="btn btn-primary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="saveBookAnalysisToInspiration(${idx})">⭐ 收藏</button>
-                            <button class="btn btn-primary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="createWorkFromBookAnalysis(${idx})">📝 创建作品</button>
+                        <div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">
+                            <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="analyzeHotTitle('${safeTitle}', '', '')">🔍 拆解</button>
+                            <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="generateCreationPlan('analysis', '${safeTitle}', '', '${trendsCurrentCategory}', getBookAnalysisText(${idx}))">💡 生成创作方案</button>
+                            <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="saveTrendsItemToInspiration('analysis', '${safeTitle}', '', '${trendsCurrentCategory}', getBookAnalysisText(${idx}))">⭐ 收藏</button>
+                            <button class="btn btn-primary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="createWorkFromTrendsItem('analysis', '${safeTitle}', '', '${trendsCurrentCategory}', getBookAnalysisText(${idx}))">📝 创建作品</button>
+                            <button class="btn btn-primary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="bringTrendsItemIntoCurrentWork('analysis', '${safeTitle}', '', '${trendsCurrentCategory}', getBookAnalysisText(${idx}))">📥 带入当前作品</button>
                         </div>
                     </div>
                     <div style="padding:14px 16px;">
@@ -753,21 +756,30 @@ function renderTrends(data) {
     if (trendsCurrentCategory === 'platform') {
         contentEl.innerHTML = `
             <div class="card rank-card">
-                ${items.map((item, i) => `
+                ${items.map((item, i) => {
+                    const safeTitle = escapeHtml(item.title).replace(/'/g, "\\'");
+                    return `
                     <div class="rank-item" style="padding:12px 18px; align-items:flex-start;">
                         <div class="rank-num ${i < 3 ? 'top' : 'normal'}" style="min-width:28px; margin-top:2px;">${item.rank}</div>
                         <div class="rank-info" style="flex:1; min-width:0;">
                             <div class="rank-title" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                                 ${item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener" style="color:var(--text-primary); text-decoration:none; word-break:break-all;">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
                             </div>
+                            <div style="display:flex; gap:4px; margin-top:6px; flex-wrap:wrap;">
+                                <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="analyzeHotTitle('${safeTitle}', '${trendsCurrentPlatform}', '${item.heat || ''}')">🔍 拆解</button>
+                                <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="generateCreationPlan('hot', '${safeTitle}', '${trendsCurrentPlatform}', '${trendsCurrentCategory}', '')">💡 生成创作方案</button>
+                                <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="saveTrendsItemToInspiration('hot', '${safeTitle}', '${trendsCurrentPlatform}', '${trendsCurrentCategory}', '')">⭐ 收藏</button>
+                                <button class="btn btn-primary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="createWorkFromTrendsItem('hot', '${safeTitle}', '${trendsCurrentPlatform}', '${trendsCurrentCategory}', '')">📝 创建作品</button>
+                                <button class="btn btn-primary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="bringTrendsItemIntoCurrentWork('hot', '${safeTitle}', '${trendsCurrentPlatform}', '${trendsCurrentCategory}', '')">📥 带入当前作品</button>
+                            </div>
                         </div>
                         <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
-                            <button class="btn btn-ghost btn-sm" onclick="analyzeHotTitle('${escapeHtml(item.title).replace(/'/g, "\\'")}', '${trendsCurrentPlatform}', '${item.heat || ''}')" style="font-size:12px; padding:2px 8px;">AI分析</button>
                             <span style="font-size:13px; color:var(--text-muted); white-space:nowrap;">${item.heat}</span>
                             ${item.change === 'up' ? '<span style="color:var(--danger); font-size:11px;">↑</span>' : item.change === 'down' ? '<span style="color:var(--success); font-size:11px;">↓</span>' : '<span style="color:var(--text-muted); font-size:11px;">-</span>'}
                         </div>
                     </div>
-                `).join('')}
+                    `;
+                }).join('')}
             </div>`;
         return;
     }
@@ -795,16 +807,28 @@ function renderTrends(data) {
     // 书籍榜单（男频/女频）
     contentEl.innerHTML = `
         <div class="card rank-card">
-            ${items.map((item, i) => `
+            ${items.map((item, i) => {
+                const safeTitle = escapeHtml(item.title).replace(/'/g, "\\'");
+                const context = `${escapeHtml(item.author)} · ${escapeHtml(item.genre)} · ${item.readers}在读${(item.tags || []).length > 0 ? ' · 标签：' + item.tags.join(',') : ''}`;
+                const safeContext = escapeHtml(context).replace(/'/g, "\\'");
+                return `
                 <div class="rank-item" style="padding:14px 18px;">
                     <div class="rank-num ${i < 3 ? 'top' : 'normal'}" style="min-width:28px;">${item.rank}</div>
                     <div class="rank-info" style="flex:1;">
                         <div class="rank-title">${escapeHtml(item.title)}</div>
                         <div class="rank-meta">${escapeHtml(item.author)} · ${escapeHtml(item.genre)} · ${item.readers}在读</div>
                         ${(item.tags || []).length > 0 ? `<div style="display:flex; gap:4px; margin-top:4px; flex-wrap:wrap;">${item.tags.map((t) => `<span style="padding:2px 6px; border-radius:4px; background:var(--bg-tertiary); color:var(--text-muted); font-size:11px;">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+                        <div style="display:flex; gap:4px; margin-top:8px; flex-wrap:wrap;">
+                            <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="analyzeHotTitle('${safeTitle}', '', '')">🔍 拆解</button>
+                            <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="generateCreationPlan('book', '${safeTitle}', '', '${trendsCurrentCategory}', '${safeContext}')">💡 生成创作方案</button>
+                            <button class="btn btn-ghost btn-sm" style="padding:2px 8px; font-size:11px;" onclick="saveTrendsItemToInspiration('book', '${safeTitle}', '', '${trendsCurrentCategory}', '${safeContext}')">⭐ 收藏</button>
+                            <button class="btn btn-primary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="createWorkFromTrendsItem('book', '${safeTitle}', '', '${trendsCurrentCategory}', '${safeContext}')">📝 创建作品</button>
+                            <button class="btn btn-primary btn-sm" style="padding:2px 8px; font-size:11px;" onclick="bringTrendsItemIntoCurrentWork('book', '${safeTitle}', '', '${trendsCurrentCategory}', '${safeContext}')">📥 带入当前作品</button>
+                        </div>
                     </div>
                 </div>
-            `).join('')}
+                `;
+            }).join('')}
         </div>`;
 }
 
@@ -2019,4 +2043,387 @@ async function createWorkFromBookAnalysis(idx) {
         showToast('创建失败：' + (err.message || '未知错误'), 'error');
     }
 }
+
+// ========== 热点/榜单/拆书 → 创作转化 ==========
+
+/** 生成创作方案：调用后端 LLM，输出结构化原创方案 */
+async function generateCreationPlan(source, title, platform, category, context) {
+    if (!currentUser) { showToast('请先登录', 'warning'); return; }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'jz-modal-overlay';
+    overlay.style.cssText = `
+        position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 9998; opacity: 0; transition: opacity 0.2s ease;
+    `;
+    overlay.innerHTML = `
+        <div class="jz-modal" style="
+            background: var(--bg-secondary); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); padding: 24px;
+            max-width: 680px; width: 90%; max-height: 85vh; overflow-y: auto;
+            box-shadow: var(--shadow); transform: scale(0.95);
+            transition: transform 0.2s ease;
+        ">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <span style="font-size: 16px; font-weight: 600; color: var(--text-primary);">💡 创作方案：${escapeHtml(title)}</span>
+                <button onclick="this.closest('.jz-modal-overlay').remove()" style="
+                    background: none; border: none; color: var(--text-muted);
+                    cursor: pointer; font-size: 18px; padding: 4px;
+                ">✕</button>
+            </div>
+            <div id="creationPlanContent" style="font-size: 13px; color: var(--text-secondary); line-height: 1.7;">
+                <div id="creationPlanLoading" style="text-align:center; padding:32px;">
+                    <div class="spinner" style="width:28px; height:28px; margin:0 auto 10px;"></div>
+                    <div style="color:var(--text-muted); font-size:13px;">AI 正在生成原创创作方案</div>
+                    <div style="color:var(--text-muted); font-size:11px; margin-top:6px;">预计 10-30 秒，请稍候...</div>
+                </div>
+            </div>
+            <div id="creationPlanActions" style="display:none; margin-top:16px; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+                <button class="btn btn-ghost btn-sm" onclick="saveCurrentPlanToInspiration()">⭐ 收藏到灵感库</button>
+                <button class="btn btn-primary btn-sm" onclick="createWorkFromCurrentPlan()">📝 创建作品</button>
+                <button class="btn btn-primary btn-sm" onclick="bringCurrentPlanIntoWork()">📥 带入当前作品</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) overlay.remove();
+    });
+    requestAnimationFrame(() => {
+        overlay.style.opacity = '1';
+        overlay.querySelector('.jz-modal').style.transform = 'scale(1)';
+    });
+
+    const contentEl = document.getElementById('creationPlanContent');
+    let hasReceived = false;
+    let fullText = '';
+    let parsedPlan = null;
+
+    await streamSSE('/api/trends/generate-plan', { source, title, platform, category, context },
+        (text) => {
+            if (!hasReceived && contentEl) {
+                const loadingEl = document.getElementById('creationPlanLoading');
+                if (loadingEl) loadingEl.remove();
+                hasReceived = true;
+            }
+            fullText = text;
+            // 尝试解析 JSON，如果失败则展示原始文本
+            const plan = tryParsePlanJSON(text);
+            parsedPlan = plan || parsedPlan;
+            if (contentEl) {
+                if (plan) {
+                    contentEl.innerHTML = renderPlanHTML(plan);
+                } else {
+                    contentEl.innerHTML = `<div style="white-space:pre-wrap; color:var(--text-secondary); font-size:12px; line-height:1.7;">${escapeHtml(text)}</div>`;
+                }
+            }
+        },
+        (text) => {
+            fullText = text;
+            const plan = tryParsePlanJSON(text);
+            parsedPlan = plan || parsedPlan;
+            if (contentEl) {
+                if (plan) {
+                    contentEl.innerHTML = renderPlanHTML(plan);
+                } else {
+                    contentEl.innerHTML = `<div style="white-space:pre-wrap; color:var(--text-secondary); font-size:12px; line-height:1.7;">${escapeHtml(text)}</div>`;
+                }
+            }
+            const actionsEl = document.getElementById('creationPlanActions');
+            if (actionsEl) actionsEl.style.display = 'flex';
+            // 将当前方案挂载到全局，供按钮调用
+            window._currentCreationPlan = parsedPlan || { raw: fullText, title };
+        },
+        (err) => {
+            if (contentEl) {
+                contentEl.innerHTML = `<div style="color:var(--danger);">生成失败：${escapeHtml(err)}</div>`;
+            }
+        }
+    );
+}
+
+/** 尝试从 LLM 输出中解析创作方案 JSON */
+function tryParsePlanJSON(text) {
+    try {
+        // 去掉 markdown 代码块标记
+        let clean = text.replace(/^\s*```(?:json)?\s*/, '').replace(/\s*```\s*$/, '');
+        const parsed = JSON.parse(clean);
+        if (parsed.coreSellingPoint || parsed.targetReader || parsed.characterRelations) {
+            return parsed;
+        }
+    } catch {
+        // 尝试提取 JSON 对象
+        const match = text.match(/\{[\s\S]*\}/);
+        if (match) {
+            try {
+                const parsed = JSON.parse(match[0]);
+                if (parsed.coreSellingPoint || parsed.targetReader || parsed.characterRelations) {
+                    return parsed;
+                }
+            } catch {
+                // ignore
+            }
+        }
+    }
+    return null;
+}
+
+/** 渲染创作方案为 HTML */
+function renderPlanHTML(plan) {
+    const sections = [
+        { key: 'coreSellingPoint', label: '🎯 核心卖点', desc: '一句话概括为什么这个故事能火' },
+        { key: 'targetReader', label: '👥 目标读者', desc: '性别、年龄、阅读偏好、痛点' },
+        { key: 'characterRelations', label: '👤 人设关系', desc: '主角性格 + 关键配角关系网 + 矛盾性' },
+        { key: 'openingHook', label: '🪝 开篇钩子', desc: '第一章具体场景 + 冲突 + 悬念' },
+        { key: 'pacingBeats', label: '⚡ 爽点节奏', desc: '递进式的爽点设计' },
+        { key: 'directionShort', label: '📄 短篇方向', desc: '3-5万字的结构建议' },
+        { key: 'directionLong', label: '📚 长篇方向', desc: '百万字级别的世界观与主线规划' },
+    ];
+    return sections.map(s => {
+        const val = plan[s.key];
+        if (!val) return '';
+        return `
+            <div style="margin-bottom:14px; padding:12px; background:var(--bg-tertiary); border-radius:var(--radius-sm); border:1px solid var(--border);">
+                <div style="font-size:12px; font-weight:600; color:var(--accent); margin-bottom:4px;">${escapeHtml(s.label)}</div>
+                <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px;">${escapeHtml(s.desc)}</div>
+                <div style="font-size:13px; color:var(--text-secondary); line-height:1.7; white-space:pre-wrap;">${escapeHtml(val)}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+/** 收藏当前方案到灵感库 */
+async function saveCurrentPlanToInspiration() {
+    const plan = window._currentCreationPlan;
+    if (!plan) { showToast('暂无方案可收藏', 'warning'); return; }
+
+    const title = plan.title || '创作方案';
+    let content = '';
+    if (plan.raw) {
+        content = plan.raw;
+    } else {
+        content = [
+            '🎯 核心卖点：' + (plan.coreSellingPoint || ''),
+            '👥 目标读者：' + (plan.targetReader || ''),
+            '👤 人设关系：' + (plan.characterRelations || ''),
+            '🪝 开篇钩子：' + (plan.openingHook || ''),
+            '⚡ 爽点节奏：' + (plan.pacingBeats || ''),
+            '📄 短篇方向：' + (plan.directionShort || ''),
+            '📚 长篇方向：' + (plan.directionLong || ''),
+        ].filter(Boolean).join('\n\n');
+    }
+
+    try {
+        await api('/inspirations', {
+            method: 'POST',
+            body: {
+                title: `【创作方案】${title}`,
+                source: 'trend',
+                tags: ['创作方案', '热文转化'],
+                content: content,
+            },
+        });
+        showToast('已收藏到灵感库', 'success');
+    } catch (err) {
+        showToast('收藏失败：' + (err.message || '未知错误'), 'error');
+    }
+}
+
+/** 从当前方案创建作品 */
+async function createWorkFromCurrentPlan() {
+    const plan = window._currentCreationPlan;
+    if (!plan) { showToast('暂无方案可创建', 'warning'); return; }
+
+    const title = (plan.title || '创作方案作品').replace(/^《|》$/g, '');
+    let content = '';
+    if (plan.raw) {
+        content = plan.raw;
+    } else {
+        content = [
+            '🎯 核心卖点：' + (plan.coreSellingPoint || ''),
+            '👥 目标读者：' + (plan.targetReader || ''),
+            '👤 人设关系：' + (plan.characterRelations || ''),
+            '🪝 开篇钩子：' + (plan.openingHook || ''),
+            '⚡ 爽点节奏：' + (plan.pacingBeats || ''),
+            '📄 短篇方向：' + (plan.directionShort || ''),
+            '📚 长篇方向：' + (plan.directionLong || ''),
+        ].filter(Boolean).join('\n\n');
+    }
+
+    let channel = 'male';
+    const cat = trendsCurrentCategory;
+    if (cat === 'femaleHot' || cat === 'femaleNew') channel = 'female';
+
+    try {
+        await api('/works', {
+            method: 'POST',
+            body: {
+                title: title.slice(0, 50) || '新作品',
+                genre: '未分类',
+                perspective: 'third',
+                channel: channel,
+                tags: ['热文转化'],
+                intro: '',
+                cover: '',
+                inspiration: content,
+                source: 'trend-plan',
+            },
+        });
+        showToast('作品已创建', 'success');
+        switchPage('works');
+    } catch (err) {
+        showToast('创建失败：' + (err.message || '未知错误'), 'error');
+    }
+}
+
+/** 将当前方案带入当前作品 */
+async function bringCurrentPlanIntoWork() {
+    const plan = window._currentCreationPlan;
+    if (!plan) { showToast('暂无方案可带入', 'warning'); return; }
+
+    if (!currentWorkId) {
+        showToast('请先进入写作台选择一个作品', 'warning');
+        return;
+    }
+
+    let content = '';
+    if (plan.raw) {
+        content = plan.raw;
+    } else {
+        content = [
+            '🎯 核心卖点：' + (plan.coreSellingPoint || ''),
+            '👥 目标读者：' + (plan.targetReader || ''),
+            '👤 人设关系：' + (plan.characterRelations || ''),
+            '🪝 开篇钩子：' + (plan.openingHook || ''),
+            '⚡ 爽点节奏：' + (plan.pacingBeats || ''),
+            '📄 短篇方向：' + (plan.directionShort || ''),
+            '📚 长篇方向：' + (plan.directionLong || ''),
+        ].filter(Boolean).join('\n\n');
+    }
+
+    try {
+        // 先获取当前作品信息
+        const work = await api(`/works/${currentWorkId}`);
+        const existingInspiration = work.inspiration || '';
+        const newInspiration = existingInspiration
+            ? existingInspiration + '\n\n---\n\n【热文创作方案】\n' + content
+            : '【热文创作方案】\n' + content;
+
+        await api(`/works/${currentWorkId}`, {
+            method: 'PUT',
+            body: {
+                inspiration: newInspiration,
+            },
+        });
+        showToast('已带入当前作品，可在写作台「作品灵感」中查看', 'success');
+    } catch (err) {
+        showToast('带入失败：' + (err.message || '未知错误'), 'error');
+    }
+}
+
+/** 通用：保存热点/榜单/拆书项到灵感库 */
+async function saveTrendsItemToInspiration(source, title, platform, category, context) {
+    if (!currentUser) { showToast('请先登录', 'warning'); return; }
+
+    let content = '';
+    if (context) {
+        content = context;
+    } else {
+        content = `来源：${source === 'hot' ? '平台热搜' : source === 'book' ? '书籍榜单' : '拆书分析'}\n标题：${title}`;
+        if (platform) content += `\n平台：${platform}`;
+        if (category) content += `\n赛道：${category}`;
+    }
+
+    try {
+        await api('/inspirations', {
+            method: 'POST',
+            body: {
+                title: `【${source === 'hot' ? '热搜' : source === 'book' ? '榜单' : '拆书'}】${title}`,
+                source: 'trend',
+                tags: [source === 'hot' ? '热搜' : source === 'book' ? '榜单' : '拆书', '热文赛道'],
+                content: content,
+            },
+        });
+        showToast('已收藏到灵感库', 'success');
+    } catch (err) {
+        showToast('收藏失败：' + (err.message || '未知错误'), 'error');
+    }
+}
+
+/** 通用：从热点/榜单/拆书项创建作品 */
+async function createWorkFromTrendsItem(source, title, platform, category, context) {
+    if (!currentUser) { showToast('请先登录', 'warning'); return; }
+
+    let content = '';
+    if (context) {
+        content = context;
+    } else {
+        content = `来源：${source === 'hot' ? '平台热搜' : source === 'book' ? '书籍榜单' : '拆书分析'}\n标题：${title}`;
+        if (platform) content += `\n平台：${platform}`;
+        if (category) content += `\n赛道：${category}`;
+    }
+
+    let channel = 'male';
+    if (category === 'femaleHot' || category === 'femaleNew') channel = 'female';
+
+    try {
+        await api('/works', {
+            method: 'POST',
+            body: {
+                title: title.slice(0, 50) || '新作品',
+                genre: '未分类',
+                perspective: 'third',
+                channel: channel,
+                tags: ['热文转化'],
+                intro: '',
+                cover: '',
+                inspiration: content,
+                source: 'trend-item',
+            },
+        });
+        showToast('作品已创建', 'success');
+        switchPage('works');
+    } catch (err) {
+        showToast('创建失败：' + (err.message || '未知错误'), 'error');
+    }
+}
+
+/** 通用：将热点/榜单/拆书项带入当前作品 */
+async function bringTrendsItemIntoCurrentWork(source, title, platform, category, context) {
+    if (!currentUser) { showToast('请先登录', 'warning'); return; }
+    if (!currentWorkId) {
+        showToast('请先进入写作台选择一个作品', 'warning');
+        return;
+    }
+
+    let content = '';
+    if (context) {
+        content = context;
+    } else {
+        content = `来源：${source === 'hot' ? '平台热搜' : source === 'book' ? '书籍榜单' : '拆书分析'}\n标题：${title}`;
+        if (platform) content += `\n平台：${platform}`;
+        if (category) content += `\n赛道：${category}`;
+    }
+
+    try {
+        const work = await api(`/works/${currentWorkId}`);
+        const existingInspiration = work.inspiration || '';
+        const label = source === 'hot' ? '热搜素材' : source === 'book' ? '榜单素材' : '拆书素材';
+        const newInspiration = existingInspiration
+            ? existingInspiration + '\n\n---\n\n【' + label + '】\n' + content
+            : '【' + label + '】\n' + content;
+
+        await api(`/works/${currentWorkId}`, {
+            method: 'PUT',
+            body: {
+                inspiration: newInspiration,
+            },
+        });
+        showToast('已带入当前作品，可在写作台「作品灵感」中查看', 'success');
+    } catch (err) {
+        showToast('带入失败：' + (err.message || '未知错误'), 'error');
+    }
+}
+
 

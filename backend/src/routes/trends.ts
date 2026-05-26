@@ -5,6 +5,9 @@ import { getWindVane } from '../services/trendsAnalysis.js';
 import { getBookAnalysis, generateBookAnalysis, generateFromSeed, checkGenerationLimit } from '../services/trendsInspiration.js';
 import { callLLM } from '../services/llm.js';
 import { getBookRankings, hasTodayBookRankings } from '../services/bookCrawler.js';
+import { db } from '../db/index.js';
+import { users, pointTransactions } from '../db/schema.js';
+import { eq } from 'drizzle-orm';
 
 const trendsRouter = new Hono();
 
@@ -1049,6 +1052,90 @@ ${hotStr}
   } catch (err: any) {
     console.error('[trends] 热点分析失败:', err);
     return c.json({ error: err.message || '分析失败' }, 500);
+  }
+});
+
+// POST /api/trends/generate-plan — 基于热点/书籍生成原创创作方案
+trendsRouter.post('/generate-plan', authMiddleware, async (c) => {
+  try {
+    const body = await c.req.json();
+    const { source, title, platform: hotPlatform, category, context } = body;
+
+    if (!title || typeof title !== 'string') {
+      return c.json({ error: '缺少标题' }, 400);
+    }
+
+    // 扣积分
+    const userId = c.get('userId');
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user) return c.json({ error: '用户不存在' }, 404);
+    const cost = 1;
+    if (user.points < cost) {
+      return c.json({ error: '积分不足', need: cost, have: user.points, code: 'INSUFFICIENT_POINTS' }, 403);
+    }
+    await db.update(users).set({ points: user.points - cost }).where(eq(users.id, userId));
+    await db.insert(pointTransactions).values({
+      userId,
+      type: 'spend',
+      amount: -cost,
+      description: '创作方案生成',
+    });
+
+    const platformLabel = hotPlatform ? getPlatformLabel(hotPlatform) : '';
+    const categoryLabelMap: Record<string, string> = {
+      platform: '全网热搜',
+      maleHot: '男频热度榜',
+      maleNew: '男频新书榜',
+      femaleHot: '女频热度榜',
+      femaleNew: '女频新书榜',
+      jiuzhou: '九州短篇',
+    };
+    const categoryLabel = category ? (categoryLabelMap[category] || category) : '';
+
+    const prompt = `你是顶级网文策划。请根据以下素材，输出一份原创创作方案（不是模仿，是借鉴热点/爆款逻辑后的原创方案）。
+
+素材：
+- 来源：${source === 'hot' ? '平台热搜' : source === 'book' ? '书籍榜单' : source === 'analysis' ? '拆书分析' : '未知'}
+- 标题：${title}
+${platformLabel ? `- 平台：${platformLabel}` : ''}
+${categoryLabel ? `- 赛道：${categoryLabel}` : ''}
+${context ? `- 上下文：${context}` : ''}
+
+请严格输出以下 JSON，不要有任何其他文字：
+{
+  "coreSellingPoint": "核心卖点：一句话概括为什么这个故事能火",
+  "targetReader": "目标读者：性别、年龄、阅读偏好、痛点",
+  "characterRelations": "人设关系：主角性格 + 关键配角关系网 + 矛盾性",
+  "openingHook": "开篇钩子：第一章具体场景 + 冲突 + 悬念",
+  "pacingBeats": "爽点节奏：①...②...③...④...（递进关系）",
+  "directionShort": "短篇方向：3-5万字的结构建议",
+  "directionLong": "长篇方向：百万字级别的世界观与主线规划"
+}
+
+约束：
+1. 必须是原创方案，不是对原作的复述或模仿
+2. 核心卖点要有市场差异化
+3. 人设必须有矛盾性，避免脸谱化
+4. 开篇必须直接从冲突切入
+5. 爽点节奏必须有递进关系
+6. 所有内容使用中文（简体）`;
+
+    const messages = [
+      { role: 'system', content: '你是顶级网文策划，擅长从热点和爆款中提炼原创创作方案。输出必须严格是 JSON 格式，不要任何 markdown 标记或额外文字。' },
+      { role: 'user', content: prompt },
+    ];
+
+    const res = await callLLM(messages, true);
+    return new Response(res.body, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
+  } catch (err: any) {
+    console.error('[trends] 创作方案生成失败:', err);
+    return c.json({ error: err.message || '生成失败' }, 500);
   }
 });
 
