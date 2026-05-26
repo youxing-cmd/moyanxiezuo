@@ -55,7 +55,7 @@ const OFFICIAL_TEMPLATES: Omit<PlanTemplate, 'id' | 'useCount'>[] = [
     userId: 0,
     name: '参考爆款创作',
     description: '研究参考作品 → 生成创作方向 → 用户选择 → 写作 → 自检',
-    queryPattern: '参考|模仿|爆款|仿写|借鉴',
+    queryPattern: '爆款|仿写|模仿.*作品|借鉴.*作品|对标',
     plan: {
       title: '参考爆款创作',
       estimatedDuration: '5-8 分钟',
@@ -131,11 +131,20 @@ export async function matchTemplate(userId: number, query: string): Promise<Plan
   for (const tmpl of allTemplates) {
     const pattern = tmpl.queryPattern || '';
     if (!pattern) continue;
-    // 简单关键词匹配（按匹配到的关键词数量打分）
+    // 关键词/正则匹配（按匹配到的关键词数量打分）
     const keywords = pattern.split('|').filter((k) => k.trim());
     let score = 0;
     for (const kw of keywords) {
-      if (query.includes(kw.trim())) score++;
+      const trimmed = kw.trim();
+      if (!trimmed) continue;
+      // 包含正则元字符时用 RegExp，否则用 includes
+      if (/[.*+?^${}()|[\]\\]/.test(trimmed)) {
+        try {
+          if (new RegExp(trimmed).test(query)) score++;
+        } catch { /* 无效正则跳过 */ }
+      } else {
+        if (query.includes(trimmed)) score++;
+      }
     }
     // 使用次数加权（用户自定义模板更有价值）
     if (!tmpl.isOfficial && score > 0) score += tmpl.useCount * 0.1;

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { eq, and, desc, gt } from 'drizzle-orm';
+import { eq, and, desc, gt, inArray, isNull } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
 import { db } from '../db/index.js';
 import { agentJobs, agentPlanSteps, agentStepEvents, aiArtifacts } from '../db/schema.js';
@@ -26,6 +26,27 @@ agentJobsRouter.post('/agent-jobs', async (c) => {
 
   const userId = c.get('userId');
   const { query, workId } = parsed.data;
+  const activeStatuses = ['planning', 'ready', 'running', 'waiting', 'user_blocked', 'paused'];
+  const [existingJob] = await db
+    .select()
+    .from(agentJobs)
+    .where(and(
+      eq(agentJobs.userId, userId),
+      workId == null ? isNull(agentJobs.workId) : eq(agentJobs.workId, workId),
+      eq(agentJobs.query, query),
+      inArray(agentJobs.status, activeStatuses),
+    ))
+    .orderBy(desc(agentJobs.createdAt))
+    .limit(1);
+
+  if (existingJob) {
+    return c.json({
+      id: existingJob.id,
+      status: existingJob.status,
+      query: existingJob.query,
+      duplicate: true,
+    }, 200);
+  }
 
   const [job] = await db
     .insert(agentJobs)
@@ -192,8 +213,16 @@ agentJobsRouter.post('/agent-jobs/:id/start', async (c) => {
     return c.json({ error: '任务不存在' }, 404);
   }
 
-  if (['done', 'failed', 'aborted', 'user_blocked'].includes(job.status)) {
+  if (job.status === 'running') {
+    return c.json({ id: jobId, status: 'running', duplicate: true });
+  }
+
+  if (['done', 'failed', 'aborted', 'user_blocked', 'waiting'].includes(job.status)) {
     return c.json({ error: `当前状态为 ${job.status}，无法开始` }, 400);
+  }
+
+  if (!['planning', 'ready', 'paused'].includes(job.status)) {
+    return c.json({ error: `未知任务状态 ${job.status}，无法开始` }, 400);
   }
 
   await db
@@ -518,8 +547,14 @@ agentJobsRouter.get('/agent-jobs/:id/stream', async (c) => {
 
       send('connected', { jobId, status: job.status });
 
-      // 轮询循环（每 2 秒）
-      const interval = setInterval(async () => {
+      // 轮询循环（每 2 秒），用 setTimeout 递归避免并发重叠
+      let pollTimer: ReturnType<typeof setTimeout> | null = null;
+      let isPolling = false;
+      const STOP_STREAM_STATUSES = ['done', 'failed', 'aborted', 'user_blocked', 'waiting'];
+
+      const doPoll = async () => {
+        if (isPolling) return;
+        isPolling = true;
         try {
           const [currentJob] = await db
             .select()
@@ -567,19 +602,29 @@ agentJobsRouter.get('/agent-jobs/:id/stream', async (c) => {
             })),
           });
 
-          if (['done', 'failed', 'aborted'].includes(currentJob.status)) {
-            send('done', {});
-            clearInterval(interval);
+          if (STOP_STREAM_STATUSES.includes(currentJob.status)) {
+            send('done', { status: currentJob.status });
+            if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
             controller.close();
+            return;
           }
         } catch (err) {
           console.error('[agent-jobs stream] 轮询错误:', err);
+        } finally {
+          isPolling = false;
         }
-      }, 2000);
+        if (!subAbort) {
+          pollTimer = setTimeout(doPoll, 2000);
+        }
+      };
+
+      let subAbort = false;
+      pollTimer = setTimeout(doPoll, 2000);
 
       // 客户端断开时清理
       c.req.raw.signal.addEventListener('abort', () => {
-        clearInterval(interval);
+        subAbort = true;
+        if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
         controller.close();
       });
     },

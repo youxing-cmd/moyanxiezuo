@@ -6,6 +6,7 @@
 
     const POLL_INTERVAL = 10000; // 轮询兜底：10 秒
     const API_BASE = (typeof window !== 'undefined' && window.API_BASE) || '/api';
+    const STOP_STATUSES = ['done', 'failed', 'aborted', 'user_blocked', 'waiting'];
 
     const activeSubscriptions = new Map(); // jobId -> { abort, stop }
 
@@ -38,11 +39,22 @@
                 if (currentEvent === 'connected') callbacks.onUpdate?.(payload);
                 if (currentEvent === 'job_update') {
                     callbacks.onUpdate?.(payload);
-                    if (['done', 'failed', 'aborted', 'user_blocked'].includes(payload.status)) {
-                        callbacks.onDone?.();
+                    if (STOP_STATUSES.includes(payload.status)) {
+                        callbacks.onDone?.(payload.status);
+                        sub.abort = true;
                     }
                 }
-                if (currentEvent === 'done') callbacks.onDone?.();
+                if (currentEvent === 'done') {
+                    // done 事件带 status：如果 status 是 waiting/user_blocked，说明
+                    // job_update 已经通过 STOP_STATUSES 触发过 onDone，不应再报"已完成"
+                    const doneStatus = payload.status;
+                    if (doneStatus && STOP_STATUSES.includes(doneStatus) && doneStatus !== 'done' && doneStatus !== 'failed' && doneStatus !== 'aborted') {
+                        // waiting/user_blocked：之前 job_update 已触发 onDone，忽略空 done
+                    } else {
+                        callbacks.onDone?.(doneStatus || 'done');
+                    }
+                    sub.abort = true;
+                }
             } catch {
                 // 非 JSON payload 忽略
             }
@@ -88,7 +100,11 @@
 
             sub.sseAbort = false;
             const url = `${API_BASE}/ai/agent-jobs/${jobId}/stream`;
-            ssePromise = connectSSE(url, callbacks, sub).catch((err) => {
+            ssePromise = connectSSE(url, callbacks, sub).then(() => {
+                if (sub.abort) {
+                    activeSubscriptions.delete(jobId);
+                }
+            }).catch((err) => {
                 // SSE 出错时降级到轮询
                 if (!sub.abort && !sub.sseAbort) {
                     callbacks.onError?.(err);
@@ -121,8 +137,8 @@
                         events: data.events || [],
                         artifacts: data.artifacts || [],
                     });
-                    if (['done', 'failed', 'aborted', 'user_blocked'].includes(data.job?.status)) {
-                        callbacks.onDone?.();
+                    if (STOP_STATUSES.includes(data.job?.status)) {
+                        callbacks.onDone?.(data.job?.status);
                         if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
                         activeSubscriptions.delete(jobId);
                     }

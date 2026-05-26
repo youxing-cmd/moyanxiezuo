@@ -99,20 +99,29 @@ app.get('*', async (c) => {
 });
 
 // 启动 DailyHotApi（内嵌到同一进程）
-if (process.env.NODE_ENV !== 'test') {
+// DISABLE_DAILY_HOT_EMBEDDED=true 或外部已配置时跳过
+if (process.env.NODE_ENV !== 'test' && !process.env.DISABLE_DAILY_HOT_EMBEDDED) {
   (async () => {
     try {
+      const hotApiPort = parseInt(process.env.DAILY_HOT_API_PORT || '6688');
       // 临时改 NODE_ENV 阻止 dailyhot-api 自动启动
       const prevEnv = process.env.NODE_ENV;
       process.env.NODE_ENV = 'production';
       const { default: serveHotApi } = await import('dailyhot-api');
       process.env.NODE_ENV = prevEnv;
-      serveHotApi(6688);
-      console.log('🔥 DailyHotApi 内嵌启动成功');
-    } catch (err) {
-      console.error('[DailyHotApi] 内嵌启动失败:', err);
+      serveHotApi(hotApiPort);
+      console.log(`🔥 DailyHotApi 内嵌启动成功 (port ${hotApiPort})`);
+    } catch (err: any) {
+      // EADDRINUSE 等端口错误不触发 uncaughtException，只打日志降级
+      if (err?.code === 'EADDRINUSE') {
+        console.warn(`[DailyHotApi] 端口已被占用，跳过内嵌启动。设置 DISABLE_DAILY_HOT_EMBEDDED=true 可消除此警告`);
+      } else {
+        console.error('[DailyHotApi] 内嵌启动失败:', err);
+      }
     }
   })();
+} else if (process.env.DISABLE_DAILY_HOT_EMBEDDED) {
+  console.log('[index] DailyHotApi 内嵌启动已关闭 (DISABLE_DAILY_HOT_EMBEDDED)');
 }
 
 // 初始化定时任务（仅在非测试环境，支持细粒度开关）
@@ -143,7 +152,12 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // 未捕获异常上报 Sentry
-process.on('uncaughtException', (err) => {
+process.on('uncaughtException', (err: any) => {
+  // 端口冲突类异常：只打日志不退出（DailyHotApi 等非核心服务的 EADDRINUSE 不应 kill 主进程）
+  if (err?.code === 'EADDRINUSE') {
+    console.warn(`[uncaughtException] 端口 ${err.port || ''} 已被占用，忽略:`, err.message);
+    return;
+  }
   console.error('未捕获异常:', err);
   if (process.env.SENTRY_DSN) {
     Sentry.captureException(err);
