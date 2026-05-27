@@ -26,7 +26,7 @@ RUN cd backend && npm run build
 RUN mkdir -p /app/backend/logs
 
 # 暴露后端端口（前端经后端静态托管）
-EXPOSE 7860
+EXPOSE 3000
 
 WORKDIR /app/backend
 

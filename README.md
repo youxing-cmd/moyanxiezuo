@@ -1,7 +1,7 @@
 ---
 title: Jiuzhang Writing
 sdk: docker
-app_port: 7860
+app_port: 3000
 pinned: false
 ---
 
