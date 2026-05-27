@@ -19,6 +19,9 @@ ENV NODE_ENV=production
 COPY backend ./backend
 COPY frontend ./frontend
 
+# 编译 TypeScript（devDeps 在 npm ci 阶段已安装，tsc 可用）
+RUN cd backend && npm run build
+
 # 日志目录预创建（运行时通过 volume 挂载）
 RUN mkdir -p /app/backend/logs \
   && chown -R 1000:1000 /app
