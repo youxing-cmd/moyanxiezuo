@@ -1015,6 +1015,10 @@ async function initPageInteractions(page) {
                 /帮我写/,
                 /生成.*大纲/,
                 /生成.*章纲/,
+                /填充.*大纲/,
+                /导入.*大纲/,
+                /保存.*大纲/,
+                /更新.*大纲/,
                 /写一篇/,
                 /写一章/,
                 /写个.*故事/,
@@ -1030,6 +1034,10 @@ async function initPageInteractions(page) {
                 /检查.*全文/,
                 /分析.*剧情/,
                 /分析.*人物/,
+                /创建.*角色/,
+                /添加.*角色/,
+                /设定.*背景/,
+                /填充.*设定/,
             ];
             return triggers.some((re) => re.test(text));
         }
@@ -1310,6 +1318,30 @@ async function initPageInteractions(page) {
                         const contentEl = el.querySelector('.ai-msg-content');
                         const txt = contentEl?.textContent || '';
                         if (!txt) { showToast('内容为空', 'warning'); return; }
+                        // 智能判断：若内容像大纲/角色/设定，提供保存到侧栏选项
+                        const outlineLike = /第[一二三四五六七八九十\d]+章|故事大纲|章节.*概|主线|支线/.test(txt);
+                        const charLike = /姓名[:：]|年龄[:：]|性别[:：]|性格[:：]|外貌[:：]/.test(txt);
+                        if (outlineLike && currentWorkId && confirm('检测到大纲内容，保存到「故事大纲」吗？')) {
+                            api('/metadata/' + currentWorkId + '/outlines', {
+                                method: 'POST',
+                                body: { title: 'AI生成大纲', content: txt }
+                            }).then(() => {
+                                showToast('已保存到故事大纲', 'success');
+                                if (typeof loadWorkMetadata === 'function' && currentWorkData) loadWorkMetadata(currentWorkData);
+                            }).catch((e) => showToast('保存失败: ' + (e.message || ''), 'danger'));
+                            return;
+                        }
+                        if (charLike && currentWorkId && confirm('检测到角色内容，保存到「人物角色」吗？')) {
+                            const nameMatch = txt.match(/姓名[:：]\s*(.+)/);
+                            api('/metadata/' + currentWorkId + '/characters', {
+                                method: 'POST',
+                                body: { name: nameMatch ? nameMatch[1].trim().slice(0,20) : '新角色', role: 'supporting', content: txt }
+                            }).then(() => {
+                                showToast('已保存到人物角色', 'success');
+                                if (typeof loadWorkMetadata === 'function' && currentWorkData) loadWorkMetadata(currentWorkData);
+                            }).catch((e) => showToast('保存失败: ' + (e.message || ''), 'danger'));
+                            return;
+                        }
                         insertIntoEditor(txt);
                     },
                     onRetry: () => {

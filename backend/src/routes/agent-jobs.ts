@@ -580,6 +580,17 @@ agentJobsRouter.get('/agent-jobs/:id/stream', async (c) => {
             .where(eq(agentPlanSteps.jobId, jobId))
             .orderBy(agentPlanSteps.idx);
 
+          // 任务完成时查询关联 artifacts，方便前端交付面板展示
+          let artifacts: unknown[] = [];
+          if (STOP_STREAM_STATUSES.includes(currentJob.status) && currentJob.workId) {
+            artifacts = await db
+              .select({ id: aiArtifacts.id, title: aiArtifacts.title, type: aiArtifacts.type, content: aiArtifacts.content })
+              .from(aiArtifacts)
+              .where(and(eq(aiArtifacts.workId, currentJob.workId), eq(aiArtifacts.userId, userId)))
+              .orderBy(desc(aiArtifacts.createdAt))
+              .limit(10);
+          }
+
           send('job_update', {
             status: currentJob.status,
             progress: currentJob.progress,
@@ -592,6 +603,8 @@ agentJobsRouter.get('/agent-jobs/:id/stream', async (c) => {
               title: s.title,
               status: s.status,
               retryCount: s.retryCount,
+              output: s.output,
+              description: s.description,
             })),
             events: newEvents.map((e) => ({
               id: e.id,
@@ -600,6 +613,7 @@ agentJobsRouter.get('/agent-jobs/:id/stream', async (c) => {
               payload: e.payload,
               createdAt: e.createdAt,
             })),
+            artifacts,
           });
 
           if (STOP_STREAM_STATUSES.includes(currentJob.status)) {
