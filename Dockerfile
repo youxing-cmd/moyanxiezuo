@@ -27,7 +27,7 @@ RUN mkdir -p /app/backend/logs \
   && chown -R 1000:1000 /app
 
 # 暴露后端端口（前端经后端静态托管）
-EXPOSE 3000
+EXPOSE 7860
 
 WORKDIR /app/backend
 
