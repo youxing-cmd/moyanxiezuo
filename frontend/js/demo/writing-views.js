@@ -1,3 +1,4 @@
+var writingViews = {};
 writingViews.cover = () => `
         <div class="page-section" style="max-width: 800px; margin: 0 auto;">
             <div style="text-align: center; margin-bottom: 32px;">

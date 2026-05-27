@@ -1,15 +1,16 @@
 async function api(path, options = {}) {
     const url = API_BASE + path;
-    // 30s 超时，防止请求永远挂起
+    // 默认 30s 超时，防止请求永远挂起；可通过 options.timeout 覆盖
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutMs = options.timeout || 30000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     const opts = {
+        ...options,
         headers: {
             'Content-Type': 'application/json',
             ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
             ...options.headers,
         },
-        ...options,
         signal: controller.signal,
     };
     if (opts.body && typeof opts.body === 'object') {

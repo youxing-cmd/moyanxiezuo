@@ -332,10 +332,14 @@
                     <div class="chat-panel">
                         <!-- 顶部 -->
                         <div class="chat-topbar">
-                            <div class="model-select" id="chatTopbarModelSelect" onclick="toggleChatModelDropdown()">
+                            <div class="chat-title-block">
+                                <div class="chat-title">九章助手</div>
+                                <div class="chat-subtitle">当前章节协作</div>
+                            </div>
+                            <button class="model-select" id="chatTopbarModelSelect" onclick="toggleChatModelDropdown()">
                                 <span id="chatTopbarModelName">默认模型</span>
                                 <span class="arrow">▼</span>
-                            </div>
+                            </button>
                             <div class="chat-tabs">
                                 <button class="chat-tab active" data-tab="chat" onclick="switchChatTab('chat')">对话</button>
                                 <button class="chat-tab" data-tab="continue" onclick="switchChatTab('continue')">续写</button>
@@ -350,15 +354,18 @@
 
                             <!-- Agent 高频入口 -->
                             <div class="agent-entry-bar" id="agentEntryBar">
-                                <span class="agent-entry-label">快捷任务</span>
+                                <span class="agent-entry-label">常用动作</span>
                                 <button class="agent-entry-btn" data-agent-query="帮我写一章正文，延续当前剧情" title="AI 分析上下文后自动续写一章">
-                                    ✍️ 写一章
+                                    写一章
                                 </button>
                                 <button class="agent-entry-btn" data-action="review" title="AI 对当前章节进行全面审稿">
-                                    🔍 审稿全文
+                                    审稿
                                 </button>
-                                <button class="agent-entry-btn" data-agent-query="参考当前热门爆款作品，给我写一篇同风格短篇" title="AI 研究爆款后模仿创作">
-                                    🎯 参考爆款创作
+                                <button class="agent-entry-btn" data-action="next-chapter" title="基于当前章节生成下一章推进方案">
+                                    下一章
+                                </button>
+                                <button class="agent-entry-btn" data-action="polish-selection" title="润色编辑器中的选中段落">
+                                    润色选中
                                 </button>
                             </div>
 

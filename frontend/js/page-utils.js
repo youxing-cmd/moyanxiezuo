@@ -17,6 +17,7 @@ const pageTitles = {
 
 // 当前写作子视图
 let currentWritingView = 'editor';
+let currentPage = null;
 
 // ========== 初始化 ==========
 async function init() {
@@ -57,6 +58,11 @@ async function init() {
 
 // ========== 页面切换 ==========
 async function switchPage(page) {
+    if (currentPage === 'writing') {
+        window.jzAgentPoller?.unsubscribeAllAgentJobs?.();
+        window.__jzComposerActiveLocks?.clear?.();
+    }
+
     // 更新导航激活状态
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.toggle('active', item.dataset.page === page);
@@ -77,6 +83,7 @@ async function switchPage(page) {
         if (page === 'writing') {
             switchWritingView(currentWritingView);
         }
+        currentPage = page;
     }
 }
 

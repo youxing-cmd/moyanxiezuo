@@ -14,7 +14,7 @@ router.get('/templates', async (c) => {
   const official = [
     { id: -1, name: '写一章正文', description: '读取作品上下文 → 生成章纲 → 写正文 → 自检 → 保存产物', queryPattern: '写一章|续写|写正文|写内容' },
     { id: -2, name: '审稿检查', description: '读取作品上下文 → 六维度自检 → 生成审稿报告', queryPattern: '审稿|检查|看看|评价|点评' },
-    { id: -3, name: '参考爆款创作', description: '研究参考作品 → 生成创作方向 → 用户选择 → 写作 → 自检', queryPattern: '参考|模仿|爆款|仿写|借鉴' },
+    { id: -3, name: '参考爆款创作', description: '研究参考作品 → 生成创作方向 → 用户选择 → 写作 → 自检', queryPattern: '爆款|仿写|模仿.*作品|借鉴.*作品|对标' },
     { id: -4, name: '章纲转正文', description: '读取作品上下文 → 写正文 → 自检 → 保存产物', queryPattern: '章纲|大纲|转正文|扩写' },
     { id: -5, name: '标题简介包装', description: '读取作品上下文 → 生成标题/简介方案 → 用户选择 → 保存产物', queryPattern: '标题|简介|包装|起名|取名' },
   ];
