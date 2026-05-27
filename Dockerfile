@@ -23,15 +23,11 @@ COPY frontend ./frontend
 RUN cd backend && npm run build
 
 # 日志目录预创建（运行时通过 volume 挂载）
-RUN mkdir -p /app/backend/logs \
-  && chown -R 1000:1000 /app
+RUN mkdir -p /app/backend/logs
 
 # 暴露后端端口（前端经后端静态托管）
 EXPOSE 7860
 
 WORKDIR /app/backend
 
-USER 1000:1000
-
-# 直接用 tsx 跑 TypeScript（与 npm start 一致）
 CMD ["npm", "start"]
