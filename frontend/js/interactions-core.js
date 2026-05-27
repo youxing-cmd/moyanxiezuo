@@ -655,16 +655,18 @@ async function initPageInteractions(page) {
                     const msgText = contentEl?.textContent?.slice(0, 50) || '';
                     const trackCorrection = (userAction) => {
                         const fullText = contentEl?.textContent || '';
+                        const correctionBody = {
+                            aiContent: fullText,
+                            userAction,
+                        };
+                        if (currentWorkId) correctionBody.workId = Number(currentWorkId);
+                        if (currentChapterId) correctionBody.chapterId = Number(currentChapterId);
+                        if (currentChatTool) correctionBody.toolType = currentChatTool;
+                        const mid = typeof getActiveModelId === 'function' ? getActiveModelId() : null;
+                        if (mid != null) correctionBody.modelId = mid;
                         api('/ai/corrections', {
                             method: 'POST',
-                            body: {
-                                workId: currentWorkId || null,
-                                chapterId: currentChapterId || null,
-                                aiContent: fullText,
-                                userAction,
-                                toolType: currentChatTool || null,
-                                modelId: typeof getActiveModelId === 'function' ? getActiveModelId() : null,
-                            }
+                            body: correctionBody,
                         }).catch(() => {});
                     };
                     if (action === 'copy') {
@@ -929,10 +931,13 @@ async function initPageInteractions(page) {
 
         function renderChatHistory() {
             if (!chatMessages) return;
+            // 保留 Plan 卡片，只清除聊天消息和欢迎提示
+            const planCards = Array.from(chatMessages.querySelectorAll('.plan-card'));
             chatMessages.innerHTML = '';
+            planCards.forEach((card) => chatMessages.appendChild(card));
 
-            if (aiChatHistory.length === 0) {
-                // 无历史时显示欢迎提示
+            if (aiChatHistory.length === 0 && planCards.length === 0) {
+                // 无历史且无 Plan 卡片时显示欢迎提示
                 chatMessages.innerHTML = `
                     <div class="chat-welcome" id="aiChatWelcome">
                         <div class="chat-welcome-avatar">
@@ -1030,8 +1035,21 @@ async function initPageInteractions(page) {
         }
 
         // 执行 Composer 流程：创建 agent-job → 渲染 Plan 卡片
+        let composerRunning = false;
         async function runComposerFlow(query, container) {
             const workId = currentWorkId ? Number(currentWorkId) : null;
+            const lockKey = `${workId || 'global'}:${String(query || '').trim()}`;
+            window.__jzComposerActiveLocks = window.__jzComposerActiveLocks || new Set();
+            if (window.__jzComposerActiveLocks.has(lockKey)) {
+                showToast('这条协作任务已经在执行中', 'warning');
+                return;
+            }
+            if (composerRunning) {
+                showToast('正在规划中，请稍候...', 'warning');
+                return;
+            }
+            composerRunning = true;
+            window.__jzComposerActiveLocks.add(lockKey);
 
             // 显示"正在规划..."
             const planningBubble = document.createElement('div');
@@ -1049,6 +1067,7 @@ async function initPageInteractions(page) {
                 jobData = await api('/ai/agent-jobs', {
                     method: 'POST',
                     body: { query, workId },
+                    timeout: 120000, // Planner LLM 可能较慢，给 120s
                 });
             } catch (err) {
                 planningBubble.innerHTML = `
@@ -1056,6 +1075,8 @@ async function initPageInteractions(page) {
                         规划失败: ${err.message || '未知错误'}
                     </div>
                 `;
+                composerRunning = false;
+                window.__jzComposerActiveLocks.delete(lockKey);
                 return;
             }
 
@@ -1072,6 +1093,8 @@ async function initPageInteractions(page) {
                 `;
                 container.appendChild(failBubble);
                 container.scrollTop = container.scrollHeight;
+                composerRunning = false;
+                window.__jzComposerActiveLocks.delete(lockKey);
                 return;
             }
 
@@ -1123,21 +1146,48 @@ async function initPageInteractions(page) {
             container.appendChild(planCard);
             container.scrollTop = container.scrollHeight;
 
-            // 如果 job 已经是 running 状态（极少见），自动启动订阅
-            if (planData.status === 'running') {
-                startPlanPolling(jobData.id, planCard);
+            if (jobData.duplicate) {
+                showToast('已恢复现有协作任务', 'info');
             }
+
+            try {
+                if (jobData.duplicate) {
+                    if (planData.status === 'running') {
+                        startPlanPolling(jobData.id, planCard, { lockKey });
+                    } else {
+                        window.__jzComposerActiveLocks.delete(lockKey);
+                    }
+                } else if (['ready', 'paused'].includes(planData.status)) {
+                    await api(`/ai/agent-jobs/${jobData.id}/start`, { method: 'POST' });
+                    startPlanPolling(jobData.id, planCard, { lockKey });
+                } else if (planData.status === 'running') {
+                    startPlanPolling(jobData.id, planCard, { lockKey });
+                } else {
+                    window.__jzComposerActiveLocks.delete(lockKey);
+                }
+            } catch (err) {
+                showToast('启动失败: ' + (err.message || '未知错误'), 'error');
+                window.__jzComposerActiveLocks.delete(lockKey);
+            }
+            composerRunning = false;
         }
 
         // 启动 Plan 卡片的实时刷新
-        function startPlanPolling(jobId, planCard) {
+        function startPlanPolling(jobId, planCard, options = {}) {
             if (!window.jzAgentPoller) return;
             window.jzAgentPoller.subscribeAgentJob(jobId, {
                 onUpdate: (data) => {
                     window.jzComposer.updatePlanCard(planCard, data);
                 },
-                onDone: () => {
-                    showToast('协作任务已完成', 'success');
+                onDone: (status) => {
+                    if (options.lockKey) {
+                        window.__jzComposerActiveLocks?.delete(options.lockKey);
+                    }
+                    if (status === 'waiting' || status === 'user_blocked') {
+                        showToast('协作任务需要你确认下一步', 'info');
+                    } else {
+                        showToast('协作任务已完成', 'success');
+                    }
                 },
                 onError: (err) => {
                     console.warn('[composer poll] 错误:', err);
@@ -2458,8 +2508,9 @@ async function initPageInteractions(page) {
         // Agent 高频入口按钮绑定
         workspace.querySelectorAll('.agent-entry-btn').forEach((btn) => {
             btn.addEventListener('click', () => {
+                const action = btn.dataset.action;
                 // 审稿全文：直接调用 chapter-review API，不走聊天流程
-                if (btn.dataset.action === 'review') {
+                if (action === 'review') {
                     if (isReviewing) {
                         showToast('正在审稿中，请稍候...', 'warning');
                         return;
@@ -2469,6 +2520,31 @@ async function initPageInteractions(page) {
                         return;
                     }
                     runChapterReview(currentWorkId, currentChapterId);
+                    return;
+                }
+                if (action === 'next-chapter') {
+                    if (!currentWorkId || !currentChapterId) {
+                        showToast('请先选择一个章节', 'warning');
+                        return;
+                    }
+                    if (chatInput) {
+                        chatInput.value = '基于当前章节内容、章节摘要和未回收伏笔，给我3个下一章推进方案。每个方案包含：核心冲突、爽点/情绪点、结尾钩子。';
+                        sendAiMessage();
+                    }
+                    return;
+                }
+                if (action === 'polish-selection') {
+                    const editorArea = document.getElementById('editorArea');
+                    const selection = window.getSelection();
+                    const selectedText = selection?.toString().trim();
+                    if (!selectedText || (editorArea && !editorArea.contains(selection.anchorNode))) {
+                        showToast('请先在编辑器中选中要润色的段落', 'warning');
+                        return;
+                    }
+                    if (chatInput) {
+                        chatInput.value = `请润色下面这段文字，保留原意和人物口吻，只提升节奏、画面感和句子顺畅度。直接给出可替换版本。\n\n【引用内容】\n${selectedText}`;
+                        sendAiMessage();
+                    }
                     return;
                 }
                 const query = btn.dataset.agentQuery;

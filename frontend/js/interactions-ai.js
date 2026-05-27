@@ -782,21 +782,26 @@ async function executeAiTool(tool, body, customTool = null) {
         let data;
         if (customTool) {
             // 自定义工具走 chat 接口
+            const mid0 = getActiveModelId();
+            const chatBody = {
+                messages: [
+                    { role: 'system', content: customTool.systemPrompt },
+                    { role: 'user', content: body.input || '' }
+                ],
+            };
+            if (mid0 != null) chatBody.modelId = mid0;
             data = await api('/ai/chat', {
                 method: 'POST',
-                body: {
-                    messages: [
-                        { role: 'system', content: customTool.systemPrompt },
-                        { role: 'user', content: body.input || '' }
-                    ],
-                    modelId: getActiveModelId()
-                }
+                body: chatBody,
             });
             data = { content: data.content || '无结果' };
         } else {
             const config = AI_TOOL_CONFIG[tool];
             if (!config) throw new Error('工具配置不存在');
-            data = await api(config.route, { method: 'POST', body: { ...body, modelId: getActiveModelId() } });
+            const mid1 = getActiveModelId();
+            const toolBody = { ...body };
+            if (mid1 != null) toolBody.modelId = mid1;
+            data = await api(config.route, { method: 'POST', body: toolBody });
         }
         if (resultLoading) resultLoading.style.display = 'none';
         if (resultContent) {
@@ -1746,9 +1751,12 @@ let semanticMatchTimer = null;
 /** 调用后端AI语义匹配 */
 async function callSemanticToolMatch(text) {
     try {
+        const mid = getActiveModelId();
+        const body = { text };
+        if (mid != null) body.modelId = mid;
         const result = await api('/ai/tool-match', {
             method: 'POST',
-            body: { text, modelId: getActiveModelId() },
+            body,
         });
         if (result.tool && result.tool !== 'default' && result.confidence >= 0.6) {
             if (currentChatTool !== result.tool) {

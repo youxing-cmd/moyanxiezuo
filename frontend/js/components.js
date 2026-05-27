@@ -85,6 +85,20 @@ function showModal(title, content) {
     overlay.addEventListener('click', (e) => {
         if (e.target === overlay) overlay.remove();
     });
+    // ESC 关闭弹窗
+    const onEsc = (e) => {
+        if (e.key === 'Escape') {
+            overlay.remove();
+            document.removeEventListener('keydown', onEsc);
+        }
+    };
+    document.addEventListener('keydown', onEsc);
+    // 弹窗关闭时移除监听（覆盖 remove 场景）
+    const origRemove = overlay.remove.bind(overlay);
+    overlay.remove = () => {
+        document.removeEventListener('keydown', onEsc);
+        origRemove();
+    };
     requestAnimationFrame(() => {
         overlay.style.opacity = '1';
         overlay.querySelector('.jz-modal').style.transform = 'scale(1)';
